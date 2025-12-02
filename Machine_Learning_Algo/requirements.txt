@@ -1,0 +1,18 @@
+# Core scientific stack
+numpy
+pandas
+scikit-learn
+
+# Optional but recommended for text cleaning
+nltk
+
+# For saving/loading models
+joblib
+
+# Jupyter support
+ipykernel
+jupyter
+
+# Optional metrics visualization
+matplotlib
+seaborn
