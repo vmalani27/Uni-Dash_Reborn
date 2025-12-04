@@ -307,6 +307,19 @@ def pre_rule(sender, text):
         print("  [pre] Course document detected → Administrative")
         return ("Administrative", True, "course_document")
 
+    # Semester-wide or long-term timetables → Administrative
+    if regex_match(text, [
+        r"\bsemester timetable\b",
+        r"\bfull semester\b",
+        r"\bcomplete timetable\b",
+        r"\bterm timetable\b",
+        r"\bsemester schedule\b",
+        r"\bacademic calendar\b",
+        r"\bsemester plan\b"
+    ]):
+        print("  [pre] Long-term timetable detected → Administrative")
+        return ("Administrative", True, "long_term_timetable")
+
     # Academic keywords
     if regex_match(text, PAT_ASSIGN):
         print("  [pre] Assignment keyword matched")
@@ -323,6 +336,7 @@ def pre_rule(sender, text):
     if regex_match(text, PAT_URGENT):
         print("  [pre] Urgent keyword matched")
         return ("Urgent", True, "urgent")
+
 
     print("  [pre] No rule matched → LLM needed")
     return (None, False, "undecided")
@@ -389,16 +403,27 @@ labels = df["label"].tolist()
 
 print("\nStarting labeling...\n")
 
-for idx, row in df.iterrows():
 
-    if labels[idx] != "":
+# Find the first row with an empty label and start from there
+start_idx = 0
+for i, label in enumerate(labels):
+    if label == "":
+        start_idx = i
+        break
+else:
+    print("All rows already labeled. Exiting.")
+    exit(0)
+
+for idx, row in df.iloc[start_idx:].iterrows():
+    real_idx = start_idx + idx if hasattr(df.iloc[start_idx:], 'index') else idx
+    if labels[real_idx] != "":
         continue
 
     sender = row.get("from", "")
     content = clean(row.get("full_text", ""))
 
     print("\n----------------------------------")
-    print(f"Row {idx}")
+    print(f"Row {real_idx}")
     print("----------------------------------")
     print("Sender:", sender)
     print("Preview:", preview(content))
@@ -431,7 +456,7 @@ for idx, row in df.iterrows():
     user = input("Your label (ENTER = accept): ").strip()
     final = suggested if user == "" else (user if user in CATEGORIES else suggested)
 
-    labels[idx] = final
+    labels[real_idx] = final
     df["label"] = labels
     df.to_csv(OUTPUT_FILE, index=False)
 
