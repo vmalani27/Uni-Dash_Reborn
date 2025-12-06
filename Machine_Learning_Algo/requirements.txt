@@ -16,3 +16,6 @@ jupyter
 # Optional metrics visualization
 matplotlib
 seaborn
+
+# Sentence Transformers for embeddings
+sentence-transformers   
