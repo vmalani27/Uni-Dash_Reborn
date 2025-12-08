@@ -1,0 +1,27 @@
+# Flutter/Dart/Pub related
+.dart_tool/
+.packages
+build/
+pubspec.lock
+
+# Android Gradle
+.android/
+gradle-wrapper.jar
+
+# iOS/Xcode
+**/DerivedData/
+**/Pods/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# VS Code and IntelliJ
+.vscode/
+.idea/
+
+# Mac, Windows, Linux generated files
+*.iml
+*.DS_Store
+
+# Web build artifacts
+/web/.dart_tool/
+/web/build/

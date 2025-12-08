@@ -1,3 +1,25 @@
+# Email Classification Label Taxonomy
+
+## Level-1 Labels (Source Category)
+These labels identify the source of the email:
+
+- **Administration / Office**: Emails from charusat.ac.in domain with admin/office keywords (e.g., exam cell, fees, timetable, office order).
+- **Faculty / Academic Staff**: Emails from charusat.ac.in domain not matching admin/office keywords.
+- **Student / Club**: Emails from charusat.edu.in domain.
+- **External Course Provider**: Emails from known external course domains (e.g., nptel.iitm.ac.in, coursera.org).
+- **Misc / External**: All other emails.
+
+## Level-2 Labels (Topic/Intent)
+These labels identify the topic or intent of the email, using rule-based and model-based approaches. Examples include:
+
+- **Fee Payment**
+- **Exam Schedule**
+- **Course Enrollment**
+- **Event Announcement**
+- **Newsletter**
+- **General Communication**
+
+Level-2 labels are assigned using a combination of keyword rules, sender domain logic, and supervised ML models. See `step4_label_topic/level2_rules.py` for implementation details.
 LEVEL-0 → Preprocessing Layer
 
 Purpose: Improve embeddings + models.
