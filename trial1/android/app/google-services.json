@@ -1,0 +1,135 @@
+{
+  "project_info": {
+    "project_number": "551724754459",
+    "firebase_url": "https://f-r-i-d-a-y-vlelfh.firebaseio.com",
+    "project_id": "f-r-i-d-a-y-vlelfh",
+    "storage_bucket": "f-r-i-d-a-y-vlelfh.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:551724754459:android:ab997a1ed08064d05d7abe",
+        "android_client_info": {
+          "package_name": "com.example.login_trial_2"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "551724754459-143mtaf6uh30uo4ifofrfcne5vpp3qsr.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.login_trial_2",
+            "certificate_hash": "c174965082dbe0da33592b9bc80cc2782378c044"
+          }
+        },
+        {
+          "client_id": "551724754459-jfr5qel37k6b1pemdg6hgme5upjeljr6.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBvGs5AAZ-MkuJzzwKT-WJLZlQ3tx6pkE8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "551724754459-j3rlq5jmvvgngf7q1r11l78b2rdai806.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "551724754459-8vb5mj0fig6gnbp7jdsbsfa7t8cvt6ek.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.loginTrial2"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:551724754459:android:a786e54635a8e8695d7abe",
+        "android_client_info": {
+          "package_name": "com.example.trial1"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "551724754459-jfr5qel37k6b1pemdg6hgme5upjeljr6.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBvGs5AAZ-MkuJzzwKT-WJLZlQ3tx6pkE8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "551724754459-j3rlq5jmvvgngf7q1r11l78b2rdai806.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "551724754459-8vb5mj0fig6gnbp7jdsbsfa7t8cvt6ek.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.loginTrial2"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:551724754459:android:a7f23a888b63602d5d7abe",
+        "android_client_info": {
+          "package_name": "com.friday.unidash"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "551724754459-516al09g8pej9pv1fempsfeatgo4ol1s.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.friday.unidash",
+            "certificate_hash": "fd26e47d6be8b91726e44375da529626cbb3409b"
+          }
+        },
+        {
+          "client_id": "551724754459-jfr5qel37k6b1pemdg6hgme5upjeljr6.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBvGs5AAZ-MkuJzzwKT-WJLZlQ3tx6pkE8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "551724754459-j3rlq5jmvvgngf7q1r11l78b2rdai806.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "551724754459-8vb5mj0fig6gnbp7jdsbsfa7t8cvt6ek.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.loginTrial2"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
