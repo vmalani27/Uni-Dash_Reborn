@@ -1,10 +1,12 @@
-import 'package:flutter/material.dart';
-import 'package:google_sign_in/google_sign_in.dart';
-import 'package:trial1/firebase_options.dart';
-import 'screens/splash.dart';
-import 'theme.dart';
-import 'package:firebase_core/firebase_core.dart';
+// Add this import for dotenv
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:trial1/firebase_options.dart';
+import 'package:trial1/services/oauth2_service.dart';
+import 'theme.dart';
+import 'package:trial1/services/authorisation_service.dart';
 
 
 void main() async {
@@ -12,8 +14,15 @@ void main() async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.android);
   await dotenv.load(fileName: ".env");
 
-  runApp(const MyApp());
+  runApp(
+    OAuthHandler(
+      child: MyApp(),
+    ),
+  );
 }
+// Example usage of the client ID in your OAuth flow:
+// final clientId = dotenv.env['ANDROID_GOOGLE_CLIENT_ID']!;
+// Use clientId when building the Google OAuth URL.
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -25,8 +34,8 @@ class MyApp extends StatelessWidget {
       theme: uniDashLightTheme,
       darkTheme: uniDashDarkTheme,
       themeMode: ThemeMode.system,
-      home: const SplashScreen(),
       debugShowCheckedModeBanner: false,
+      home: const AuthGate(),
     );
   }
 }

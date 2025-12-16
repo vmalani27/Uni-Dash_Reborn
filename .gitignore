@@ -2,3 +2,8 @@ Machine_Learning_Algo/ML_venv/
 Machine_Learning_Algo/__pycache__/
 Machine_Learning_Algo/venv
 trial1/.env
+backend/WEB_CLIENT_OAUTH_SECRET.json
+backend/app/core/credentials.json
+backend/.env
+trial1/client_secret_551724754459-qa0mnvf692mj8s9gkmu6n7otjfslbtuo.apps.googleusercontent.com.json
+backend/backend_venv

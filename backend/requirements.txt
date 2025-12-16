@@ -1,0 +1,14 @@
+# Python dependencies for Uni-Dash_Reborn backend
+fastapi
+uvicorn
+pydantic
+python-dotenv
+google-auth
+google-auth-oauthlib
+google-api-python-client
+firebase-admin
+scikit-learn
+joblib
+pytest
+httpx
+sqlalchemy

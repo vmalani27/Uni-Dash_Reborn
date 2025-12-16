@@ -1,0 +1,17 @@
+C:\Users\Vansh Malani\Documents\GitHub\Uni-Dash_Reborn\trial1>keytool -keystore C:\Users\vansh\.android\debug.keysto
+re -list -v -storepass android -alias androiddebugkey -keypass android         
+Alias name: androiddebugkey
+Creation date: 22-Nov-2025
+Entry type: PrivateKeyEntry
+Certificate chain length: 1
+Certificate[1]:
+Owner: C=US, O=Android, CN=Android Debug
+Issuer: C=US, O=Android, CN=Android Debug
+Serial number: 1
+Valid from: Sat Nov 22 12:39:28 IST 2025 until: Mon Nov 15 12:39:28 IST 2055
+Certificate fingerprints:
+         SHA1: BC:A7:A0:ED:73:E0:27:D3:DB:3F:BA:A6:D4:1E:56:51:6C:F1:8B:00
+         SHA256: 89:46:FF:ED:D5:9E:F8:F5:15:0C:C2:B3:C2:61:80:8A:AA:75:38:C7:EA:EB:99:65:EA:79:13:01:90:18:34:C7    
+Signature algorithm name: SHA256withRSA
+Subject Public Key Algorithm: 2048-bit RSA key
+Version: 1
