@@ -1,9 +1,17 @@
+
 import re
 import pandas as pd
 from html import unescape
+import os
+from datetime import datetime
 
-INPUT_FILE = "unlabeled_dataset.csv"
-OUTPUT_FILE = "level1_output.csv"
+INPUT_FILE = "manual_level1_output.csv"
+
+# Output will be saved in a timestamped folder
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+OUTPUT_DIR = f"output_{timestamp}"
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+OUTPUT_FILE = os.path.join(OUTPUT_DIR, "semi_assisted_labelling.csv")
 
 # ----------------------------------------------------------
 # Helper: Extract domain from "from" field if missing
@@ -26,11 +34,21 @@ EXTERNAL_COURSE_DOMAINS = {
 
 }
 
+
 # Admin keywords that indicate institutional office actions
 ADMIN_KEYWORDS = [
     "exam cell", "examination", "exam schedule", "timetable", "fees", "payment",
     "hallticket", "admission", "academic office", "notice",
-    "circular", "student section", "updated", "renewal", "mysy","scholarship","scheme", "student id","e-governance", "commencment" ,"reporting"
+    "circular", "student section", "updated", "renewal", "mysy", "scholarship", "scheme", "student id", "e-governance", "commencment", "reporting"
+]
+
+# Faculty keywords that indicate academic instruction
+FACULTY_KEYWORDS = [
+    "assignment", "submit", "submission",
+    "project", "sgp", "lab work",
+    "class", "lecture", "syllabus",
+    "internal assessment", "ia",
+    "attendance", "viva", "presentation"
 ]
 
 
@@ -51,6 +69,7 @@ def classify_level1(sender, sender_domain, clean_text):
     if sender_domain in EXTERNAL_COURSE_DOMAINS:
         return "External Course Provider"
 
+
     # 2. Student / Club
     if sender_domain.endswith("charusat.edu.in"):
         return "Student / Club"
@@ -59,11 +78,15 @@ def classify_level1(sender, sender_domain, clean_text):
     if sender_domain.endswith("charusat.ac.in") and any(k in clean_text for k in ADMIN_KEYWORDS):
         return "Administration / Office"
 
-    # 4. Faculty / Academic Staff (charusat.ac.in, not admin)
-    if sender_domain.endswith("charusat.ac.in"):
+    # 4. Faculty-originated academic instruction (charusat.ac.in with faculty keywords)
+    if sender_domain.endswith("charusat.ac.in") and any(k in clean_text for k in FACULTY_KEYWORDS):
         return "Faculty / Academic Staff"
 
-    # 5. Misc / External
+    # 5. charusat.ac.in but not admin and not faculty → forwarded / noise
+    if sender_domain.endswith("charusat.ac.in"):
+        return "Misc / External"
+
+    # 6. Misc / External
     return "Misc / External"
 
 
@@ -87,4 +110,4 @@ if __name__ == "__main__":
     )
 
     df.to_csv(OUTPUT_FILE, index=False)
-    print("Level-1 labels written to:", OUTPUT_FILE)
+    print(f"Level-1 labels written to: {OUTPUT_FILE}")

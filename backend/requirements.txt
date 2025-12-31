@@ -12,3 +12,4 @@ joblib
 pytest
 httpx
 sqlalchemy
+psycopg2

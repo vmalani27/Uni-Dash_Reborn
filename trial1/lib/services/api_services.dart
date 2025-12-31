@@ -12,6 +12,10 @@ class BackendService {
   static final String androidClientId =
       dotenv.env['ANDROID_GOOGLE_CLIENT_ID']!;
 
+  static final String webClientId =
+    dotenv.env['oauth2_client_id_web']!;
+
+
   /* =======================
      USER PROFILE
      ======================= */
@@ -80,70 +84,57 @@ class BackendService {
      GOOGLE OAUTH (CLIENT)
      ======================= */
 
-  static final FlutterAppAuth _appAuth = FlutterAppAuth();
+static final FlutterAppAuth _appAuth = FlutterAppAuth();
+
+
 static Future<void> startGoogleOAuth() async {
   final user = FirebaseAuth.instance.currentUser;
   if (user == null) throw Exception("No Firebase user");
 
-  const redirectUri = 'com.example.trial1:/oauth2redirect';
+final redirectUri =
+  'com.googleusercontent.apps.551724754459-qa0mnvf692mj8s9gkmu6n7otjfslbtuo:/oauth2redirect';
+final result = await _appAuth.authorize(
+  AuthorizationRequest(
+    androidClientId,
+    redirectUri,
+    discoveryUrl: 'https://accounts.google.com/.well-known/openid-configuration',
+    scopes: [
+      'openid',
+      'email',
+      'profile',
 
-  final result = await _appAuth.authorizeAndExchangeCode(
-    AuthorizationTokenRequest(
-      androidClientId,
-      redirectUri,
-      discoveryUrl: 'https://accounts.google.com/.well-known/openid-configuration',
-      scopes: [
-        'https://www.googleapis.com/auth/gmail.readonly',
-        'https://www.googleapis.com/auth/classroom.courses.readonly',
-        'https://www.googleapis.com/auth/classroom.announcements.readonly',
-        'https://www.googleapis.com/auth/classroom.coursework.students.readonly',
-        'openid',
-        'email',
-        'profile',
-      ],
-      additionalParameters: {
-        'access_type': 'offline',
-      },
-      // If you want to pass state, add: state: user.uid,
-    ),
-  );
+      'https://www.googleapis.com/auth/gmail.readonly',
 
-  if (result == null || result.refreshToken == null) {
+      'https://www.googleapis.com/auth/classroom.courses.readonly',
+      'https://www.googleapis.com/auth/classroom.announcements.readonly',
+      'https://www.googleapis.com/auth/classroom.coursework.students.readonly',],
+    additionalParameters: {
+      'access_type': 'offline',
+      
+    },
+
+    promptValues: const  ['consent'],
+  ),
+
+);
+
+debugPrint("App Auth result: $result");
+  if (result == null || result.authorizationCode == null) {
     throw Exception("OAuth failed");
   }
 
-  await exchangeRefreshToken(result.refreshToken!);
+await exchangeAuthCode(
+  result.authorizationCode!,
+  result.codeVerifier!,
+);
 }
 
-static Future<void> exchangeRefreshToken(String refreshToken) async {
-  final user = FirebaseAuth.instance.currentUser;
-  if (user == null) throw Exception("No Firebase user");
-
-  final idToken = await user.getIdToken();
-
-  final response = await http.post(
-    Uri.parse("$baseUrl/auth/google/exchange"),
-    headers: {
-      "Authorization": "Bearer $idToken",
-      "Content-Type": "application/json",
-    },
-    body: jsonEncode({
-      "refresh_token": refreshToken,
-    }),
-  );
-
-  if (response.statusCode == 200) {
-    debugPrint("Google OAuth connected successfully");
-  } else {
-    debugPrint("OAuth exchange failed: ${response.body}");
-  }
-}
 
 
   /* =======================
      GOOGLE OAUTH (BACKEND)
      ======================= */
-static Future<void> exchangeAuthCode(String code) async {
+static Future<void> exchangeAuthCode(String code, String codeVerifier) async {
   final user = FirebaseAuth.instance.currentUser;
   if (user == null) throw Exception("No Firebase user");
 
@@ -157,6 +148,7 @@ static Future<void> exchangeAuthCode(String code) async {
     },
     body: jsonEncode({
       "code": code,
+      "code_verifier": codeVerifier,
     }),
   );
 
@@ -166,5 +158,6 @@ static Future<void> exchangeAuthCode(String code) async {
     debugPrint("OAuth exchange failed: ${response.body}");
   }
 }
+
 
 }

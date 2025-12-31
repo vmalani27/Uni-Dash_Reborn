@@ -1,4 +1,5 @@
-"""update user and oauth_token models
+alembic revision --autogenerate -m "update user and oauth_token models"
+alembic upgrade head"""update user and oauth_token models
 
 Revision ID: 975e08fd1934
 Revises: 
