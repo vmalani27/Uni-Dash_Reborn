@@ -5,13 +5,14 @@ from html import unescape
 import os
 from datetime import datetime
 
-INPUT_FILE = "manual_level1_output.csv"
+INPUT_FILE = "unlabeled_dataset.csv"
+# OUTPUT_FILE = "source_labeled_dataset.csv"
 
 # Output will be saved in a timestamped folder
 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 OUTPUT_DIR = f"output_{timestamp}"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
-OUTPUT_FILE = os.path.join(OUTPUT_DIR, "semi_assisted_labelling.csv")
+OUTPUT_FILE = os.path.join(OUTPUT_DIR, "source_labeled_dataset.csv")
 
 # ----------------------------------------------------------
 # Helper: Extract domain from "from" field if missing
