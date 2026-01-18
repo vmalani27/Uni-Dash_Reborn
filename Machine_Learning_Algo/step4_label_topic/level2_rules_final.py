@@ -7,7 +7,7 @@ import requests
 # Config
 # ----------------------------------------------------------
 
-INPUT_FILE = r"D:\vanshmalanidata\Documents\GitHub\Uni-Dash_Reborn\Machine_Learning_Algo\output_20260103_222919\source_labeled_dataset.csv"
+INPUT_FILE = r"D:\vanshmalanidata\Documents\GitHub\Uni-Dash_Reborn\Machine_Learning_Algo\step4_label_topic\level2_annotation_runs\run_20260102_090441\level2_labeled.csv"
 BASE_OUTPUT_DIR = "level2_annotation_runs"
 MAX_PREVIEW_CHARS = 500
 
@@ -47,9 +47,13 @@ def extract_obligation_markers(label_source, clean_text):
         response = requests.post(
             "http://127.0.0.1:11434/api/generate",
             json={
-                "model": "llama3",
+                "model": "qwen2.5:7b-instruct-q4_k_m",
                 "prompt": prompt,
-                "stream": False
+                "stream": False,
+                "options": {
+                    "temperature": 0,
+                    "top_p": 0.1
+                }
             },
             timeout=30
         )

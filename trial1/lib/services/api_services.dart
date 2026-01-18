@@ -5,15 +5,47 @@ import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:flutter_appauth/flutter_appauth.dart';
+// Removed flutter_appauth import
 
 class BackendService {
-  static final String baseUrl = dotenv.env['BACKEND_URL']!;
-  static final String androidClientId =
-      dotenv.env['ANDROID_GOOGLE_CLIENT_ID']!;
+      static final String baseUrl = dotenv.env['BACKEND_URL']!;
 
-  static final String webClientId =
-    dotenv.env['oauth2_client_id_web']!;
+      static final String webClientId = dotenv.env['oauth2_client_id_web']!;
+
+
+
+    // Fetch Gmail notification previews (list-all)
+    static Future<List<dynamic>> fetchGmailNotificationPreviews() async {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) throw Exception("No Firebase user");
+      final idToken = await user.getIdToken();
+      final response = await http.get(
+        Uri.parse("$baseUrl/notifications/gmail/list-all"),
+        headers: {"Authorization": "Bearer $idToken"},
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['notifications'] as List<dynamic>;
+      } else {
+        throw Exception("Failed to fetch Gmail notification previews: ${response.body}");
+      }
+    }
+
+    // Fetch full Gmail message detail (get-mail)
+    static Future<Map<String, dynamic>> fetchGmailMessageDetail(String gmailId) async {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) throw Exception("No Firebase user");
+      final idToken = await user.getIdToken();
+      final response = await http.get(
+        Uri.parse("$baseUrl/notifications/gmail/get-mail/$gmailId"),
+        headers: {"Authorization": "Bearer $idToken"},
+      );
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      } else {
+        throw Exception("Failed to fetch Gmail message detail: ${response.body}");
+      }
+    }
 
 
   /* =======================
@@ -84,49 +116,32 @@ class BackendService {
      GOOGLE OAUTH (CLIENT)
      ======================= */
 
-static final FlutterAppAuth _appAuth = FlutterAppAuth();
-
+// Removed FlutterAppAuth instance
 
 static Future<void> startGoogleOAuth() async {
   final user = FirebaseAuth.instance.currentUser;
   if (user == null) throw Exception("No Firebase user");
 
-final redirectUri =
-  'com.googleusercontent.apps.551724754459-qa0mnvf692mj8s9gkmu6n7otjfslbtuo:/oauth2redirect';
-final result = await _appAuth.authorize(
-  AuthorizationRequest(
-    androidClientId,
-    redirectUri,
-    discoveryUrl: 'https://accounts.google.com/.well-known/openid-configuration',
-    scopes: [
-      'openid',
-      'email',
-      'profile',
+  final idToken = await user.getIdToken();
 
-      'https://www.googleapis.com/auth/gmail.readonly',
-
-      'https://www.googleapis.com/auth/classroom.courses.readonly',
-      'https://www.googleapis.com/auth/classroom.announcements.readonly',
-      'https://www.googleapis.com/auth/classroom.coursework.students.readonly',],
-    additionalParameters: {
-      'access_type': 'offline',
-      
+  final response = await http.get(
+    Uri.parse("$baseUrl/auth/google/url"),
+    headers: {
+      "Authorization": "Bearer $idToken",
     },
+  );
 
-    promptValues: const  ['consent'],
-  ),
-
-);
-
-debugPrint("App Auth result: $result");
-  if (result == null || result.authorizationCode == null) {
-    throw Exception("OAuth failed");
+  if (response.statusCode != 200) {
+    throw Exception("Failed to get Google OAuth URL");
   }
 
-await exchangeAuthCode(
-  result.authorizationCode!,
-  result.codeVerifier!,
-);
+  final data = jsonDecode(response.body);
+  final authUrl = data["auth_url"];
+
+  final uri = Uri.parse(authUrl);
+  if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+    throw Exception("Could not launch Google OAuth");
+  }
 }
 
 
@@ -134,7 +149,7 @@ await exchangeAuthCode(
   /* =======================
      GOOGLE OAUTH (BACKEND)
      ======================= */
-static Future<void> exchangeAuthCode(String code, String codeVerifier) async {
+static Future<void> exchangeAuthCode(String code) async {
   final user = FirebaseAuth.instance.currentUser;
   if (user == null) throw Exception("No Firebase user");
 
@@ -148,7 +163,6 @@ static Future<void> exchangeAuthCode(String code, String codeVerifier) async {
     },
     body: jsonEncode({
       "code": code,
-      "code_verifier": codeVerifier,
     }),
   );
 
