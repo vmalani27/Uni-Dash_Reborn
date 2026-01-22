@@ -13,3 +13,4 @@ secrets/backend/.env
 secrets/trial1/.env
 secrets/trial1/client_secret_551724754459-qa0mnvf692mj8s9gkmu6n7otjfslbtuo.apps.googleusercontent.com.json
 secrets.rar
+backend/venv/
