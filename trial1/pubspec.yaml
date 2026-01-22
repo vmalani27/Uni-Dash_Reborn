@@ -42,6 +42,7 @@ dependencies:
   url_launcher: ^6.2.5
   http: ^1.1.0
   flutter_appauth: ^6.0.0
+  device_info_plus: ^12.3.0
 
 
 dev_dependencies:

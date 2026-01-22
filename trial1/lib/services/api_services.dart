@@ -5,10 +5,11 @@ import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:trial1/config.dart';
 // Removed flutter_appauth import
 
 class BackendService {
-      static final String baseUrl = dotenv.env['BACKEND_URL']!;
+      static String get baseUrl => AppConfig.backendUrl;
 
       static final String webClientId = dotenv.env['oauth2_client_id_web']!;
 

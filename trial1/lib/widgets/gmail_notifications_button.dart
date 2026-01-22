@@ -105,7 +105,7 @@ class _GmailNotificationsButtonState extends State<GmailNotificationsButton> {
             (n) {
               try {
                 final notif = GmailNotificationPreview.fromJson(n as Map<String, dynamic>);
-                debugPrint('[GMAIL DEBUG] Parsed notification: ' + notif.toString());
+                debugPrint('[GMAIL DEBUG] Parsed notification: $notif');
                 return notif;
               } catch (err) {
                 debugPrint('[GMAIL DEBUG] Error parsing notification: $err, data: $n');
