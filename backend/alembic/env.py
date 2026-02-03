@@ -15,7 +15,7 @@ fileConfig(config.config_file_name)
 
 # Set DB URL from .env
 from os import getenv
-db_url = getenv("DATABASE_URL")
+db_url = getenv("LOCAL_DATABASE_URL")
 if db_url:
     config.set_main_option("sqlalchemy.url", db_url)
 

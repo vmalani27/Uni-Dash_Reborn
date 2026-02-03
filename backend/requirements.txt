@@ -13,3 +13,4 @@ pytest
 httpx
 sqlalchemy
 psycopg2-binary
+alembic

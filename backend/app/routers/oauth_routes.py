@@ -3,9 +3,10 @@ import os
 import urllib.parse
 import requests
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
-from app.core.database import get_db
+from app.core.database import get_supabase_db
 from app.models.oauthToken import OAuthToken
 from app.utils.firebase_util import verify_firebase_token
 
@@ -16,7 +17,7 @@ GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 
 CLIENT_ID = os.getenv("CLIENT_ID")
 CLIENT_SECRET = os.getenv("CLIENT_SECRET")
-REDIRECT_URL = os.getenv("REDIRECT_URL")
+REDIRECT_URL = os.getenv("BACKEND_REDIRECT_URI")
 
 SCOPES = [
     "https://www.googleapis.com/auth/gmail.readonly",
@@ -55,10 +56,16 @@ def get_google_auth_url(firebase_data=Depends(verify_firebase_token)):
 # -------------------------------
 # STEP 2: Google redirects here
 # -------------------------------
+
+from fastapi import BackgroundTasks
+from app.jobs.gmail_sync import initial_gmail_sync
+from app.core.database import get_local_db
+
 @router.get("/callback")
 def google_callback(
     request: Request,
-    db: Session = Depends(get_db),
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_supabase_db),
 ):
     code = request.query_params.get("code")
     uid = request.query_params.get("state")
@@ -105,7 +112,16 @@ def google_callback(
 
     db.commit()
 
-    return {
-        "success": True,
-        "message": "Google account connected. You may close this tab.",
-    }
+    print(f"[OAUTH CALLBACK] OAuth token saved for user {uid}")
+    
+    # Trigger initial Gmail sync (limit 100 mails)
+    print(f"[OAUTH CALLBACK] Triggering initial Gmail sync for user {uid}")
+    if background_tasks is not None:
+        from app.core.database import LocalSessionLocal
+        local_db = LocalSessionLocal()  # For gmail messages and sync status
+        background_tasks.add_task(initial_gmail_sync, uid, local_db, db, 100)
+        print(f"[OAUTH CALLBACK] Background task added for user {uid}")
+
+    # Redirect to app using deep link
+    print(f"[OAUTH CALLBACK] Redirecting to app via deep link")
+    return RedirectResponse(url="unidash://oauth/success")

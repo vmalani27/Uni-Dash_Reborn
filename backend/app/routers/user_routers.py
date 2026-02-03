@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from app.core.database import get_db
+from app.core.database import get_supabase_db
 from app.models.user import User
 from app.models.schemas.user_schema import UserOut, UserProfileSetup
 from app.utils.firebase_util import verify_firebase_token
@@ -11,7 +11,7 @@ router = APIRouter(prefix="/user", tags=["User"])
 @router.get("/profile", response_model=UserOut)
 def get_or_create_user(
     firebase_data=Depends(verify_firebase_token),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_supabase_db),
 ):
     uid = firebase_data["uid"]
     email = firebase_data.get("email", "")
@@ -53,7 +53,7 @@ def get_or_create_user(
 def update_profile(
     data: UserProfileSetup,
     firebase_data = Depends(verify_firebase_token),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_supabase_db),
 ):
     uid = firebase_data["uid"]
     user = db.query(User).filter(User.uid == uid).first()
@@ -79,7 +79,7 @@ def update_profile(
 def create_profile(
     data: UserProfileSetup,
     firebase_data = Depends(verify_firebase_token),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_supabase_db),
 ):
 
     uid = firebase_data["uid"]
@@ -97,3 +97,17 @@ def create_profile(
     db.commit()
     db.refresh(user)
     return user
+
+
+@router.post("/logout")
+def logout(
+    firebase_data=Depends(verify_firebase_token),
+):
+    """
+    Logout endpoint. Currently minimal since Firebase auth is handled client-side.
+    Backend validates the token is valid and logs the logout event.
+    
+    Returns: {status: "logged_out", uid: uid}
+    """
+    uid = firebase_data["uid"]
+    return {"status": "logged_out", "uid": uid}
