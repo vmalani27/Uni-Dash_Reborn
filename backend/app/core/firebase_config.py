@@ -1,7 +1,14 @@
+'''============== code approved by developer after review since the developer himself wrote it =============='''
+
+
 import firebase_admin
 from firebase_admin import credentials
 import logging
 import os
+
+''' This module initializes the Firebase Admin SDK using a service account key stored in a local JSON file.'''
+
+
 
 cred_path = os.path.join(os.path.dirname(__file__), "credentials.json")
 

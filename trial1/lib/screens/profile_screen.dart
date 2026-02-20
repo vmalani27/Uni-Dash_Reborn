@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:trial1/models/UserProfile.dart';
-import 'package:trial1/services/app_services.dart';
+import 'package:trial1/services/api_services.dart';
 import 'package:trial1/services/authentication_service.dart';
 import '../theme.dart';
 
@@ -11,7 +11,8 @@ class ProfileScreen extends StatefulWidget {
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> {
+class _ProfileScreenState extends State<ProfileScreen>
+    with WidgetsBindingObserver {
   late Future<UserProfile> _profileFuture;
   bool _connectingOAuth = false;
   bool _loggingOut = false;
@@ -19,7 +20,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _profileFuture = _fetchProfile();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    // Refresh profile when app resumes (e.g., after OAuth in browser)
+    if (state == AppLifecycleState.resumed) {
+      setState(() {
+        _profileFuture = _fetchProfile();
+      });
+    }
   }
 
   Future<UserProfile> _fetchProfile() async {

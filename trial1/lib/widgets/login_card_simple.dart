@@ -140,11 +140,8 @@ class _LoginCardState extends State<LoginCard> {
     try {
       final user = await _authService.signInWithEmail(email, password);
       if (user != null && mounted) {
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
-          (route) => false,
-        );
+        Navigator.of(context).pop();
+        // AuthGate will react automatically to Firebase auth change.
       }
     } catch (e) {
       setState(() {

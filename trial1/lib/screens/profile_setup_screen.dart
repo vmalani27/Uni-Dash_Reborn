@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:trial1/screens/home_screen.dart';
-import 'package:trial1/services/app_services.dart';
+import 'package:trial1/services/api_services.dart';
 import '../theme.dart';
 
 class ProfileSetupScreen extends StatefulWidget {

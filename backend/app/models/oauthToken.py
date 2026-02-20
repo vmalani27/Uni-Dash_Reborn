@@ -6,6 +6,7 @@ class OAuthToken(Base):
     __tablename__ = "oauth_tokens"
 
     uid = Column(String, primary_key=True)
+    email = Column(String, nullable=True)  # User's Gmail email address
 
     refresh_token = Column(Text, nullable=False)
     scopes = Column(Text, nullable=True)

@@ -295,11 +295,8 @@ class _RegisterCardState extends State<RegisterCard>
       }
       final user = await _authService.registerWithEmail(email, password);
       if (user != null && mounted) {
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (_) => const ProfileSetupScreen()),
-          (route) => false,
-        );
+        Navigator.of(context).pop();
+        // AuthGate will react automatically to Firebase auth change.
       }
     } catch (e) {
       setState(() {

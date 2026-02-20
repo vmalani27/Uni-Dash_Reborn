@@ -6,8 +6,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:trial1/config.dart';
+import 'package:trial1/models/gmail_models.dart';
 import 'package:trial1/services/gmail_cache_service.dart';
-import 'package:trial1/widgets/gmail_notifications_button.dart';
 // Removed flutter_appauth import
 
 class BackendService {
@@ -24,7 +24,7 @@ class BackendService {
     if (user == null) throw Exception("No Firebase user");
     final idToken = await user.getIdToken();
     final response = await http.get(
-      Uri.parse("$baseUrl/gmail/sync/status/$uid"),
+      Uri.parse("$baseUrl/gmail/sync/status"),
       headers: {"Authorization": "Bearer $idToken"},
     );
     if (response.statusCode == 200) {
@@ -37,31 +37,19 @@ class BackendService {
     }
   }
 
-  // Trigger Gmail sync
-  static Future<void> triggerGmailSync(String uid) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) throw Exception("No Firebase user");
-    final idToken = await user.getIdToken();
-    final response = await http.post(
-      Uri.parse("$baseUrl/gmail/sync/$uid"),
-      headers: {"Authorization": "Bearer $idToken"},
-    );
-    if (response.statusCode != 200) {
-      throw Exception("Failed to trigger Gmail sync: ${response.body}");
-    }
-  }
-
   static String get baseUrl => AppConfig.backendUrl;
 
   static final String webClientId = dotenv.env['oauth2_client_id_web']!;
 
   // Fetch Gmail notification previews (list-all)
-  static Future<List<dynamic>> fetchGmailNotificationPreviews() async {
+  static Future<List<dynamic>> fetchGmailNotificationPreviews({
+    int limit = 50,
+  }) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw Exception("No Firebase user");
     final idToken = await user.getIdToken();
     final response = await http.get(
-      Uri.parse("$baseUrl/notifications/gmail/list-all"),
+      Uri.parse("$baseUrl/notifications/gmail/list-all?limit=$limit"),
       headers: {"Authorization": "Bearer $idToken"},
     );
     if (response.statusCode == 200) {
@@ -81,12 +69,20 @@ class BackendService {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw Exception("No Firebase user");
     final idToken = await user.getIdToken();
+
+    print('[BackendService] Fetching Gmail message detail for: $gmailId');
     final response = await http.get(
       Uri.parse("$baseUrl/notifications/gmail/get-mail/$gmailId"),
       headers: {"Authorization": "Bearer $idToken"},
     );
+
+    print('[BackendService] Response status: ${response.statusCode}');
+    print('[BackendService] Response body: ${response.body}');
+
     if (response.statusCode == 200) {
-      return jsonDecode(response.body) as Map<String, dynamic>;
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      print('[BackendService] Parsed response: $data');
+      return data;
     } else {
       throw Exception("Failed to fetch Gmail message detail: ${response.body}");
     }
@@ -116,27 +112,13 @@ class BackendService {
     return notifications;
   }
 
-  // Trigger incremental sync
-  static Future<void> triggerIncrementalSync(String uid) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) throw Exception("No Firebase user");
-    final idToken = await user.getIdToken();
-    final response = await http.post(
-      Uri.parse("$baseUrl/gmail/sync/$uid/incremental"),
-      headers: {"Authorization": "Bearer $idToken"},
-    );
-    if (response.statusCode != 200) {
-      throw Exception("Failed to trigger incremental sync: ${response.body}");
-    }
-  }
-
   // Get sync statistics
   static Future<Map<String, dynamic>> getGmailSyncStats(String uid) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw Exception("No Firebase user");
     final idToken = await user.getIdToken();
     final response = await http.get(
-      Uri.parse("$baseUrl/gmail/sync/stats/$uid"),
+      Uri.parse("$baseUrl/gmail/sync/stats"),
       headers: {"Authorization": "Bearer $idToken"},
     );
     if (response.statusCode == 200) {
@@ -266,8 +248,9 @@ class BackendService {
   }
 
   /* =======================
-     LOGOUT
+     GMAIL MESSAGE DETAILS
      ======================= */
+
   static Future<void> logout() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw Exception("No Firebase user");
@@ -290,6 +273,48 @@ class BackendService {
     } catch (e) {
       debugPrint("Backend logout error: $e");
       // Continue with client-side logout even if backend fails
+    }
+  }
+
+  // Fetch Gmail notifications with pagination
+  static Future<List<dynamic>> fetchGmailNotifications({
+    int offset = 0,
+    int limit = 50,
+  }) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) throw Exception("No Firebase user");
+    final idToken = await user.getIdToken();
+
+    print(
+      '[BackendService] Fetching Gmail notifications: offset=$offset, limit=$limit',
+    );
+    final response = await http.get(
+      Uri.parse(
+        "$baseUrl/notifications/gmail/list-all?offset=$offset&limit=$limit",
+      ),
+      headers: {"Authorization": "Bearer $idToken"},
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      print(
+        '[BackendService] Raw response type: ${data.runtimeType}, data: $data',
+      );
+
+      // Backend returns {"notifications": [...]}
+      if (data is Map<String, dynamic> && data.containsKey('notifications')) {
+        final notifications = data['notifications'] as List<dynamic>;
+        print('[BackendService] Fetched ${notifications.length} notifications');
+        return notifications;
+      } else if (data is List<dynamic>) {
+        // Direct list response
+        print('[BackendService] Fetched ${data.length} notifications');
+        return data;
+      } else {
+        throw Exception("Unexpected response format: ${data.runtimeType}");
+      }
+    } else {
+      throw Exception("Failed to fetch Gmail notifications: ${response.body}");
     }
   }
 }

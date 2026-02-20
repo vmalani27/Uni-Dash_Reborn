@@ -1,35 +1,46 @@
+from contextlib import asynccontextmanager
+import asyncio
+
 from fastapi import FastAPI
-from app.core.database import Base, supabase_engine, local_engine
-from app.models import user   # IMPORTANT: import your model files
 from app.routers import user_routers, oauth_routes
 from app.routers import notifications
-from app.core import firebase_config
-from app.routers import gmail_sync
+from app.routers import gmail_sync_routes
+from app.routers import sync_events
+from app.routers import health
+from app.core import firebase_config  # Initialize Firebase Admin SDK
+from app.services.background_scheduler import ingestion_loop, ai_processing_loop
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Start background workers on startup, cancel on shutdown."""
+    print("[LIFESPAN] Starting background workers…")
+    ingestion_task = asyncio.create_task(ingestion_loop())
+    ai_task = asyncio.create_task(ai_processing_loop())
+    yield
+    print("[LIFESPAN] Shutting down background workers…")
+    ingestion_task.cancel()
+    ai_task.cancel()
+    try:
+        await ingestion_task
+    except asyncio.CancelledError:
+        pass
+    try:
+        await ai_task
+    except asyncio.CancelledError:
+        pass
 
 
-from sqlalchemy.orm import Session
-from app.core.database import SupabaseSessionLocal, LocalSessionLocal
-from app.jobs.gmail_sync import sync_all_gmail
-
-
-app = FastAPI()
+app = FastAPI(lifespan=lifespan)
 
 app.include_router(user_routers.router)
 app.include_router(oauth_routes.router)
 app.include_router(notifications.router)
-app.include_router(gmail_sync.router)
-
-# ---
-# To create tables, run this manually in a script or shell, not on every startup:
-# Base.metadata.create_all(supabase_engine)
-# Base.metadata.create_all(local_engine)
-# ---
-
+app.include_router(gmail_sync_routes.router)
+app.include_router(sync_events.router)
+app.include_router(health.router)
 
 
 @app.get("/")
 def root():
     return {"message": "Backend running"}
-

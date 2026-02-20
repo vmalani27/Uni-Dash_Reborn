@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:trial1/widgets/gmail_notifications_button.dart';
+import 'package:trial1/models/gmail_models.dart';
 
 class GmailCacheService {
   static const String _cacheKey = 'gmail_notifications';

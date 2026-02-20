@@ -1,8 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:app_links/app_links.dart';
-import 'package:trial1/services/app_services.dart';
-import 'package:trial1/screens/home_screen.dart';
 
 class OAuthCallbackHandler {
   final navigatorKey = GlobalKey<NavigatorState>();
@@ -70,17 +68,10 @@ class OAuthCallbackHandler {
         ),
       );
 
-      // Get user ID and trigger initial sync
-      final uid = await BackendService.getCurrentUid();
-
-      // Trigger full sync in background (non-blocking)
-      BackendService.triggerGmailSync(uid)
-          .then((_) {
-            print('[OAUTH] Initial sync triggered successfully');
-          })
-          .catchError((e) {
-            print('[OAUTH] Sync trigger failed: $e');
-          });
+      // No manual sync trigger needed — backend ingestion loop
+      // will detect this user's OAuth token and start fetching
+      // emails automatically within the next 3 minutes.
+      print('[OAUTH] Gmail connected. Backend will sync automatically.');
 
       // Navigate to root and let AuthGate determine the correct screen
       // This will refresh profile state and navigate appropriately

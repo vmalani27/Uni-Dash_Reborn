@@ -1,9 +1,9 @@
 import datetime
 from datetime import timedelta
 from app.models.oauthToken import OAuthToken
-from app.models.gmail_sync_status import GmailSyncStatus
-from app.services.gmail_sync import sync_gmail_for_user
-from app.core.database import LocalSessionLocal, SupabaseSessionLocal
+from app.models.gmail.gmail_message import GmailMessage, GmailSyncStatus
+from app.services.gmail_service import GmailService
+from app.core.database import SupabaseSession
 
 def background_gmail_sync_job():
     """
@@ -12,15 +12,14 @@ def background_gmail_sync_job():
     """
     print(f"[BACKGROUND SYNC] Starting at {datetime.datetime.utcnow()}")
     
-    local_db = LocalSessionLocal()
-    supabase_db = SupabaseSessionLocal()
+    supabase_db = SupabaseSession()
     
     try:
         # Get users with recent activity (last 24 hours)
         # This prevents syncing inactive users
         recent_cutoff = datetime.datetime.utcnow() - timedelta(hours=24)
         
-        recent_users = local_db.query(GmailSyncStatus)\
+        recent_users = supabase_db.query(GmailSyncStatus)\
             .filter(GmailSyncStatus.started_at > recent_cutoff)\
             .filter(GmailSyncStatus.status.in_(['completed', 'failed']))\
             .all()
@@ -41,14 +40,12 @@ def background_gmail_sync_job():
                     print(f"[BACKGROUND SYNC] No token for user {user_status.uid}, skipping")
                     continue
                 
-                # Incremental sync with smaller limit for background job
+                # Sync with smaller limit for background job
                 print(f"[BACKGROUND SYNC] Syncing user {user_status.uid}")
-                sync_gmail_for_user(
+                GmailService.incremental_sync(
                     user_status.uid, 
-                    local_db, 
                     supabase_db, 
-                    limit=20,        # Smaller limit for background
-                    incremental=True # Only new emails
+                    limit=20
                 )
                 sync_count += 1
                 
@@ -61,13 +58,12 @@ def background_gmail_sync_job():
                 user_status.finished_at = datetime.datetime.utcnow()
                 user_status.error_message = f"Background sync error: {str(e)[:500]}"
         
-        local_db.commit()
+        supabase_db.commit()
         print(f"[BACKGROUND SYNC] Complete - {sync_count} successful, {error_count} errors")
                 
     except Exception as e:
         print(f"[BACKGROUND SYNC] Critical error: {e}")
     finally:
-        local_db.close()
         supabase_db.close()
 
 def cleanup_old_emails():
@@ -75,35 +71,33 @@ def cleanup_old_emails():
     Remove emails older than 30 days to manage storage.
     Run daily as part of maintenance.
     """
-    from app.models.gmail_message import GmailMessage
-    
     print(f"[CLEANUP] Starting email cleanup at {datetime.datetime.utcnow()}")
     
-    local_db = LocalSessionLocal()
+    supabase_db = SupabaseSession()
     try:
         cutoff_date = datetime.datetime.utcnow() - timedelta(days=30)
         
         # Count before deletion
-        old_count = local_db.query(GmailMessage)\
+        old_count = supabase_db.query(GmailMessage)\
             .filter(GmailMessage.internal_date < cutoff_date)\
             .count()
         
         if old_count > 0:
             # Delete old emails
-            deleted = local_db.query(GmailMessage)\
+            deleted = supabase_db.query(GmailMessage)\
                 .filter(GmailMessage.internal_date < cutoff_date)\
                 .delete()
             
-            local_db.commit()
+            supabase_db.commit()
             print(f"[CLEANUP] Cleaned up {deleted} emails older than 30 days")
         else:
             print(f"[CLEANUP] No old emails to clean up")
             
     except Exception as e:
         print(f"[CLEANUP] Error during cleanup: {e}")
-        local_db.rollback()
+        supabase_db.rollback()
     finally:
-        local_db.close()
+        supabase_db.close()
 
 if __name__ == "__main__":
     import sys

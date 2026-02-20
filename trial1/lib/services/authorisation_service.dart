@@ -3,7 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:trial1/screens/entry/intro_screen.dart';
 import 'package:trial1/screens/home_screen.dart';
 import 'package:trial1/screens/profile_setup_screen.dart';
-import 'package:trial1/services/app_services.dart';
+import 'package:trial1/services/api_services.dart';
 import 'package:trial1/theme.dart';
 
 class AuthGate extends StatelessWidget {
