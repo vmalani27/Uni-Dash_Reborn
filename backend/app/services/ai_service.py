@@ -1,13 +1,13 @@
 import requests
 import json
 import datetime
-
+import os
 from app.ai.preprocessing import preprocess_email_for_llm
 from app.models.gmail.gmail_message import GmailMessage
 from app.services.level1_classifier import Level1Classifier
 from app.services.academic_context_engine import AcademicContextEngine
 
-OLLAMA_URL = "http://192.168.31.2:11434/api/generate"
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://192.168.31.2:11434/api/generate")
 MODEL_NAME = "qwen2.5:7b-instruct-q4_k_m"
 
 LEVEL2_LABELS = [
