@@ -37,6 +37,7 @@ class _GmailNotificationsListState extends State<GmailNotificationsList>
   // View toggle
   bool _isOrganizedView = false;
   int _unprocessedCount = 0;
+  bool _isFirstSync = false; // True when initial sync is in progress
 
   late ScrollController _scrollController;
   Timer? _autoRefreshTimer;
@@ -142,15 +143,37 @@ class _GmailNotificationsListState extends State<GmailNotificationsList>
           .where((n) => n.normalizedTopic == 'OTHER' && n.academicScore == 0)
           .length;
 
+      // Detect first-time sync: 0 emails but user may have just connected
+      bool firstSync = false;
+      if (result.notifications.isEmpty) {
+        try {
+          final uid = await BackendService.getCurrentUid();
+          final syncStatus = await BackendService.fetchGmailSyncStatus(uid);
+          firstSync = syncStatus == 'in_progress' || syncStatus == 'no_status';
+        } catch (_) {
+          // If sync status check fails, assume not first sync
+        }
+      }
+
       setState(() {
         _allNotifications = result.notifications;
         _currentOffset = result.notifications.length;
         _hasMoreData = result.notifications.length >= _pageSize;
         _unprocessedCount = unprocessed;
+        _isFirstSync = firstSync;
         _isOrganizedView =
             unprocessed < result.notifications.length &&
             result.notifications.length > 0;
       });
+
+      // If first sync, refresh faster to pick up incoming emails
+      if (firstSync) {
+        _autoRefreshTimer?.cancel();
+        _autoRefreshTimer = Timer.periodic(
+          const Duration(seconds: 5),
+          (_) => _silentRefresh(),
+        );
+      }
     } catch (e) {
       setState(() => _error = e.toString());
     } finally {
@@ -324,6 +347,49 @@ class _GmailNotificationsListState extends State<GmailNotificationsList>
   }
 
   Widget _buildEmptyState() {
+    // ─ First-time sync in progress ─
+    if (_isFirstSync) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 60, horizontal: 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: kAccentPrimary.withOpacity(0.08),
+                  shape: BoxShape.circle,
+                ),
+                child: SizedBox(
+                  width: 48,
+                  height: 48,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 3,
+                    valueColor: AlwaysStoppedAnimation(kAccentPrimary),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'Setting things up…',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Syncing your emails for the first time.\nThis may take a minute.',
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: kTextSecondary),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // ─ Genuinely empty ─
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 60, horizontal: 32),
