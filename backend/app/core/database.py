@@ -1,40 +1,33 @@
+'''============== code approved by developer after review since the developer himself wrote it =============='''
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 import os
 from dotenv import load_dotenv
 
-# Load environment variables
 load_dotenv()
 
-# Example:
-# postgresql://username:password@localhost:5432/mydb
-DATABASE_URL = os.getenv("DATABASE_URL")
+''' SupabaseSession: Connects to the cloud database (Supabase) for user and OAuth token management.
 
-if DATABASE_URL is None:
-    raise ValueError("DATABASE_URL is not set in environment variables")
+Notes: in future it maybe that the messages are stored in the cloud as well, but for now we want to keep them separate to reduce load on the cloud database and allow for faster read/write during sync operations. '''
 
-# Create SQLAlchemy engine
-engine = create_engine(
-    DATABASE_URL,
-    pool_pre_ping=True,     # Detect dropped connections
-    future=True             # Modern SQLAlchemy 2.0 style
-)
 
-# Session local class – each request gets its own DB session
-SessionLocal = sessionmaker(
-    autocommit=False,
-    autoflush=False,
-    bind=engine
-)
 
-# Base used by ORM models
+USER_DATABASE_URL = os.getenv("USER_DATABASE_URL")
+
+if USER_DATABASE_URL is None:
+    raise ValueError("USER_DATABASE_URL is not set in environment variables")
+
+# Supabase (cloud) engine/session for user & oauth
+supabase_engine = create_engine(USER_DATABASE_URL, pool_pre_ping=True, future=True)
+SupabaseSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=supabase_engine)
+
+
 Base = declarative_base()
 
-
-# Dependency for FastAPI routes
-def get_db():
-    db = SessionLocal()
+def get_supabase_db():
+    db = SupabaseSessionLocal()
     try:
         yield db
     finally:
         db.close()
+

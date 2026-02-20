@@ -14,81 +14,40 @@ OUTPUT_DIR = f"output_{timestamp}"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 OUTPUT_FILE = os.path.join(OUTPUT_DIR, "source_labeled_dataset.csv")
 
-# ----------------------------------------------------------
-# Helper: Extract domain from "from" field if missing
-# ----------------------------------------------------------
-def extract_domain(sender):
-    """Extracts domain from 'from' field if the dataset doesn't contain sender_domain."""
-    if not isinstance(sender, str):
-        return ""
-    m = re.search(r"@([^ >]+)", sender)
-    return m.group(1).lower() if m else ""
-
 
 # ----------------------------------------------------------
-# Level-1 Rules (Source Category)
+# Level-1: Source Trust Classification (Identity-only)
 # ----------------------------------------------------------
 
-EXTERNAL_COURSE_DOMAINS = {
+EXTERNAL_ACADEMIC_DOMAINS = {
     "nptel.iitm.ac.in",
     "nptel.ac.in",
-
+    "coursera.org",
+    "edx.org",
 }
 
-
-# Admin keywords that indicate institutional office actions
-ADMIN_KEYWORDS = [
-    "exam cell", "examination", "exam schedule", "timetable", "fees", "payment",
-    "hallticket", "admission", "academic office", "notice",
-    "circular", "student section", "updated", "renewal", "mysy", "scholarship", "scheme", "student id", "e-governance", "commencment", "reporting"
-]
-
-# Faculty keywords that indicate academic instruction
-FACULTY_KEYWORDS = [
-    "assignment", "submit", "submission",
-    "project", "sgp", "lab work",
-    "class", "lecture", "syllabus",
-    "internal assessment", "ia",
-    "attendance", "viva", "presentation"
-]
-
-
-def classify_level1(sender, sender_domain, clean_text):
+def classify_level1(sender_domain: str) -> str:
     """
-    Level-1 classification:
-    Identify the source category (who sent it), not the topic.
+    Level-1 classification determines the institutional trust level
+    of the sender. It does NOT infer intent or topic.
     """
 
     sender_domain = (sender_domain or "").lower().strip()
-    clean_text = (clean_text or "").lower()
 
-    # If domain not given - extract
     if not sender_domain:
-        sender_domain = extract_domain(sender)
+        return "External / Misc"
 
-    # 1. External Course Providers
-    if sender_domain in EXTERNAL_COURSE_DOMAINS:
-        return "External Course Provider"
+    if sender_domain in EXTERNAL_ACADEMIC_DOMAINS:
+        return "External Academic Platform"
 
-
-    # 2. Student / Club
-    if sender_domain.endswith("charusat.edu.in"):
-        return "Student / Club"
-
-    # 3. Administration / Office (only charusat.ac.in with admin keywords)
-    if sender_domain.endswith("charusat.ac.in") and any(k in clean_text for k in ADMIN_KEYWORDS):
-        return "Administration / Office"
-
-    # 4. Faculty-originated academic instruction (charusat.ac.in with faculty keywords)
-    if sender_domain.endswith("charusat.ac.in") and any(k in clean_text for k in FACULTY_KEYWORDS):
-        return "Faculty / Academic Staff"
-
-    # 5. charusat.ac.in but not admin and not faculty → forwarded / noise
     if sender_domain.endswith("charusat.ac.in"):
-        return "Misc / External"
+        return "Institutional Sender"
 
-    # 6. Misc / External
-    return "Misc / External"
+    if sender_domain.endswith("charusat.edu.in"):
+        return "Student / Peer"
+
+    return "External / Misc"
+
 
 
 # ----------------------------------------------------------
@@ -97,15 +56,10 @@ def classify_level1(sender, sender_domain, clean_text):
 if __name__ == "__main__":
     df = pd.read_csv(INPUT_FILE, dtype=str, keep_default_na=False)
 
-    # Extract domain if column absent
-    if "sender_domain" not in df.columns:
-        df["sender_domain"] = df["from"].map(extract_domain)
 
     df["label_source"] = df.apply(
         lambda r: classify_level1(
-            r.get("from", ""),
             r.get("sender_domain", ""),
-            r.get("clean_text", "")
         ),
         axis=1
     )

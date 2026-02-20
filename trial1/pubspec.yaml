@@ -43,6 +43,10 @@ dependencies:
   http: ^1.1.0
   flutter_appauth: ^6.0.0
   device_info_plus: ^12.3.0
+  shared_preferences: ^2.5.4
+  shimmer: ^3.0.0
+  animations: ^2.0.0
+  google_fonts: ^6.1.0
 
 
 dev_dependencies:
