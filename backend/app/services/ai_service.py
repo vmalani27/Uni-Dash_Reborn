@@ -209,18 +209,14 @@ CONTENT: {features["clean_text"]}"""
         except requests.exceptions.ConnectionError as e:
             print(f"[AI SERVICE] Connection error to Ollama: {e}")
             print(f"[AI SERVICE] Make sure Ollama is running at {OLLAMA_URL}")
-            parsed = {
-                "summary": "AI service unavailable - connection failed",
-                "label_topic": "General Information / Misc",
-                "label_urgency": "None"
-            }
+            # Re-raise so email stays ai_processed=False and gets retried
+            raise
+
         except requests.exceptions.Timeout as e:
             print(f"[AI SERVICE] Timeout connecting to Ollama: {e}")
-            parsed = {
-                "summary": "AI service timeout",
-                "label_topic": "General Information / Misc",
-                "label_urgency": "None"
-            }
+            # Re-raise so email stays ai_processed=False and gets retried
+            raise
+
         except Exception as e:
             print(f"[AI SERVICE] Inference failed for message {message.gmail_id}: {e}")
             print(f"[AI SERVICE] Full error details: {type(e).__name__}: {str(e)}")
