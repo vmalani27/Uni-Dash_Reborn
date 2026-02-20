@@ -92,10 +92,18 @@ async def ai_processing_loop():
         try:
             from app.core.database import SupabaseSessionLocal
             from app.models.gmail.gmail_message import GmailMessage
+            from app.models.oauthToken import OAuthToken
             from app.services.ai_service import AIService
 
             db = SupabaseSessionLocal()
             try:
+                # Skip if no users have connected Gmail yet
+                user_count = db.query(OAuthToken.uid).count()
+                if user_count == 0:
+                    db.close()
+                    await asyncio.sleep(60)
+                    continue
+
                 # Get one unprocessed email
                 message = (
                     db.query(GmailMessage)
