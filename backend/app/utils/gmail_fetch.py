@@ -36,25 +36,47 @@ def extract_sender(msg):
             return h["value"]
     return ""
 
-def extract_body(msg):
-    payload = msg.get("payload", {})
-    if "body" in payload and payload["body"].get("data"):
-        import base64
-        import quopri
-        data = payload["body"]["data"]
+def parse_gmail_payload(payload):
+    """
+    Recursively extract text/plain and text/html from a Gmail MIME payload.
+    """
+    import base64
+    import quopri
+
+    text_body = ""
+    html_body = ""
+    
+    def decode_data(data):
+        if not data:
+            return ""
         try:
+            # Gmail uses URL-safe base64 encoding. Padding is required.
             return base64.urlsafe_b64decode(data + '===').decode(errors="ignore")
         except Exception:
-            return quopri.decodestring(data).decode(errors="ignore")
-    # If multipart
-    for part in payload.get("parts", []):
-        if part.get("mimeType", "").startswith("text/plain") and part.get("body", {}).get("data"):
-            import base64
             try:
-                return base64.urlsafe_b64decode(part["body"]["data"] + '===').decode(errors="ignore")
+                return quopri.decodestring(data).decode(errors="ignore")
             except Exception:
-                continue
-    return ""
+                return ""
+
+    mime_type = payload.get("mimeType", "")
+    data = payload.get("body", {}).get("data", "")
+    
+    if mime_type == "text/plain" and data:
+        text_body = decode_data(data)
+    elif mime_type == "text/html" and data:
+        html_body = decode_data(data)
+        
+    for part in payload.get("parts", []):
+        t, h = parse_gmail_payload(part)
+        if t: text_body += t + "\n"
+        if h: html_body += h + "\n"
+        
+    return text_body.strip(), html_body.strip()
+
+def extract_body(msg):
+    payload = msg.get("payload", {})
+    text, _ = parse_gmail_payload(payload)
+    return text
 
 def extract_timestamp(msg):
     return msg.get("internalDate", "")

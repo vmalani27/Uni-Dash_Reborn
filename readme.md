@@ -1,120 +1,131 @@
-# Email Classification Label Taxonomy
+# Uni-Dash: AI-Powered Academic Email Platform
 
-## Level-1 Labels (Source Category)
-These labels identify the source of the email:
+Uni-Dash is a distributed, AI-augmented email dashboard built for university students. It solves the problem of academic email overload by automatically syncing, parsing, and classifying student emails into actionable insights (e.g., deadlines, exam notifications, fees) using local Large Language Models (LLMs).
 
-- **Administration / Office**: Emails from charusat.ac.in domain with admin/office keywords (e.g., exam cell, fees, timetable, office order).
-- **Faculty / Academic Staff**: Emails from charusat.ac.in domain not matching admin/office keywords.
-- **Student / Club**: Emails from charusat.edu.in domain.
-- **External Course Provider**: Emails from known external course domains (e.g., nptel.iitm.ac.in, coursera.org).
-- **Misc / External**: All other emails.
+Unlike traditional monolithic student projects, Uni-Dash is designed as a **distributed system** with clear separation of concerns across multiple nodes: a frontend client, an API broker on a Raspberry Pi, a centralized database, and a dedicated GPU AI inference worker.
 
-## Level-2 Labels (Topic/Intent)
-These labels identify the topic or intent of the email, using rule-based and model-based approaches. Examples include:
+---
 
-- **Fee Payment**
-- **Exam Schedule**
-- **Course Enrollment**
-- **Event Announcement**
-- **Newsletter**
-- **General Communication**
+## System Architecture
 
-Level-2 labels are assigned using a combination of keyword rules, sender domain logic, and supervised ML models. See `step4_label_topic/level2_rules.py` for implementation details.
-LEVEL-0 → Preprocessing Layer
+The architecture mimics a production-grade microservice environment, ensuring that heavy AI workloads never block API routing or user interactions.
 
-Purpose: Improve embeddings + models.
+```mermaid
+graph TD
+    %% Frontend Layer
+    subgraph Client Layer
+        F[Flutter Mobile App]
+    end
 
-Remove disclaimers
+    %% API Broker Layer (Raspberry Pi)
+    subgraph Edge Node (Raspberry Pi)
+        API[FastAPI Gateway]
+        SYNC[Incremental Sync Worker]
+    end
 
-Remove signatures
+    %% Inference Layer (GPU Machine)
+    subgraph AI Processing Node (GPU Worker)
+        OLLAMA[Ollama Inference Server]
+        MODEL[Llama 3 Model]
+        AI_WORK[AI Processing Background Job]
+    end
 
-Remove forwarded chain metadata
+    %% Storage Layer
+    subgraph Cloud Storage
+        DB[(Supabase PostgreSQL)]
+    end
 
-Extract the main meaningful body
+    %% External Services
+    subgraph External APIs
+        GMAIL[Gmail API / OAuth 2.0]
+    end
 
-Normalize whitespace
+    %% Connections
+    F -->|Secure REST via ngrok| API
+    API <-->|OAuth Tokens| DB
+    SYNC -->|Fetch incremental emails| GMAIL
+    SYNC -->|Store raw MIME| DB
+    
+    AI_WORK <-->|Query unprocessed emails| DB
+    AI_WORK -->|Prompt + Context| OLLAMA
+    OLLAMA --> MODEL
+    OLLAMA -->|Return structured JSON| AI_WORK
+    AI_WORK -->|Write insights| DB
+    
+    API <-->|Serve classified emails| DB
+```
 
-Lowercase
+### Component Breakdown
 
-This dramatically improves similarity scores.
+1. **Frontend (Flutter)**
+   - Minimalist, dynamic UI built with Flutter.
+   - Passive consumer of state: it renders the dashboard and relies on the backend for heavy lifting.
+   - Implements local widget caching to prevent redundant API calls during UI animations.
 
-LEVEL-1 → Source Category (Soft Routing Layer)
+2. **API Broker & Edge Node (Raspberry Pi via ngrok)**
+   - Built with **FastAPI**.
+   - Acts as the central nervous system. Handles OAuth state validation, serves REST endpoints, and runs the `Incremental Sync Worker` via `asyncio` background tasks.
+   - Periodically polls the Gmail API, parsing complex MIME trees (with BeautifulSoup fallbacks for HTML-only emails), and writes raw payloads to the database.
 
-NOT a hard filter.
-This layer identifies who the email is from, not what it is about.
+3. **Database (Supabase PostgreSQL)**
+   - Central state store for OAuth tokens, User Profiles, Sync Statuses, and Email data.
+   - Decouples the API Broker from the AI Worker.
 
-Level-1 Categories
-Label	Meaning
-External Course Provider	NPTEL, Coursera, Cisco, AWS Academy, etc.
-University Automation	E-Gov portal, fee notices, attendance system, exam system mails
-Faculty / Academic Staff	All @charusat.ac.in senders
-Student / Club	All @charusat.edu.in senders (students, IEEE clubs, Cloud Club, etc.)
-Misc / External Sender	Ads, newsletters, vendors, unknown
-Important rule:
+4. **AI Inference Server (GPU Node)**
+   - Runs a dedicated polling worker that queries Supabase for emails marked `ai_processed == False`.
+   - Offloads heavy NLP and categorization tasks to a locally hosted **Ollama** server running specialized LLMs.
+   - Extracts semantic insights (Topic, Urgency, Academic Score, Deadlines) and writes them back to Supabase. This ensures the Raspberry Pi API broker never hangs due to GPU compute blocking.
 
-Level-1 is a hint, not a restriction.
-It should NEVER disallow or block Level-2 labels.
+5. **CI/CD Pipeline (GitHub Actions)**
+   - Automated deployment via a Self-Hosted GitHub Action runner hosted directly on the Raspberry Pi edge node.
+   - Restarts the `uvicorn` systemd service automatically on main-branch pushes.
 
-Instead, it only provides weighting biases later.
+---
 
-LEVEL-2 → Topic Classification (Hard Semantic Labeling)
+## Features
 
-This is the true heart of your system.
-These 9 labels must be allowed for every Level-1 category.
+- **Distributed AI Pipeline**: Inference runs on a LAN-connected GPU rig, fully decoupled from the Edge API Gateway.
+- **Robust MIME Parsing**: Recursively traverses `multipart/alternative` and `multipart/mixed` email payloads to extract pure text, with built-in `text/html` fallback parsing for automated/marketing emails.
+- **Incremental Sync**: Only fetches new emails by tracking the `historyId` and `last_sync_date`, avoiding Gmail API rate limits.
+- **Automated Taxonomies**: Emails are grouped by semantic topic (Exams, Assignments, Events) and urgency, allowing students to focus strictly on actionable items.
+- **Graceful Degradation**: If the AI GPU server goes offline, the REST API and email sync continue functioning perfectly. Users see the raw email until the AI server comes back online and processes the backlog.
 
-Level-2 Categories
-Label	When to use
-Timetable / Schedule Update	Class changes, timetable, rescheduling
-Exam Notifications	Exam dates, hall tickets, seating plans
-Assignment or Submission	SGP reports, project submissions, assignments
-Certification / Courses	AWS, NPTEL, CISCO, MOOCs, course enrollments
-Internship / Placement Opportunities	Jobs, internships, CDPC mails
-Events / Hackathons	Workshops, seminars, hackathons, club events
-Important Announcements	Urgent circulars, policy changes, required actions
-Administrative / Fees / Counselling	Fees, counselling, hostel, leave rules
-General Information / Misc	Anything that doesn't fit above
-Rules:
+---
 
-Level-2 classification uses embeddings + keywords + weighting from Level-1.
+## Deployment
 
-No hard restrictions based on Level-1.
+### Prerequisites
+- Flutter SDK (Frontend)
+- Python 3.10+ (Backend)
+- PostgreSQL / Supabase account
+- Ollama installed on a GPU-enabled machine
+- Raspberry Pi (Optional, but recommended for API hosting)
+- Google Cloud Console account (for OAuth credentials)
 
-If embedding confidence is low → send to Level-2 fallback (LLM).
+### Backend Setup
+1. Clone the repository and navigate to `/backend`.
+2. Create `venv`: `python -m venv venv && source venv/bin/activate`
+3. Install dependencies: `pip install -r requirements.txt`
+4. Copy `.env.example` to `.env` and fill in Supabase and Google OAuth keys.
+5. Apply Alembic migrations: `alembic upgrade head`
+6. Start the server: `uvicorn app.main:app --host 0.0.0.0 --port 8000`
 
-LEVEL-3 → Urgency Classification Layer
+### AI Worker Setup
+Make sure the machine running Ollama is accessible from the API Broker (e.g., connected to the same Tailscale network or LAN).
+Update the `OLLAMA_URL` in the backend `.env` file to point to this inference machine's IP (e.g., `http://192.168.1.100:11434`).
 
-This is independent of Level-2.
+### Frontend Setup
+1. Navigate to `/trial1`.
+2. Run `flutter pub get`.
+3. Update `api_services.dart` to point to the base URL of your FastAPI server (or ngrok tunnel).
+4. Run the app: `flutter run`.
 
-Urgency	Meaning
-Critical	deadline today/tomorrow; missing this causes penalties
-High	deadline within 2–3 days; important to act
-Medium	relevant academic info but no action required immediately
-Low	optional: events, clubs, workshops
-None	newsletters, ads, routine info
+---
 
-This is derived from:
+## OAuth & Security
 
-dates inside email
+- **Strict Environment Separation**: The frontend handles Google Sign-In and passes an authorization code to the backend. The backend strictly exchanges and stores the Refresh Tokens.
+- **Symmetric Encryption**: OAuth Refresh tokens are encrypted symmetrically via `cryptography.fernet` before resting in the database.
 
-deadline keywords
-
-requirement verbs
-
-student action needed
-
-LEVEL-4 → Priority Score (Optional Layer for Your App)
-
-This uses Level-2 + Level-3:
-
-priority = urgency_weight + topic_weight + sender_weight
-
-
-Example:
-
-Exam Notification + Critical = Highest priority
-
-Administrative + Medium = Moderate priority
-
-Events + Low = Low priority
-
-Misc + None = Ignore
+---
+*Built to simplify the student experience through resilient systems engineering.*

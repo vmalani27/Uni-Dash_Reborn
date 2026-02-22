@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.models.oauthToken import OAuthToken
 from app.models.gmail.gmail_message import GmailMessage, GmailSyncStatus
 from app.utils.google_oauth import get_access_token
-from app.utils.gmail_fetch import extract_body
+from app.utils.gmail_fetch import parse_gmail_payload
 from app.utils.encryption import decrypt_token
 
 
@@ -101,9 +101,13 @@ class GmailService:
 
                 sender = headers_map.get("From", "")
                 subject = headers_map.get("Subject", "")
-                # Skip emails sent by the user themselves
-                if sender == token.email:
-                    continue
+                text_body, html_body = parse_gmail_payload(full.get("payload", {}))
+
+                # Fallback to parsing text from HTML if text is empty
+                if not text_body and html_body:
+                    from bs4 import BeautifulSoup
+                    soup = BeautifulSoup(html_body, "html.parser")
+                    text_body = soup.get_text(separator="\n").strip()
 
                 # Create and store message
                 db.add(
@@ -115,8 +119,8 @@ class GmailService:
                         subject=subject,
                         snippet=full.get("snippet"),
                         internal_date=internal_date,
-                        body_text=extract_body(full),
-                        body_html=""
+                        body_text=text_body,
+                        body_html=html_body
                     )
                 )
 
@@ -289,9 +293,15 @@ class GmailService:
                     print(f"[INCREMENTAL SYNC] Inserting new message: {gmail_id}")
                     print(f"[INCREMENTAL SYNC]   Subject: {subject}")
                     print(f"[INCREMENTAL SYNC]   From: {sender}")
-                    print(f"[INCREMENTAL SYNC]   Date: {internal_date}")
-
                     # Create and store message
+                    text_body, html_body = parse_gmail_payload(full.get("payload", {}))
+                    
+                    # Fallback to parsing text from HTML if text is empty
+                    if not text_body and html_body:
+                        from bs4 import BeautifulSoup
+                        soup = BeautifulSoup(html_body, "html.parser")
+                        text_body = soup.get_text(separator="\n").strip()
+                    
                     db.add(
                         GmailMessage(
                             uid=uid,
@@ -301,8 +311,8 @@ class GmailService:
                             subject=subject,
                             snippet=full.get("snippet"),
                             internal_date=internal_date,
-                            body_text=extract_body(full),
-                            body_html=""
+                            body_text=text_body,
+                            body_html=html_body
                         )
                     )
 
