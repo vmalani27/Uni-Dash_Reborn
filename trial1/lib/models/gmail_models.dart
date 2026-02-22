@@ -8,7 +8,8 @@ class GmailNotificationPreview {
   final DateTime? deadlineIso;
   final String? deadlineConfidence;
   final double academicScore;
-  final String normalizedTopic; // ASSIGNMENT, EXAM, ACADEMIC_ADMIN, OPPORTUNITY, INFORMATION, OTHER
+  final String
+  normalizedTopic; // ASSIGNMENT, EXAM, ACADEMIC_ADMIN, OPPORTUNITY, INFORMATION, OTHER
 
   GmailNotificationPreview({
     required this.id,
@@ -49,7 +50,7 @@ class GmailNotificationPreview {
 }
 
 class GmailMessageDetail {
-  final int? id;  // Made optional since backend doesn't provide it
+  final int? id; // Made optional since backend doesn't provide it
   final String gmailId;
   final String? threadId;
   final String sender;
@@ -57,21 +58,21 @@ class GmailMessageDetail {
   final String bodyHtml;
   final String bodyText;
   final DateTime? internalDate;
-  
+
   // AI fields
   final String? aiSummary;
   final String? aiLabelTopic;
   final String? aiLabelUrgency;
   final String? aiLabelSource;
   final bool aiProcessed;
-  
+
   // Deadline and priority fields
   final DateTime? deadlineIso;
   final String? deadlineConfidence;
   final double academicScore;
 
   GmailMessageDetail({
-    this.id,  // Made optional
+    this.id, // Made optional
     required this.gmailId,
     this.threadId,
     required this.sender,
@@ -90,13 +91,8 @@ class GmailMessageDetail {
   });
 
   factory GmailMessageDetail.fromJson(Map<String, dynamic> json) {
-    // Add logging to debug the JSON structure
-    print('[GmailMessageDetail.fromJson] Received JSON keys: ${json.keys.toList()}');
-    print('[GmailMessageDetail.fromJson] id field: ${json['id']} (type: ${json['id']?.runtimeType})');
-    print('[GmailMessageDetail.fromJson] gmail_id field: ${json['gmail_id']}');
-    
     return GmailMessageDetail(
-      id: json['id'] as int?,  // Made nullable
+      id: json['id'] as int?, // Made nullable
       gmailId: json['gmail_id'] as String,
       threadId: json['thread_id'] as String?,
       sender: json['sender'] as String? ?? '',

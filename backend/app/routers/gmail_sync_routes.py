@@ -165,6 +165,14 @@ def get_gmail_messages(db: Session = Depends(get_supabase_db), firebase_data=Dep
             "body_text": m.body_text,
             "body_html": m.body_html,
             "internal_date": m.internal_date,
+            "ai_summary": m.ai_summary,
+            "ai_label_topic": m.ai_label_topic,
+            "ai_label_urgency": m.ai_label_urgency,
+            "ai_label_source": m.ai_label_source,
+            "ai_processed": m.ai_processed,
+            "deadline_iso": m.deadline_iso.isoformat() if m.deadline_iso else None,
+            "deadline_confidence": m.deadline_confidence,
+            "academic_score": m.academic_score,
         }
         for m in messages
     ]

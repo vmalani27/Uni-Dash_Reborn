@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import '../screens/profile_setup_screen.dart';
 import 'package:trial1/services/authentication_service.dart';
 import 'Password_field.dart';
 import 'Username_field.dart';

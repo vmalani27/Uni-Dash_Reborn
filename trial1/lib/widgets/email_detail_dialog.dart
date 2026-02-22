@@ -1,13 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:trial1/models/gmail_models.dart';
-import 'package:trial1/services/api_services.dart';
 import 'package:trial1/widgets/notification_cards/priority_dot.dart';
 import 'package:trial1/widgets/notification_cards/deadline_display.dart';
 import 'package:trial1/theme.dart';
-import 'dart:async';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import 'package:firebase_auth/firebase_auth.dart';
 
 /// Email detail screen with AI insights.
 class EmailDetailScreen extends StatefulWidget {
@@ -26,84 +21,16 @@ class EmailDetailScreen extends StatefulWidget {
 
 class _EmailDetailScreenState extends State<EmailDetailScreen> {
   late GmailMessageDetail _message;
-  StreamSubscription? _aiSubscription;
+  String _selectedView = 'ai'; // 'ai' or 'raw'
 
   @override
   void initState() {
     super.initState();
     _message = widget.initialMessage;
-    if (!widget.initialMessage.aiProcessed) {
-      _startAiStreaming();
+    // Default to raw view if AI hasn't processed it yet
+    if (!_message.aiProcessed) {
+      _selectedView = 'raw';
     }
-  }
-
-  @override
-  void dispose() {
-    _aiSubscription?.cancel();
-    super.dispose();
-  }
-
-  Future<void> _startAiStreaming() async {
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
-
-      final url = Uri.parse(
-        '${BackendService.baseUrl}/gmail/${widget.gmailId}/ai/stream',
-      );
-      final idToken = await user.getIdToken();
-
-      final request = http.Request('GET', url);
-      request.headers['Authorization'] = 'Bearer $idToken';
-      request.headers['Accept'] = 'text/event-stream';
-      request.headers['Cache-Control'] = 'no-cache';
-
-      final client = http.Client();
-      final response = await client.send(request);
-
-      if (response.statusCode != 200) return;
-
-      _aiSubscription = response.stream
-          .transform(utf8.decoder)
-          .transform(const LineSplitter())
-          .listen(
-            (line) {
-              if (line.startsWith('data: ')) {
-                final jsonStr = line.substring(6).trim();
-                if (jsonStr.isEmpty) return;
-                try {
-                  final data = jsonDecode(jsonStr) as Map<String, dynamic>;
-                  if (data['status'] == 'completed' && mounted) {
-                    setState(() {
-                      _message = GmailMessageDetail(
-                        id: _message.id,
-                        gmailId: _message.gmailId,
-                        threadId: _message.threadId,
-                        sender: _message.sender,
-                        subject: _message.subject,
-                        bodyHtml: _message.bodyHtml,
-                        bodyText: _message.bodyText,
-                        internalDate: _message.internalDate,
-                        aiSummary: data['ai_summary'] as String?,
-                        aiLabelTopic: data['ai_label_topic'] as String?,
-                        aiLabelUrgency: data['ai_label_urgency'] as String?,
-                        aiLabelSource: data['ai_label_source'] as String?,
-                        aiProcessed: true,
-                        deadlineIso: _message.deadlineIso,
-                        deadlineConfidence: _message.deadlineConfidence,
-                        academicScore: _message.academicScore,
-                      );
-                    });
-                  }
-                } catch (e) {
-                  // Ignore parse errors
-                }
-              }
-            },
-            onError: (_) {},
-            onDone: () => client.close(),
-          );
-    } catch (_) {}
   }
 
   @override
@@ -154,7 +81,7 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
                         width: 40,
                         height: 40,
                         decoration: BoxDecoration(
-                          color: kAccentPrimary.withOpacity(0.15),
+                          color: kAccentPrimary.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Center(
@@ -190,20 +117,79 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 20),
-
-                  // AI Analysis Card
-                  _buildAiSection(context),
                   const SizedBox(height: 24),
 
-                  // Email Body
-                  Text(
-                    _message.bodyText,
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: kTextPrimary,
-                      height: 1.7,
+                  // View Toggle
+                  if (_message.aiProcessed) ...[
+                    SizedBox(
+                      width: double.infinity,
+                      child: SegmentedButton<String>(
+                        segments: const [
+                          ButtonSegment<String>(
+                            value: 'ai',
+                            label: Text('AI Summary'),
+                            icon: Icon(Icons.auto_awesome),
+                          ),
+                          ButtonSegment<String>(
+                            value: 'raw',
+                            label: Text('Raw Email'),
+                            icon: Icon(Icons.mail_outline),
+                          ),
+                        ],
+                        selected: {_selectedView},
+                        onSelectionChanged: (Set<String> newSelection) {
+                          setState(() {
+                            _selectedView = newSelection.first;
+                          });
+                        },
+                        style: ButtonStyle(
+                          backgroundColor:
+                              WidgetStateProperty.resolveWith<Color>((
+                                Set<WidgetState> states,
+                              ) {
+                                if (states.contains(WidgetState.selected)) {
+                                  return kAccentPrimary.withValues(alpha: 0.15);
+                                }
+                                return Colors.transparent;
+                              }),
+                          foregroundColor:
+                              WidgetStateProperty.resolveWith<Color>((
+                                Set<WidgetState> states,
+                              ) {
+                                if (states.contains(WidgetState.selected)) {
+                                  return kAccentPrimary;
+                                }
+                                return kTextSecondary;
+                              }),
+                        ),
+                      ),
                     ),
-                  ),
+                    const SizedBox(height: 24),
+                  ],
+
+                  // Content based on toggle
+                  if (_selectedView == 'ai' && _message.aiProcessed)
+                    _buildAiSection(context)
+                  else
+                    // Raw Email Body
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: kBgSurface,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: kTextDisabled.withValues(alpha: 0.1),
+                        ),
+                      ),
+                      child: Text(
+                        _message.bodyText,
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          color: kTextPrimary,
+                          height: 1.7,
+                        ),
+                      ),
+                    ),
+
                   const SizedBox(height: 60),
                 ],
               ),
@@ -215,42 +201,19 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
   }
 
   Widget _buildAiSection(BuildContext context) {
-    if (!_message.aiProcessed) {
-      return Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: kAccentPrimary.withOpacity(0.06),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: kAccentPrimary.withOpacity(0.15)),
-        ),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: kAccentPrimary,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Text(
-              'Analyzing email…',
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: kAccentPrimary),
-            ),
-          ],
-        ),
-      );
-    }
-
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: kBgSurface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: kTextDisabled.withOpacity(0.1)),
+        border: Border.all(color: kAccentPrimary.withValues(alpha: 0.2)),
+        boxShadow: [
+          BoxShadow(
+            color: kAccentPrimary.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -258,19 +221,31 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
           // Header + chips row
           Row(
             children: [
-              Icon(Icons.auto_awesome, color: kAccentPrimary, size: 18),
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: kAccentPrimary.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.auto_awesome,
+                  color: kAccentPrimary,
+                  size: 16,
+                ),
+              ),
               const SizedBox(width: 8),
               Text(
-                'AI Insights',
-                style: Theme.of(
-                  context,
-                ).textTheme.labelLarge?.copyWith(fontSize: 13),
+                'AI Analysis',
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: kAccentPrimary,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
               const Spacer(),
               PriorityDot(academicScore: _message.academicScore),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
 
           // Topic + Urgency chips
           Wrap(
@@ -300,17 +275,17 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
 
           // Deadline
           if (_message.deadlineIso != null) ...[
-            const SizedBox(height: 14),
+            const SizedBox(height: 16),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
-                color: kUrgencyHigh.withOpacity(0.08),
+                color: kUrgencyHigh.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: kUrgencyHigh.withValues(alpha: 0.2)),
               ),
               child: Row(
-                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.calendar_today, color: kUrgencyHigh, size: 14),
+                  Icon(Icons.event_busy, color: kUrgencyHigh, size: 16),
                   const SizedBox(width: 8),
                   Expanded(
                     child: DeadlineDisplay(deadline: _message.deadlineIso),
@@ -322,14 +297,22 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
 
           // Summary
           if (_message.aiSummary != null && _message.aiSummary!.isNotEmpty) ...[
-            const SizedBox(height: 14),
-            Divider(color: kTextDisabled.withOpacity(0.1), height: 1),
-            const SizedBox(height: 14),
+            const SizedBox(height: 16),
+            const Divider(height: 1),
+            const SizedBox(height: 16),
+            Text(
+              'Summary',
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: kTextSecondary,
+                letterSpacing: 0.5,
+              ),
+            ),
+            const SizedBox(height: 8),
             Text(
               _message.aiSummary!,
               style: Theme.of(
                 context,
-              ).textTheme.bodyMedium?.copyWith(height: 1.5),
+              ).textTheme.bodyLarge?.copyWith(height: 1.6, color: kTextPrimary),
             ),
           ],
         ],
@@ -341,7 +324,7 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(

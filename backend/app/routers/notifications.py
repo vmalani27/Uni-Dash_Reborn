@@ -90,6 +90,14 @@ def get_gmail_message_detail(
         "body_html": message.body_html,
         "body_text": normalize_email_text(message.body_text),
         "internal_date": format_ist_datetime(message.internal_date),
+        "ai_summary": message.ai_summary,
+        "ai_label_topic": message.ai_label_topic,
+        "ai_label_urgency": message.ai_label_urgency,
+        "ai_label_source": message.ai_label_source,
+        "ai_processed": message.ai_processed,
+        "deadline_iso": message.deadline_iso.isoformat() if message.deadline_iso else None,
+        "deadline_confidence": message.deadline_confidence,
+        "academic_score": message.academic_score,
     }
     return mail_detail
 

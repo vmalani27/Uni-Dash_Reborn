@@ -22,31 +22,8 @@ class NotificationTile extends StatelessWidget {
       child: OpenContainer(
         transitionType: ContainerTransitionType.fadeThrough,
         transitionDuration: const Duration(milliseconds: 400),
-        openBuilder: (context, _) => FutureBuilder<Map<String, dynamic>>(
-          future: BackendService.fetchGmailMessageDetail(notification.gmailId),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return Scaffold(
-                backgroundColor: kBgPrimary,
-                body: const Center(
-                  child: CircularProgressIndicator(color: kAccentPrimary),
-                ),
-              );
-            }
-            if (snapshot.hasError) {
-              return Scaffold(
-                backgroundColor: kBgPrimary,
-                appBar: AppBar(leading: const CloseButton()),
-                body: Center(child: Text('Error: ${snapshot.error}')),
-              );
-            }
-            final detail = GmailMessageDetail.fromJson(snapshot.data!);
-            return EmailDetailScreen(
-              initialMessage: detail,
-              gmailId: notification.gmailId,
-            );
-          },
-        ),
+        openBuilder: (context, _) =>
+            _EmailDetailLoader(gmailId: notification.gmailId),
         closedElevation: 0,
         closedShape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14),
@@ -223,6 +200,55 @@ class _DeadlineBadge extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _EmailDetailLoader extends StatefulWidget {
+  final String gmailId;
+
+  const _EmailDetailLoader({required this.gmailId});
+
+  @override
+  State<_EmailDetailLoader> createState() => _EmailDetailLoaderState();
+}
+
+class _EmailDetailLoaderState extends State<_EmailDetailLoader> {
+  late Future<Map<String, dynamic>> _detailFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    // Cache the future here so it only fires ONCE when the widget is created
+    _detailFuture = BackendService.fetchGmailMessageDetail(widget.gmailId);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _detailFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            backgroundColor: kBgPrimary,
+            body: Center(
+              child: CircularProgressIndicator(color: kAccentPrimary),
+            ),
+          );
+        }
+        if (snapshot.hasError) {
+          return Scaffold(
+            backgroundColor: kBgPrimary,
+            appBar: AppBar(leading: const CloseButton()),
+            body: Center(child: Text('Error: ${snapshot.error}')),
+          );
+        }
+        final detail = GmailMessageDetail.fromJson(snapshot.data!);
+        return EmailDetailScreen(
+          initialMessage: detail,
+          gmailId: widget.gmailId,
+        );
+      },
     );
   }
 }
