@@ -117,7 +117,7 @@ CONTENT: {features["clean_text"]}"""
                         "num_predict": 256   # Enough tokens for complete JSON response
                     }
                 },
-                timeout=60
+                timeout=(5, 60)  # (connect_timeout, read_timeout)
             )
             
             print(f"[AI SERVICE] Ollama response status: {response.status_code}")

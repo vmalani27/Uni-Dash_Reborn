@@ -48,6 +48,10 @@ class GmailCacheService {
                 'subject': n.subject,
                 'snippet': n.snippet,
                 'internal_date': n.internalDate?.toIso8601String(),
+                'deadline_iso': n.deadlineIso?.toIso8601String(),
+                'deadline_confidence': n.deadlineConfidence,
+                'academic_score': n.academicScore,
+                'normalized_topic': n.normalizedTopic,
               },
             )
             .toList(),
