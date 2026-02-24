@@ -8,7 +8,10 @@ from app.services.level1_classifier import Level1Classifier
 from app.services.academic_context_engine import AcademicContextEngine
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://192.168.31.2:11434/api/generate")
-MODEL_NAME = "qwen2.5:7b-instruct-q4_k_m"
+MODEL_NAME = os.getenv("OLLAMA_MODEL", "qwen2.5:7b-instruct-q4_k_m")
+OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+OPENROUTER_API_KEY = os.getenv("openrouter_api_key", "")
+OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "mistralai/mistral-7b-instruct")
 
 LEVEL2_LABELS = [
     "Timetable / Schedule Update",
@@ -24,7 +27,8 @@ LEVEL2_LABELS = [
 
 URGENCY_LABELS = ["Critical", "High", "Medium", "Low", "None"]
 
-SYSTEM_PROMPT = """RESPOND WITH VALID JSON ONLY. NO MARKDOWN. NO CODE BLOCKS. NO EXPLANATIONS.
+SYSTEM_PROMPT = """Output must be strictly valid JSON. The response must start with {{ and end with }}.
+If you include anything outside JSON, the response is invalid.
 
 Analyze the email below and return structured JSON.
 
@@ -50,23 +54,23 @@ DEADLINE EXTRACTION RULES:
 - If uncertain, return null.
 - Do NOT guess.
 
-VALID TOPICS:
-Timetable / Schedule Update
-Exam Notifications
-Assignment or Submission
-Certification / Courses
-Internship / Placement Opportunities
-Events / Hackathons
-Important Announcements
-Administrative / Fees / Counselling
-General Information / Misc
+"label_topic" must be EXACTLY one of:
+- Timetable / Schedule Update
+- Exam Notifications
+- Assignment or Submission
+- Certification / Courses
+- Internship / Placement Opportunities
+- Events / Hackathons
+- Important Announcements
+- Administrative / Fees / Counselling
+- General Information / Misc
 
-VALID URGENCY LEVELS:
-Critical
-High
-Medium
-Low
-None
+"label_urgency" must be EXACTLY one of:
+- Critical
+- High
+- Medium
+- Low
+- None
 """
 
 
@@ -74,7 +78,7 @@ class AIService:
     """Service class for AI-powered email inference and classification."""
 
     @staticmethod
-    def run_email_inference(message: GmailMessage, db):
+    def run_email_inference(message: GmailMessage, db, batch_mode: bool = False):
         """
         Run AI inference on a single GmailMessage.
         Updates the message with AI results and commits to DB.
@@ -94,51 +98,17 @@ SUBJECT: {message.subject}
 CONTENT: {features["clean_text"]}"""
 
         try:
-            print(f"[AI SERVICE] Connecting to Ollama at: {OLLAMA_URL}")
-            print(f"[AI SERVICE] Using model: {MODEL_NAME}")
-            
             full_prompt = SYSTEM_PROMPT.format(
                 source=label_source,
                 subject=message.subject,
                 content=features["clean_text"],
                 received_at=message.internal_date.isoformat() if message.internal_date else ""
             )
-            print(f"[AI SERVICE] Full prompt being sent: {full_prompt[:300]}...")
             
-            response = requests.post(
-                OLLAMA_URL,
-                json={
-                    "model": MODEL_NAME,
-                    "prompt": full_prompt,
-                    "stream": False,
-                    "options": {
-                        "temperature": 0.0,  # Zero temperature for consistent JSON output
-                        "top_p": 0.1,
-                        "num_predict": 256   # Enough tokens for complete JSON response
-                    }
-                },
-                timeout=(5, 60)  # (connect_timeout, read_timeout)
-            )
-            
-            print(f"[AI SERVICE] Ollama response status: {response.status_code}")
-            print(f"[AI SERVICE] Ollama response headers: {dict(response.headers)}")
-            
-            response.raise_for_status()
-            raw_output = response.json().get("response", "").strip()
-            
-            # Strip markdown code blocks if present
-            if raw_output.startswith("```json"):
-                raw_output = raw_output[7:]
-            if raw_output.startswith("```"):
-                raw_output = raw_output[3:]
-            if raw_output.endswith("```"):
-                raw_output = raw_output[:-3]
-            raw_output = raw_output.strip()
-            
-            print(f"[AI SERVICE] Raw Ollama output: {raw_output[:200]}...")
-            
+            raw_output = AIService._hybrid_inference(full_prompt, batch_mode)
+
             # Check if response is valid JSON
-            if not raw_output.strip():
+            if not raw_output or not raw_output.strip():
                 print(f"[AI SERVICE] Empty response from Ollama")
                 parsed = {
                     "summary": "AI service returned empty response",
@@ -237,11 +207,16 @@ CONTENT: {features["clean_text"]}"""
             parsed.get("label_topic", "General Information / Misc")
         )
         
-        # Store deadline information
+        # Store deadline information with robust validation
         if parsed.get("deadline_iso"):
             try:
-                message.deadline_iso = datetime.datetime.fromisoformat(parsed["deadline_iso"])
-            except:
+                dt = datetime.datetime.fromisoformat(parsed["deadline_iso"].replace('Z', '+00:00'))
+                # Assume UTC if timezone missing
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=datetime.timezone.utc)
+                message.deadline_iso = dt
+            except ValueError:
+                print(f"[AI SERVICE] Invalid ISO format for deadline: {parsed['deadline_iso']}")
                 message.deadline_iso = None
         else:
             message.deadline_iso = None
@@ -273,3 +248,98 @@ CONTENT: {features["clean_text"]}"""
             "deadline_confidence": message.deadline_confidence,
             "academic_score": message.academic_score
         }
+
+    @staticmethod
+    def _hybrid_inference(prompt: str, batch_mode: bool = False) -> str:
+        """
+        Runs API first for lightweight processing, falling back to local.
+        Always uses local for batch processing tasks.
+        """
+        try:
+            if batch_mode:
+                return AIService._local_inference(prompt)
+            else:
+                return AIService._openrouter_inference(prompt)
+        except Exception as e:
+            print(f"[AI SERVICE] Primary inference failed, falling back to local: {e}")
+            return AIService._local_inference(prompt)
+
+    @staticmethod
+    def _openrouter_inference(prompt: str) -> str:
+        """Runs inference via OpenRouter API for lightweight, real-time requests."""
+        if not OPENROUTER_API_KEY:
+            raise ValueError("OpenRouter API key is missing")
+
+        print(f"[AI SERVICE] Attempting OpenRouter Inference with model {OPENROUTER_MODEL}")
+        response = requests.post(
+            OPENROUTER_URL,
+            headers={
+                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                "HTTP-Referer": "https://uni-dash.local",  # Required by OpenRouter
+                "X-Title": "Uni-Dash Reborn"
+            },
+            json={
+                "model": OPENROUTER_MODEL,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.0,
+                "top_p": 0.1,
+                "response_format": {"type": "json_object"}  # Help enforce JSON
+            },
+            timeout=(5, 30)
+        )
+        response.raise_for_status()
+        output = response.json()["choices"][0]["message"]["content"].strip()
+        
+        # Strip markdown logic
+        if output.startswith("```json"):
+            output = output[7:]
+        if output.startswith("```"):
+            output = output[3:]
+        if output.endswith("```"):
+            output = output[:-3]
+        return output.strip()
+
+    @staticmethod
+    def _local_inference(prompt: str) -> str:
+        """Runs batched or fallback inference on local Ollama server."""
+        print(f"[AI SERVICE] Connecting to Ollama at: {OLLAMA_URL} with model: {MODEL_NAME}")
+        response = requests.post(
+            OLLAMA_URL,
+            json={
+                "model": MODEL_NAME,
+                "prompt": prompt,
+                "stream": False,
+                "options": {
+                    "temperature": 0.0,
+                    "top_p": 0.1,
+                    "num_predict": 256
+                }
+            },
+            timeout=(5, 60)
+        )
+        response.raise_for_status()
+        raw_output = response.json().get("response", "").strip()
+        
+        # Strip markdown code blocks
+        if raw_output.startswith("```json"):
+            raw_output = raw_output[7:]
+        if raw_output.startswith("```"):
+            raw_output = raw_output[3:]
+        if raw_output.endswith("```"):
+            raw_output = raw_output[:-3]
+        return raw_output.strip()
+
+    @staticmethod
+    def run_batch_email_inference(messages: list[GmailMessage], db):
+        """
+        Process a batch array of Gmail messages using local inference.
+        This sends them individually in a loop using the same deterministic logic
+        but flags batch_mode=True to enforce local inference usage.
+        (Future improvement: batching multiple emails into a single prompt for throughput limit if needed).
+        """
+        results = []
+        for message in messages:
+            print(f"[AI SERVICE BATCH] Processing message {message.gmail_id}")
+            res = AIService.run_email_inference(message, db, batch_mode=True)
+            results.append(res)
+        return results
