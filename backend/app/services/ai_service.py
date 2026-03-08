@@ -7,11 +7,12 @@ from app.models.gmail.gmail_message import GmailMessage
 from app.services.level1_classifier import Level1Classifier
 from app.services.academic_context_engine import AcademicContextEngine
 
+
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://192.168.31.2:11434/api/generate")
 MODEL_NAME = os.getenv("OLLAMA_MODEL", "qwen2.5:7b-instruct-q4_k_m")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 OPENROUTER_API_KEY = os.getenv("openrouter_api_key", "")
-OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "mistralai/mistral-7b-instruct")
+OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "qwen/qwen-2.5-vl-7b-instruct")
 
 LEVEL2_LABELS = [
     "Timetable / Schedule Update",
@@ -78,10 +79,10 @@ class AIService:
     """Service class for AI-powered email inference and classification."""
 
     @staticmethod
-    def run_email_inference(message: GmailMessage, db, batch_mode: bool = False):
+    def run_email_inference(message: GmailMessage, batch_mode: bool = False):
         """
         Run AI inference on a single GmailMessage.
-        Updates the message with AI results and commits to DB.
+        Updates the message with AI results. The caller is responsible for committing to DB.
         """
 
         # --- Level 1 classification ---
@@ -93,11 +94,10 @@ class AIService:
 
         label_source = Level1Classifier.classify_source(features["sender_email"])
 
-        prompt = f"""SOURCE TRUST LEVEL: {label_source}
-SUBJECT: {message.subject}
-CONTENT: {features["clean_text"]}"""
-
         try:
+            print(f"[AI SERVICE] Starting inference for gmail_id={message.gmail_id}")
+            message.ai_processed = False
+            message.ai_status = "processing"
             full_prompt = SYSTEM_PROMPT.format(
                 source=label_source,
                 subject=message.subject,
@@ -152,7 +152,7 @@ CONTENT: {features["clean_text"]}"""
                     
                     # Try to extract JSON from the response if it's wrapped in text
                     import re
-                    json_match = re.search(r'\{[^{}]*\{[^{}]*\}[^{}]*\}|\{[^{}]*\}', raw_output, re.DOTALL)
+                    json_match = re.search(r'\{[^{}]*("summary")[^{}]*\}', raw_output, re.DOTALL)
                     if json_match:
                         try:
                             candidate = json_match.group()
@@ -190,11 +190,11 @@ CONTENT: {features["clean_text"]}"""
         except Exception as e:
             print(f"[AI SERVICE] Inference failed for message {message.gmail_id}: {e}")
             print(f"[AI SERVICE] Full error details: {type(e).__name__}: {str(e)}")
-            parsed = {
-                "summary": "",
-                "label_topic": "General Information / Misc",
-                "label_urgency": "None"
-            }
+
+            message.ai_processed = False
+            message.ai_status = "failed"
+
+            raise
 
         # --- Store results ---
         message.ai_label_source = label_source
@@ -234,10 +234,11 @@ CONTENT: {features["clean_text"]}"""
             source_trust=label_source
         )
         
+        
         message.academic_score = int(academic_score)
         message.ai_processed = True
+        message.ai_status = "completed"
 
-        db.commit()
 
         return {
             "summary": message.ai_summary,
@@ -251,43 +252,41 @@ CONTENT: {features["clean_text"]}"""
 
     @staticmethod
     def _hybrid_inference(prompt: str, batch_mode: bool = False) -> str:
-        """
-        Runs API first for lightweight processing, falling back to local.
-        Always uses local for batch processing tasks.
-        """
         try:
-            if batch_mode:
-                return AIService._local_inference(prompt)
-            else:
-                return AIService._openrouter_inference(prompt)
-        except Exception as e:
-            print(f"[AI SERVICE] Primary inference failed, falling back to local: {e}")
             return AIService._local_inference(prompt)
-
+    
+        except requests.exceptions.ConnectionError as e:
+            print(f"[AI SERVICE] Local GPU connection failed, fallback triggered: {e}")
+            return AIService._openrouter_inference(prompt)
+    
+        except requests.exceptions.Timeout as e:
+            print(f"[AI SERVICE] Local GPU timeout, fallback triggered: {e}")
+            return AIService._openrouter_inference(prompt)
     @staticmethod
     def _openrouter_inference(prompt: str) -> str:
-        """Runs inference via OpenRouter API for lightweight, real-time requests."""
         if not OPENROUTER_API_KEY:
             raise ValueError("OpenRouter API key is missing")
 
         print(f"[AI SERVICE] Attempting OpenRouter Inference with model {OPENROUTER_MODEL}")
+
         response = requests.post(
             OPENROUTER_URL,
             headers={
                 "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                "HTTP-Referer": "https://uni-dash.local",  # Required by OpenRouter
+                "HTTP-Referer": "https://uni-dash.local",
                 "X-Title": "Uni-Dash Reborn"
             },
             json={
                 "model": OPENROUTER_MODEL,
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.0,
-                "top_p": 0.1,
-                "response_format": {"type": "json_object"}  # Help enforce JSON
+                "messages": [{"role": "user", "content": prompt}]
             },
             timeout=(5, 30)
         )
-        response.raise_for_status()
+
+        if response.status_code != 200:
+            print("[AI SERVICE] OpenRouter error:", response.status_code, response.text)
+            response.raise_for_status()
+
         output = response.json()["choices"][0]["message"]["content"].strip()
         
         # Strip markdown logic

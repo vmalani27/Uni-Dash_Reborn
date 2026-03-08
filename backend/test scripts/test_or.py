@@ -13,4 +13,7 @@ def run(model_name):
     )
     print(model_name, res.status_code, res.text)
 
-run("mistralai/mistral-7b-instruct")
+run("qwen/qwen-2.5-vl-7b-instruct")
+
+
+

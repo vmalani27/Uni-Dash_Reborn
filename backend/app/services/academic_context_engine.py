@@ -2,7 +2,7 @@
 Academic Context Engine - Deadline-aware intelligence for academic emails
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 
@@ -18,7 +18,7 @@ class AcademicContextEngine:
         if not deadline:
             return None
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         # Reject past deadlines older than 1 day (allows for timezone issues)
         if deadline < now - timedelta(days=1):
@@ -39,7 +39,7 @@ class AcademicContextEngine:
         if not deadline:
             return None
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         hours_remaining = (deadline - now).total_seconds() / 3600
 
         if hours_remaining <= 6:

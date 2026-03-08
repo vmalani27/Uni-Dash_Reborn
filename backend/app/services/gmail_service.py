@@ -120,7 +120,8 @@ class GmailService:
                         snippet=full.get("snippet"),
                         internal_date=internal_date,
                         body_text=text_body,
-                        body_html=html_body
+                        body_html=html_body,
+                        ai_status="pending"
                     )
                 )
 
@@ -312,39 +313,14 @@ class GmailService:
                             snippet=full.get("snippet"),
                             internal_date=internal_date,
                             body_text=text_body,
-                            body_html=html_body
+                            body_html=html_body,
+                            ai_status="pending"
                         )
                     )
 
                     inserted += 1
                     if not newest_internal_date or internal_date > newest_internal_date:
                         newest_internal_date = internal_date
-
-                    # Trigger background AI processing for new messages
-                    # This will run AI inference asynchronously without blocking sync
-                    try:
-                        from app.services.ai_service import AIService
-                        # Run AI in background thread to avoid blocking sync
-                        import threading
-                        def background_ai():
-                            try:
-                                supabase_db = None
-                                from app.core.database import SupabaseSessionLocal
-                                supabase_db = SupabaseSessionLocal()
-                                message = supabase_db.query(GmailMessage).filter_by(gmail_id=gmail_id).first()
-                                if message:
-                                    AIService.run_email_inference(message, supabase_db)
-                                    print(f"[BACKGROUND AI] Processed {gmail_id}")
-                                supabase_db.close()
-                            except Exception as e:
-                                print(f"[BACKGROUND AI] Failed for {gmail_id}: {e}")
-                        
-                        # Start background thread for AI processing
-                        ai_thread = threading.Thread(target=background_ai, daemon=True)
-                        ai_thread.start()
-                        
-                    except Exception as e:
-                        print(f"[SYNC] Failed to start background AI for {gmail_id}: {e}")
 
             db.commit()
 

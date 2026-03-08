@@ -59,39 +59,44 @@ def _process_one_email():
     try:
         message = (
             db.query(GmailMessage)
-            .filter(GmailMessage.ai_processed == False)
-            .order_by(GmailMessage.internal_date.desc())
+            .filter(
+                (GmailMessage.ai_status == None) |
+                (GmailMessage.ai_status == "pending") |
+                (GmailMessage.ai_status == "failed")
+            )
+            .order_by(GmailMessage.created_at.asc())
+            .with_for_update(skip_locked=True)
             .first()
         )
 
         if message is None:
             return None
 
+        # Atomically lock the row before heavy ML execution
+        message.ai_status = "processing"
+        db.commit()
+
         gmail_id = message.gmail_id
         subject = message.subject[:50] if message.subject else ""
         print(f"[AI_WORKER] Processing: {gmail_id} | {subject}…")
 
         try:
-            AIService.run_email_inference(message, db)
+            AIService.run_email_inference(message)
+            db.commit()
             topic = message.normalized_topic
-            print(f"[AI_WORKER] ✓ Classified: {gmail_id} → {topic}")
+            print(f"[AI_WORKER] Classified: {gmail_id} → {topic}")
             return (gmail_id, topic)
 
         except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
             # Ollama unreachable — don't mark as processed, will retry
+            db.rollback() # Ensure processing lock is removed so it can retry later
             raise
 
         except Exception as e:
-            print(f"[AI_WORKER] ✗ Failed: {gmail_id}: {e}")
-            # Non-transient failure — mark as processed so it doesn't block queue
-            try:
-                message.ai_processed = True
-                message.normalized_topic = "UNCLASSIFIED"
-                message.ai_summary = f"Classification failed: {str(e)[:100]}"
-                db.commit()
-            except Exception:
-                db.rollback()
-            return (gmail_id, "UNCLASSIFIED")
+            print(f"[AI_WORKER] Failed: {gmail_id}: {e}")
+            # Commit the failure state so that ai_status="failed" persists
+            db.commit()
+            return None 
 
     finally:
         db.close()
@@ -128,12 +133,18 @@ async def ingestion_loop():
             uids = await asyncio.to_thread(_count_users)
             print(f"[INGESTION] Running for {len(uids)} user(s) at {datetime.utcnow().isoformat()}")
 
-            for uid in uids:
-                try:
-                    await asyncio.to_thread(_sync_user, uid)
-                    print(f"[INGESTION] ✓ Synced user {uid[:8]}…")
-                except Exception as e:
-                    print(f"[INGESTION] ✗ Failed for user {uid[:8]}…: {e}")
+            sem = asyncio.Semaphore(5)
+
+            async def bounded_sync(uid):
+                async with sem:
+                    try:
+                        await asyncio.to_thread(_sync_user, uid)
+                        print(f"[INGESTION] Synced user {uid[:8]}…")
+                    except Exception as e:
+                        print(f"[INGESTION] Failed for user {uid[:8]}…: {e}")
+
+            if uids:
+                await asyncio.gather(*(bounded_sync(uid) for uid in uids))
 
         except Exception as e:
             print(f"[INGESTION] Loop error: {e}")

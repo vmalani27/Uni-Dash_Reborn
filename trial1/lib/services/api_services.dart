@@ -72,7 +72,7 @@ class BackendService {
 
     print('[BackendService] Fetching Gmail message detail for: $gmailId');
     final response = await http.get(
-      Uri.parse("$baseUrl/notifications/gmail/get-mail/$gmailId"),
+      Uri.parse("$baseUrl/gmail/$gmailId"),
       headers: {"Authorization": "Bearer $idToken"},
     );
 

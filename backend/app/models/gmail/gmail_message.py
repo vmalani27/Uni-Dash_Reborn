@@ -26,6 +26,7 @@ class GmailMessage(Base):
     ai_label_urgency = Column(String, nullable=True)
     ai_label_source = Column(String, nullable=True)
     ai_processed = Column(Boolean, default=False)
+    ai_status = Column(String, default="pending") # pending, processing, completed, failed
     
     # Normalized academic category (ASSIGNMENT, EXAM, ACADEMIC_ADMIN, OPPORTUNITY, INFORMATION, OTHER)
     normalized_topic = Column(String, default="OTHER")

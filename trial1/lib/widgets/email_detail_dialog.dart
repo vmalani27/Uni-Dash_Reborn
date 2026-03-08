@@ -3,6 +3,11 @@ import 'package:trial1/models/gmail_models.dart';
 import 'package:trial1/widgets/notification_cards/priority_dot.dart';
 import 'package:trial1/widgets/notification_cards/deadline_display.dart';
 import 'package:trial1/theme.dart';
+import 'dart:async';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:trial1/config.dart';
 
 /// Email detail screen with AI insights.
 class EmailDetailScreen extends StatefulWidget {
@@ -22,6 +27,8 @@ class EmailDetailScreen extends StatefulWidget {
 class _EmailDetailScreenState extends State<EmailDetailScreen> {
   late GmailMessageDetail _message;
   String _selectedView = 'ai'; // 'ai' or 'raw'
+  StreamSubscription<String>? _streamSubscription;
+  http.Client? _httpClient;
 
   @override
   void initState() {
@@ -30,7 +37,85 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
     // Default to raw view if AI hasn't processed it yet
     if (!_message.aiProcessed) {
       _selectedView = 'raw';
+      _listenToAiStream();
     }
+  }
+
+  void _listenToAiStream() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    final idToken = await user.getIdToken();
+
+    final url = Uri.parse(
+      '${AppConfig.backendUrl}/gmail/${widget.gmailId}/ai/stream',
+    );
+    _httpClient = http.Client();
+    final request = http.Request('GET', url);
+    request.headers['Authorization'] = 'Bearer $idToken';
+    request.headers['Accept'] = 'text/event-stream';
+
+    try {
+      final response = await _httpClient!.send(request);
+      if (response.statusCode == 200) {
+        _streamSubscription = response.stream
+            .transform(utf8.decoder)
+            .transform(const LineSplitter())
+            .listen(
+              (line) {
+                if (line.startsWith('data: ')) {
+                  final dataStr = line.substring(6);
+                  if (dataStr.trim().isEmpty) return;
+                  try {
+                    final data = jsonDecode(dataStr);
+                    if (data['status'] == 'completed') {
+                      if (mounted) {
+                        setState(() {
+                          _message = GmailMessageDetail(
+                            id: _message.id,
+                            gmailId: _message.gmailId,
+                            threadId: _message.threadId,
+                            sender: _message.sender,
+                            subject: _message.subject,
+                            bodyHtml: _message.bodyHtml,
+                            bodyText: _message.bodyText,
+                            internalDate: _message.internalDate,
+                            aiSummary: data['ai_summary'],
+                            aiLabelTopic: data['ai_label_topic'],
+                            aiLabelUrgency: data['ai_label_urgency'],
+                            aiLabelSource: data['ai_label_source'],
+                            aiProcessed: true,
+                            deadlineIso: data['deadline_iso'] != null
+                                ? DateTime.tryParse(data['deadline_iso'])
+                                : null,
+                            deadlineConfidence: data['deadline_confidence'],
+                            academicScore:
+                                (data['academic_score'] as num?)?.toDouble() ??
+                                0.0,
+                          );
+                          _selectedView = 'ai';
+                        });
+                      }
+                    }
+                  } catch (e) {
+                    debugPrint('Error parsing stream data: $e');
+                  }
+                }
+              },
+              onError: (e) {
+                debugPrint('Stream error: $e');
+              },
+            );
+      }
+    } catch (e) {
+      debugPrint('Error listening to AI stream: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _streamSubscription?.cancel();
+    _httpClient?.close();
+    super.dispose();
   }
 
   @override

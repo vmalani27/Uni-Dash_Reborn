@@ -1,4 +1,4 @@
-name: Deploy to Pi
+name: Deploy Backend
 
 on:
   push:
@@ -10,6 +10,20 @@ jobs:
     runs-on: self-hosted
 
     steps:
-      - name: Run deploy script
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t unidash-backend .
+
+      - name: Stop old container
         run: |
-          /home/barf/deploy.sh
+          docker stop unidash-backend || true
+          docker rm unidash-backend || true
+
+      - name: Start new container
+        run: |
+          docker run -d \
+          --name unidash-backend \
+          -p 8000:8000 \
+          unidash-backend

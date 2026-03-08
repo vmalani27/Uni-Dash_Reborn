@@ -208,46 +208,10 @@ def get_gmail_message(gmail_id: str, background_tasks: BackgroundTasks, db: Sess
     if not message:
         raise HTTPException(status_code=404, detail="Email not found")
 
-    # Trigger AI inference in background if not already processed
-    if not message.ai_processed:
-        print(f"[BACKGROUND AI] Starting background AI task for {gmail_id}")
-        def run_ai_inference():
-            print(f"[BACKGROUND AI] Background task started for {gmail_id}")
-            supabase_db = None
-            try:
-                from app.core.database import SupabaseSessionLocal
-                supabase_db = SupabaseSessionLocal()
-                print(f"[BACKGROUND AI] Created DB session, calling AIService for {gmail_id}")
-                
-                # Get fresh message object in this session
-                fresh_message = supabase_db.query(GmailMessage).filter(
-                    GmailMessage.uid == message.uid,
-                    GmailMessage.gmail_id == message.gmail_id
-                ).first()
-                
-                if not fresh_message:
-                    print(f"[BACKGROUND AI] ERROR: Could not find message {gmail_id} in background task")
-                    return
-                    
-                print(f"[BACKGROUND AI] Found fresh message, ai_processed={fresh_message.ai_processed}")
-                result = AIService.run_email_inference(fresh_message, supabase_db)
-                print(f"[BACKGROUND AI] AIService returned: {result}")
-                print(f"[BACKGROUND AI] After AI, message.ai_processed={fresh_message.ai_processed}")
-                supabase_db.commit()
-                print(f"[BACKGROUND AI] Committed changes for {gmail_id}")
-                
-            except Exception as e:
-                print(f"[BACKGROUND AI] Failed inference for {gmail_id}: {e}")
-                import traceback
-                print(f"[BACKGROUND AI] Full traceback: {traceback.format_exc()}")
-            finally:
-                if supabase_db:
-                    supabase_db.close()
-
-        background_tasks.add_task(run_ai_inference)
-        print(f"[BACKGROUND AI] Added background task for {gmail_id}")
+    if message.ai_processed:
+        print(f"[/gmail/{gmail_id}] Message already processed.")
     else:
-        print(f"[BACKGROUND AI] Skipping background task for {gmail_id} - already processed")
+        print(f"[/gmail/{gmail_id}] Message is pending processing by the background worker.")
 
     # Return email data immediately (AI data may be None if not processed yet)
     return {
@@ -290,7 +254,8 @@ def infer_email_ai(gmail_id: str, db: Session = Depends(get_supabase_db), fireba
 
     # Run AI inference
     try:
-        ai_result = AIService.run_email_inference(message, db)
+        ai_result = AIService.run_email_inference(message)
+        db.commit()
         return {
             "gmail_id": gmail_id,
             "ai_summary": ai_result.get("summary"),
@@ -303,6 +268,7 @@ def infer_email_ai(gmail_id: str, db: Session = Depends(get_supabase_db), fireba
             "academic_score": message.academic_score
         }
     except Exception as e:
+        db.commit() # Commit the 'failed' status or any partial changes before raising 500
         raise HTTPException(status_code=500, detail=f"AI inference failed: {str(e)}")
 
 
