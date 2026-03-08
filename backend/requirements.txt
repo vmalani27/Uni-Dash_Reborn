@@ -7,7 +7,6 @@ google-auth
 google-auth-oauthlib
 google-api-python-client
 firebase-admin
-scikit-learn
 joblib
 pytest
 httpx
