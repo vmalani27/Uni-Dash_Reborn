@@ -13,5 +13,5 @@ httpx
 sqlalchemy
 psycopg2-binary
 alembic
-cryptography
+cryptography==41.0.7
 beautifulsoup4
