@@ -1,31 +1,25 @@
 # Stage 1: Build Rust-based dependencies
-FROM rust:1.75-slim-bookworm AS rust-builder
-WORKDIR /usr/src/app
-# This ensures we have the right headers for python-based builds
-RUN apt-get update && apt-get install -y python3 python3-pip python3-venv pkg-config libssl-dev
+FROM --platform=linux/arm/v7 python:3.10-slim-bookworm AS builder
 
-# Stage 2: Python Builder
-FROM python:3.10-slim-bookworm AS builder
 WORKDIR /backend
 
-# Copy Rust binaries/toolchain from the rust-builder if needed, 
-# but usually, it's easier to just install build-essentials here 
-# and let pip handle the heavy lifting.
+# Standard build tools
 RUN apt-get update && apt-get install -y \
     build-essential \
     gcc \
-    pkg-config \
+    g++ \
     libssl-dev \
     libffi-dev \
     libblas-dev \
     liblapack-dev \
+    pkg-config \
     curl
 
-# Fix for ARM: Install Rust safely via the official method OR use the pre-built env
-# To ensure the right architecture, we force the rustup detection:
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
-ENV PATH="/root/.cargo/bin:${PATH}"
+# CRITICAL FIX: Tell the Rust installer to use the 32-bit target explicitly
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
+    --default-host armv7-unknown-linux-gnueabihf
 
+ENV PATH="/root/.cargo/bin:${PATH}"
 COPY requirements.txt .
 RUN pip install --upgrade pip && \
     pip install --no-cache-dir --user -r requirements.txt
