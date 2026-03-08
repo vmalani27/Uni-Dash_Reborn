@@ -4,7 +4,15 @@ WORKDIR /backend
 
 RUN apt-get update && apt-get install -y \
     build-essential \
-    cmake \
+    gcc \
+    g++ \
+    libssl-dev \
+    libffi-dev \
+    libblas-dev \
+    liblapack-dev \
+    pkg-config \
+    cargo \
+    rustc \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
