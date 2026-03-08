@@ -12,8 +12,18 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+      
+      - name: Create Firebase credentials file
+        run: |
+          echo '${{ secrets.FIREBASE_ADMIN_CREDENTIALS }}' > backend/credentials.json
+
+      - name: Create environment variables file
+        run: |
+          echo '${{ secrets.ENVIRONMENT_VARIABLES }}' > backend/.env
+
 
       - name: Build Docker image
+        working-directory: backend
         run: docker build -t unidash-backend .
 
       - name: Stop old container
@@ -26,4 +36,6 @@ jobs:
           docker run -d \
           --name unidash-backend \
           -p 8000:8000 \
+          -v $PWD/credentials.json:/app/core/credentials.json \
+          -v $PWD/.env:/app/.env \
           unidash-backend
