@@ -2,6 +2,7 @@ FROM python:3.10
 
 WORKDIR /backend
 
+# Install build dependencies and Rust via rustup to get the latest version
 RUN apt-get update && apt-get install -y \
     build-essential \
     gcc \
@@ -11,9 +12,12 @@ RUN apt-get update && apt-get install -y \
     libblas-dev \
     liblapack-dev \
     pkg-config \
-    cargo \
-    rustc \
+    curl \
+    && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y \
     && rm -rf /var/lib/apt/lists/*
+
+# Add Rust to PATH
+ENV PATH="/root/.cargo/bin:${PATH}"
 
 COPY requirements.txt .
 
