@@ -17,8 +17,7 @@ COPY --from=builder /root/.local /root/.local
 ENV PATH=/root/.local/bin:$PATH
 
 COPY app ./app
-COPY .env ./.env
-COPY credentials.json ./app/core/credentials.json
+# No COPY for .env or credentials.json - mounted at runtime via docker run -v
 
 EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
