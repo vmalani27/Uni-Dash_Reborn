@@ -35,7 +35,12 @@ jobs:
         run: |
           docker run -d \
           --name unidash-backend \
+          --restart unless-stopped \
           -p 8000:8000 \
-          -v /home/barf/actions-runner/_work/Uni-Dash_Reborn/Uni-Dash_Reborn/backend/.env:/backend/.env \
-          -v /home/barf/actions-runner/_work/Uni-Dash_Reborn/Uni-Dash_Reborn/backend/credentials.json:/backend/app/core/credentials.json \
+          --health-cmd "curl -f http://localhost:8000/health || exit 1" \
+          --health-interval 30s \
+          --health-timeout 10s \
+          --health-retries 3 \
+          -v ${{ github.workspace }}/backend/.env:/backend/.env \
+          -v ${{ github.workspace }}/backend/credentials.json:/backend/app/core/credentials.json \
           unidash-backend
