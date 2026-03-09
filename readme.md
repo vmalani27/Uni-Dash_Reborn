@@ -18,13 +18,13 @@ graph TD
     end
 
     %% API Broker Layer (Raspberry Pi)
-    subgraph Edge Node (Raspberry Pi)
+    subgraph "Edge Node (Raspberry Pi)"
         API[FastAPI Gateway]
         SYNC[Incremental Sync Worker]
     end
 
     %% Inference Layer (GPU Machine)
-    subgraph AI Processing Node (GPU Worker)
+    subgraph "AI Processing Node (GPU Worker)"
         OLLAMA[Ollama Inference Server]
         MODEL[Llama 3 Model]
         AI_WORK[AI Processing Background Job]
@@ -91,10 +91,10 @@ graph TD
     end
 
     %% Raspberry Pi Section
-    subgraph Raspberry Pi (Production Node)
+    subgraph "Raspberry Pi (Production Node)"
         Runner[Self-Hosted GHA Runner]
         
-        subgraph Build Process (Multi-Stage Docker)
+        subgraph "Build Process (Multi-Stage Docker)"
             BuildStage[Builder Stage: piwheels + python-slim]
             RunStage[Runtime Stage: Minimal footpint]
         end
