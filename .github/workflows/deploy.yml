@@ -36,6 +36,6 @@ jobs:
           docker run -d \
           --name unidash-backend \
           -p 8000:8000 \
-          -v $PWD/credentials.json:/app/core/credentials.json \
-          -v $PWD/.env:/.env \
+          -v /home/barf/actions-runner/_work/Uni-Dash_Reborn/Uni-Dash_Reborn/backend/.env:/backend/.env \
+          -v /home/barf/actions-runner/_work/Uni-Dash_Reborn/Uni-Dash_Reborn/backend/credentials.json:/backend/app/core/credentials.json \
           unidash-backend
