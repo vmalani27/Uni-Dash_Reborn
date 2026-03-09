@@ -9,14 +9,20 @@ RUN apt-get update && apt-get install -y \
     python3-dev \
     gcc \
     g++ \
-    cargo \
-    rustc \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --upgrade pip && \
+# Install latest Rust via rustup properly, with PATH set immediately
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
+    sh -s -- -y --profile minimal --default-toolchain stable
+ENV PATH="/root/.cargo/bin:$PATH"
+
+# Verify cargo is actually found before proceeding
+RUN cargo --version && rustc --version
+
+RUN pip install --upgrade pip setuptools && \
     pip config set global.extra-index-url https://www.piwheels.org/simple
 
-# Pin grpcio to a version piwheels has pre-built
 RUN pip install --no-cache-dir --user grpcio==1.62.0 grpcio-status==1.62.0
 
 COPY requirements.txt .
