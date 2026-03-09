@@ -9,7 +9,7 @@ from app.services.academic_context_engine import AcademicContextEngine
 
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://192.168.31.2:11434/api/generate")
-MODEL_NAME = os.getenv("OLLAMA_MODEL", "qwen2.5:7b-instruct-q4_k_m")
+MODEL_NAME = os.getenv("OLLAMA_MODEL", "phi3:mini")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 OPENROUTER_API_KEY = os.getenv("openrouter_api_key", "")
 OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "qwen/qwen-2.5-vl-7b-instruct")
@@ -28,50 +28,31 @@ LEVEL2_LABELS = [
 
 URGENCY_LABELS = ["Critical", "High", "Medium", "Low", "None"]
 
-SYSTEM_PROMPT = """Output must be strictly valid JSON. The response must start with {{ and end with }}.
-If you include anything outside JSON, the response is invalid.
+BATCH_SYSTEM_PROMPT = """You are an academic email classifier. 
+Output MUST be a strictly valid JSON ARRAY of objects. Each object corresponds to an email and must contain specific fields.
 
-Analyze the email below and return structured JSON.
-
-SOURCE TRUST LEVEL: {source}
-EMAIL RECEIVED AT (ISO 8601): {received_at}
-SUBJECT: {subject}
-CONTENT: {content}
-
-REQUIRED JSON FORMAT:
+REQUIRED JSON FORMAT PER ITEM:
 {{
-  "summary": "brief summary text",
-  "label_topic": "topic name",
-  "label_urgency": "urgency level",
-  "deadline_iso": "ISO 8601 datetime or null",
+  "email_id": "the original ID provided",
+  "summary": "brief 1-sentence summary",
+  "label_topic": "one of the allowed topic labels",
+  "label_urgency": "one of the allowed urgency labels",
+  "deadline_iso": "ISO 8601 or null",
   "deadline_confidence": "High | Medium | Low | None"
 }}
 
-DEADLINE EXTRACTION RULES:
-- If a specific deadline is mentioned (e.g., "11 AM tomorrow", "by 25 Jan 2026", "next Monday at 3 PM"),
-  convert it to ISO 8601 format using EMAIL RECEIVED AT as reference.
-- If only relative time is mentioned ("within 2 days"), compute exact datetime.
-- If no deadline exists, return null.
-- If uncertain, return null.
-- Do NOT guess.
+ALLOWED TOPIC LABELS:
+{topics}
 
-"label_topic" must be EXACTLY one of:
-- Timetable / Schedule Update
-- Exam Notifications
-- Assignment or Submission
-- Certification / Courses
-- Internship / Placement Opportunities
-- Events / Hackathons
-- Important Announcements
-- Administrative / Fees / Counselling
-- General Information / Misc
+ALLOWED URGENCY LABELS:
+{urgencies}
 
-"label_urgency" must be EXACTLY one of:
-- Critical
-- High
-- Medium
-- Low
-- None
+DEADLINE RULES:
+- Use EMAIL RECEIVED AT as reference.
+- If no deadline exists or uncertain, return null.
+
+EMAILS TO PROCESS:
+{emails_block}
 """
 
 
@@ -93,6 +74,28 @@ class AIService:
         )
 
         label_source = Level1Classifier.classify_source(features["sender_email"])
+
+        # Trust-Based Filtering (NEW): Skip if External / Misc
+        if label_source == "External / Misc":
+            print(f"[AI SERVICE] Skipping non-academic/misc email: {message.gmail_id}")
+            message.ai_label_source = label_source
+            message.ai_summary = "Non-academic or mixed source - skipped AI."
+            message.ai_label_topic = "General Information / Misc"
+            message.ai_label_urgency = "None"
+            message.normalized_topic = "INFORMATION"
+            message.academic_score = 0
+            message.ai_processed = True
+            message.ai_status = "completed"
+            # The caller is responsible for committing to DB, so db.commit() is omitted here.
+            return {
+                "summary": message.ai_summary,
+                "topic": message.ai_label_topic,
+                "urgency": message.ai_label_urgency,
+                "source": message.ai_label_source,
+                "deadline_iso": None,
+                "deadline_confidence": "None",
+                "academic_score": 0
+            }
 
         try:
             print(f"[AI SERVICE] Starting inference for gmail_id={message.gmail_id}")
@@ -331,14 +334,141 @@ class AIService:
     @staticmethod
     def run_batch_email_inference(messages: list[GmailMessage], db):
         """
-        Process a batch array of Gmail messages using local inference.
-        This sends them individually in a loop using the same deterministic logic
-        but flags batch_mode=True to enforce local inference usage.
-        (Future improvement: batching multiple emails into a single prompt for throughput limit if needed).
+        Processes a list of GmailMessages as a single batch to maximize throughput.
+        Uses Level 0 filtering to skip trivial emails and Level 1 for trust context.
         """
-        results = []
-        for message in messages:
-            print(f"[AI SERVICE BATCH] Processing message {message.gmail_id}")
-            res = AIService.run_email_inference(message, db, batch_mode=True)
-            results.append(res)
+        if not messages:
+            return []
+
+        from app.ai.preprocessing import is_trivial_email
+
+        to_process = []
+        results = {}
+
+        # 1. First Pass: Fast Filtering
+        for msg in messages:
+            # Level 0 Check
+            if is_trivial_email(msg.subject, msg.body_text):
+                print(f"[AI BATCH] Skipping trivial email: {msg.gmail_id}")
+                msg.ai_summary = "Trivial/Automated notification - skipped AI."
+                msg.ai_label_topic = "General Information / Misc"
+                msg.ai_label_urgency = "None"
+                msg.normalized_topic = "INFORMATION"
+                msg.academic_score = 0
+                msg.ai_processed = True
+                msg.ai_status = "completed"
+                results[msg.gmail_id] = {"status": "skipped"}
+                continue
+
+            # Prepare for LLM
+            features = preprocess_email_for_llm(
+                subject=msg.subject,
+                body=msg.body_text,
+                sender=msg.sender,
+            )
+            label_source = Level1Classifier.classify_source(features["sender_email"])
+            
+            # Trust-Based Filtering (NEW): Skip if External / Misc
+            if label_source == "External / Misc":
+                print(f"[AI BATCH] Skipping non-academic/misc email: {msg.gmail_id}")
+                msg.ai_label_source = label_source
+                msg.ai_summary = "Non-academic or mixed source - skipped AI."
+                msg.ai_label_topic = "General Information / Misc"
+                msg.ai_label_urgency = "None"
+                msg.normalized_topic = "INFORMATION"
+                msg.academic_score = 0
+                msg.ai_processed = True
+                msg.ai_status = "completed"
+                results[msg.gmail_id] = {"status": "skipped_trust"}
+                continue
+            
+            to_process.append({
+                "id": msg.gmail_id,
+                "text": features["clean_text"],
+                "subject": msg.subject,
+                "source": label_source,
+                "received_at": msg.internal_date.isoformat() if msg.internal_date else "",
+                "msg_obj": msg  # Keep reference for post-processing
+            })
+
+        if not to_process:
+            db.commit()
+            return results
+
+        # 2. Level 2: Batch LLM Inference
+        emails_block = ""
+        for item in to_process:
+            emails_block += f"\n---\nID: {item['id']}\nRECEIVED: {item['received_at']}\nSOURCE: {item['source']}\nSUBJECT: {item['subject']}\nCONTENT: {item['text']}\n---\n"
+
+        prompt = BATCH_SYSTEM_PROMPT.format(
+            topics="\n- ".join(LEVEL2_LABELS),
+            urgencies="\n- ".join(URGENCY_LABELS),
+            emails_block=emails_block
+        )
+
+        try:
+            raw_output = AIService._hybrid_inference(prompt)
+            # Basic scrubbing of potential Markdown
+            if "```json" in raw_output:
+                raw_output = re.search(r'\[.*\]', raw_output, re.DOTALL).group()
+            
+            parsed_batch = json.loads(raw_output)
+            if not isinstance(parsed_batch, list):
+                if isinstance(parsed_batch, dict):
+                    parsed_batch = [parsed_batch]
+                else:
+                    raise ValueError("LLM did not return a list")
+
+            # Map results back to messages
+            parsed_map = {item.get("email_id"): item for item in parsed_batch}
+
+            for item in to_process:
+                msg = item["msg_obj"]
+                gid = item["id"]
+                data = parsed_map.get(gid)
+
+                if not data:
+                    print(f"[AI BATCH] Missing AI data for {gid}")
+                    msg.ai_status = "failed"
+                    continue
+
+                # Apply data (reusing similar logic to single mode)
+                msg.ai_label_source = item["source"]
+                msg.ai_label_topic = data.get("label_topic", "General Information / Misc")
+                msg.ai_label_urgency = data.get("label_urgency", "None")
+                msg.ai_summary = data.get("summary", "No summary provided")
+                
+                msg.normalized_topic = AcademicContextEngine.normalize_topic(msg.ai_label_topic)
+                
+                # Deadline logic
+                if data.get("deadline_iso"):
+                    try:
+                        msg.deadline_iso = datetime.datetime.fromisoformat(data["deadline_iso"].replace('Z', '+00:00'))
+                    except:
+                        msg.deadline_iso = None
+                
+                msg.deadline_confidence = data.get("deadline_confidence", "None")
+                
+                # Scoring
+                norm_deadline = AcademicContextEngine.normalize_deadline(msg.deadline_iso)
+                deadline_urgency = AcademicContextEngine.calculate_deadline_urgency(norm_deadline)
+                msg.academic_score = int(AcademicContextEngine.calculate_academic_score(
+                    deadline_urgency=deadline_urgency,
+                    ai_urgency=msg.ai_label_urgency,
+                    topic=msg.ai_label_topic,
+                    source_trust=item["source"]
+                ))
+                
+                msg.ai_processed = True
+                msg.ai_status = "completed"
+                results[gid] = {"status": "success"}
+
+        except Exception as e:
+            print(f"[AI BATCH] Batch inference catastrophic failure: {e}")
+            for item in to_process:
+                item["msg_obj"].ai_status = "failed"
+            db.rollback()
+            raise
+
+        db.commit()
         return results
