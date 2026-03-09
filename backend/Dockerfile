@@ -1,3 +1,15 @@
+# ---- Builder stage ----
+FROM --platform=linux/arm/v7 python:3.11-slim-bookworm AS builder
+
+WORKDIR /backend
+
+RUN pip install --upgrade pip && \
+    pip config set global.extra-index-url https://www.piwheels.org/simple
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir --user -r requirements.txt
+
+# ---- Runtime stage ----
 FROM --platform=linux/arm/v7 python:3.11-slim-bookworm
 
 WORKDIR /backend
