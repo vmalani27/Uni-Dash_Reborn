@@ -76,9 +76,70 @@ graph TD
    - Offloads heavy NLP and categorization tasks to a locally hosted **Ollama** server running specialized LLMs.
    - Extracts semantic insights (Topic, Urgency, Academic Score, Deadlines) and writes them back to Supabase. This ensures the Raspberry Pi API broker never hangs due to GPU compute blocking.
 
-5. **CI/CD Pipeline (GitHub Actions)**
-   - Automated deployment via a Self-Hosted GitHub Action runner hosted directly on the Raspberry Pi edge node.
-   - Restarts the `uvicorn` systemd service automatically on main-branch pushes.
+## Deployment & CI/CD Architecture
+
+The Uni-Dash backend is deployed on a self-hosted Raspberry Pi environment using a robust CI/CD pipeline that prioritizes security, performance (on ARM architecture), and reliability.
+
+### Deployment Workflow Diagram
+
+```mermaid
+graph TD
+    %% GitHub Section
+    subgraph GitHub
+        GitRepo[GitHub Repository]
+        GitSecrets[Encrypted Secrets]
+    end
+
+    %% Raspberry Pi Section
+    subgraph Raspberry Pi (Production Node)
+        Runner[Self-Hosted GHA Runner]
+        
+        subgraph Build Process (Multi-Stage Docker)
+            BuildStage[Builder Stage: piwheels + python-slim]
+            RunStage[Runtime Stage: Minimal footpint]
+        end
+        
+        subgraph Container Runtime
+            DockerCont[unidash-backend Container]
+            Health[Health Check: /health]
+            Restart[Restart Policy: unless-stopped]
+        end
+        
+        LocalFiles[Runner Workspace: backend/]
+    end
+
+    %% Pipeline Flow
+    GitRepo -->|Push to main| Runner
+    GitSecrets -.->|Materialize .env & credentials.json| LocalFiles
+    Runner -->|Trigger Build| BuildStage
+    BuildStage -->|Extract .local packages| RunStage
+    RunStage -->|Deploy| DockerCont
+    
+    %% Runtime Config
+    LocalFiles -->|Volume Mount Secrets| DockerCont
+    DockerCont -->|Monitor| Health
+    Restart -.->|Auto-recover| DockerCont
+```
+
+### Architecture Details
+
+1. **Self-Hosted CI/CD (GitHub Actions)**
+   - The deployment workflow is executed on a **self-hosted runner** directly on the Raspberry Pi. This ensures all build operations occur locally, avoiding slow cross-platform emulation.
+   - Triggered automatically on every push to the `main` branch.
+
+2. **Multi-Stage ARM-Optimized Docker Build**
+   - **Builder Stage**: Leverages `piwheels.org` to fetch pre-compiled ARM wheels for heavy scientific packages (e.g., NumPy), significantly reducing build times on the Pi.
+   - **Runtime Stage**: Produces a minimal footprint container (`python:3.11-slim-bookworm`), keeping the production image lean and secure.
+   - **Platform-Specific**: Specifically targeted for `linux/arm/v7` to match Raspberry Pi hardware.
+
+3. **Secure Secret Management**
+   - Sensitive credentials like Firebase JSON and `.env` variables are stored as **GitHub Action Secrets**.
+   - These are materialized into temporary files in the runner's workspace during deployment and **mounted into the container at runtime** via Docker volumes (`-v`). This prevents secrets from being "baked" into Docker image layers.
+
+4. **Reliability & Monitoring**
+   - **Health Checks**: The container includes a Docker health check that monitors the `/health` endpoint every 30 seconds.
+   - **Restart Policy**: Configured with `--restart unless-stopped` to ensure the service automatically recovers from system reboots or crashes.
+   - **Atomic Deployment**: The pipeline stops and removes the old container instance before launching the new one to prevent port conflicts or stale state.
 
 ---
 
