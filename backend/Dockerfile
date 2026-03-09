@@ -2,29 +2,16 @@ FROM --platform=linux/arm/v7 python:3.10-slim-bookworm AS builder
 
 WORKDIR /backend
 
-# Only install basic C build tools for other python libs (like psycopg2)
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    gcc \
-    libssl-dev \
-    libffi-dev \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
+# Use the PiWheels extra index to find pre-compiled 32-bit binaries
+RUN pip install --upgrade pip && \
+    pip config set global.extra-index-url https://www.piwheels.org/simple
 
 COPY requirements.txt .
 
-# Install dependencies - pip will now find the pre-compiled ARMv7 wheels
-RUN pip install --upgrade pip && \
-    pip install --no-cache-dir --user -r requirements.txt
+# This will now pull pre-built 'pydantic-core' and 'cryptography' wheels
+RUN pip install --no-cache-dir --user -r requirements.txt
 
-FROM --platform=linux/arm/v7 python:3.10-slim-bookworm
-WORKDIR /backend
 
-# Runtime dependencies
-RUN apt-get update && apt-get install -y \
-    libssl3 \
-    libpq5 \
-    && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /root/.local /root/.local
 ENV PATH=/root/.local/bin:$PATH
