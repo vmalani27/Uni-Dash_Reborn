@@ -37,6 +37,24 @@ class BackendService {
     }
   }
 
+  // Trigger manual sync
+  static Future<void> triggerGmailSync(String uid) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) throw Exception("No Firebase user");
+    final idToken = await user.getIdToken();
+    final response = await http.post(
+      Uri.parse("$baseUrl/gmail/sync-trigger"), // Changed to match likely endpoint pattern
+      headers: {
+        "Authorization": "Bearer $idToken",
+        "Content-Type": "application/json",
+      },
+      body: jsonEncode({"uid": uid}),
+    );
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw Exception("Failed to trigger sync: ${response.body}");
+    }
+  }
+
   static String get baseUrl => AppConfig.backendUrl;
 
   static final String webClientId = dotenv.env['oauth2_client_id_web']!;
