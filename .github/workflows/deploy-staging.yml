@@ -49,3 +49,5 @@ jobs:
           -v ${{ github.workspace }}/backend/.env:/backend/.env \
           -v ${{ github.workspace }}/backend/credentials.json:/backend/app/core/credentials.json \
           unidash-backend-staging
+      - name: Cleanup unused images
+        run: docker image prune -f  
