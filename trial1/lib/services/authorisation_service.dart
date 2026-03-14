@@ -26,7 +26,7 @@ class AuthGate extends StatelessWidget {
 
         // User not authenticated → show IntroScreen
         if (!authSnapshot.hasData) {
-          return const IntroScreen();
+          return IntroScreen();
         }
 
         // User authenticated → fetch profile and route accordingly

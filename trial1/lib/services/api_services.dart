@@ -90,7 +90,7 @@ class BackendService {
 
     print('[BackendService] Fetching Gmail message detail for: $gmailId');
     final response = await http.get(
-      Uri.parse("$baseUrl/gmail/$gmailId"),
+      Uri.parse("$baseUrl/notifications/gmail/get-mail/$gmailId"),
       headers: {"Authorization": "Bearer $idToken"},
     );
 
@@ -222,8 +222,16 @@ class BackendService {
 
     final idToken = await user.getIdToken();
 
+    // Determine the platform-specific redirect URL
+    String redirectTo = "unidash://oauth/success"; // Default mobile deep link
+    if (kIsWeb) {
+      // Use the current domain for web apps (with #/oauth/success if using hash routing)
+      redirectTo = "${Uri.base.origin}/#/oauth/success"; 
+      // NOTE: Remove the # if you are using path url strategy instead of hash strategy
+    }
+
     final response = await http.get(
-      Uri.parse("$baseUrl/auth/google/url"),
+      Uri.parse("$baseUrl/auth/google/url?redirect_to=${Uri.encodeComponent(redirectTo)}"),
       headers: {"Authorization": "Bearer $idToken"},
     );
 
