@@ -1,4 +1,5 @@
 import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -11,7 +12,9 @@ import 'config.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.android);
+  
+  // NOTE: For Web, you must pass DefaultFirebaseOptions.currentPlatform
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   await dotenv.load(fileName: ".env");
 
   // Source - https://stackoverflow.com/a/63131245
@@ -19,9 +22,17 @@ void main() async {
   // Retrieved 2026-01-22, License - CC BY-SA 4.0
 
   DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
-  String backendUrl = dotenv.env['BACKEND_URL']!;
+  // Toggle this flag to switch between staging and production environments
+  const bool useStaging = true; 
+  
+  String backendUrl = useStaging 
+      ? dotenv.env['STAGING_BACKEND_URL']! 
+      : dotenv.env['PRODUCTION_BACKEND_URL']!;
 
-  if (Platform.isAndroid) {
+  if (kIsWeb) {
+    print('Running on Web - using BACKEND_URL');
+    print('Backend URL: $backendUrl');
+  } else if (Platform.isAndroid) {
     AndroidDeviceInfo androidInfo = await deviceInfo.androidInfo;
     print('Is physical device: ${androidInfo.isPhysicalDevice}');
 
