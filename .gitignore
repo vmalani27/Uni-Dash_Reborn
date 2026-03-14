@@ -24,7 +24,7 @@ trial1/client_secret_551724754459-qa0mnvf692mj8s9gkmu6n7otjfslbtuo.apps.googleus
 secrets/
 secrets.rar
 secrets.tar
-
+secrets.tar.gz
 # IDE
 .idea/
 .vscode/
