@@ -35,6 +35,45 @@ class _AuthFormState extends State<AuthForm> {
     return password.length >= 6;
   }
 
+  InputDecoration _fieldDecoration(BuildContext context, String label) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return InputDecoration(
+      labelText: label,
+      labelStyle: TextStyle(
+        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+      ),
+      filled: true,
+      fillColor: isDark ? const Color(0xFF1E222B) : Theme.of(context).colorScheme.surfaceVariant,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(
+          color: isDark
+              ? const Color(0xFF2E3340)
+              : Theme.of(context).colorScheme.onSurface.withOpacity(0.15),
+          width: 1.2,
+        ),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(
+          color: isDark
+              ? const Color(0xFF2E3340)
+              : Theme.of(context).colorScheme.onSurface.withOpacity(0.15),
+          width: 1.2,
+        ),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(
+          color: Theme.of(context).colorScheme.primary,
+          width: 1.5,
+        ),
+      ),
+      contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+      isDense: true,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isSmall = MediaQuery.of(context).size.width < 500;
@@ -66,18 +105,7 @@ class _AuthFormState extends State<AuthForm> {
           keyboardType: TextInputType.emailAddress,
           autofillHints: const [AutofillHints.email],
           style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).colorScheme.onBackground),
-          decoration: InputDecoration(
-            labelText: 'Email',
-            labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.75)),
-            filled: true,
-            fillColor: Theme.of(context).colorScheme.surfaceVariant,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-            contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
-            isDense: true,
-          ),
+          decoration: _fieldDecoration(context, 'Email'),
         ),
         const SizedBox(height: 12),
         TextField(
@@ -85,18 +113,7 @@ class _AuthFormState extends State<AuthForm> {
           obscureText: true,
           autofillHints: const [AutofillHints.password],
           style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).colorScheme.onBackground),
-          decoration: InputDecoration(
-            labelText: 'Password',
-            labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.75)),
-            filled: true,
-            fillColor: Theme.of(context).colorScheme.surfaceVariant,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-            contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
-            isDense: true,
-          ),
+          decoration: _fieldDecoration(context, 'Password'),
         ),
         if (_isRegister) ...[
           const SizedBox(height: 12),
@@ -105,18 +122,7 @@ class _AuthFormState extends State<AuthForm> {
             obscureText: true,
             autofillHints: const [AutofillHints.newPassword],
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).colorScheme.onBackground),
-            decoration: InputDecoration(
-              labelText: 'Confirm Password',
-              labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.75)),
-              filled: true,
-              fillColor: Theme.of(context).colorScheme.surfaceVariant,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
-              ),
-              contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
-              isDense: true,
-            ),
+            decoration: _fieldDecoration(context, 'Confirm Password'),
           ),
         ],
         if (_errorText != null) ...[
