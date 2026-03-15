@@ -109,9 +109,13 @@ class _MyAppState extends State<MyApp> {
   }
 
   void _toggleTheme() {
-    _themeMode.value = _themeMode.value == ThemeMode.dark
-        ? ThemeMode.light
-        : ThemeMode.dark;
+    final platformDark = WidgetsBinding.instance.window.platformBrightness == Brightness.dark;
+    final current = _themeMode.value;
+    if (current == ThemeMode.system) {
+      _themeMode.value = platformDark ? ThemeMode.light : ThemeMode.dark;
+    } else {
+      _themeMode.value = current == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
+    }
   }
 
   @override
