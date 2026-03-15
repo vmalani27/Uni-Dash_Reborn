@@ -290,8 +290,19 @@ class AIService:
             print("[AI SERVICE] OpenRouter error:", response.status_code, response.text)
             response.raise_for_status()
 
-        output = response.json()["choices"][0]["message"]["content"].strip()
-        
+        try:
+            resp_json = response.json()
+        except Exception as e:
+            print(f"[AI SERVICE] Failed to parse OpenRouter response as JSON: {e}")
+            print(f"[AI SERVICE] Raw response: {response.text}")
+            raise
+
+        if "choices" not in resp_json:
+            print(f"[AI SERVICE] OpenRouter response missing 'choices' key. Full response: {resp_json}")
+            raise KeyError(f"OpenRouter API response missing 'choices' key. Response: {resp_json}")
+
+        output = resp_json["choices"][0]["message"]["content"].strip()
+
         # Strip markdown logic
         if output.startswith("```json"):
             output = output[7:]
