@@ -45,15 +45,13 @@ SCOPES = [
 # STEP 1: Generate Google OAuth URL
 # -------------------------------
 @router.get("/url")
-
-# Generates a Google OAuth URL for the frontend to redirect the user to Google for authentication.
-# Why: Ensures backend controls OAuth flow, keeps client secret secure, and binds the flow to a user via a secure random state.
-
-
-def get_google_auth_url(firebase_data=Depends(verify_firebase_token)):
+def get_google_auth_url(
+    redirect_to: str = "unidash://oauth/success",
+    firebase_data=Depends(verify_firebase_token)
+):
     uid = firebase_data["uid"]
     state = secrets.token_urlsafe(32)
-    state_store[state] = uid
+    state_store[state] = {"uid": uid, "redirect_to": redirect_to}
     params = {
         "client_id": CLIENT_ID,
         "redirect_uri": REDIRECT_URL,
@@ -87,10 +85,13 @@ def google_callback(
     state = request.query_params.get("state")
     if not code or not state:
         raise HTTPException(status_code=400, detail="Missing code or state")
-    uid = state_store.pop(state, None)
-    if not uid:
+    
+    state_data = state_store.pop(state, None)
+    if not state_data:
         raise HTTPException(status_code=400, detail="Invalid or expired state")
-
+    
+    uid = state_data["uid"]
+    redirect_to = state_data.get("redirect_to", "unidash://oauth/success")
 
     # Exchange authorization code for tokens
 
@@ -179,5 +180,5 @@ def google_callback(
     # Why: Signals frontend that OAuth succeeded and user can proceed.
 
 
-    print(f"Oauth logs: Login succeeded, Redirecting to app via deep link")
-    return RedirectResponse(url="unidash://oauth/success")
+    print(f"Oauth logs: Login succeeded, Redirecting to {redirect_to}")
+    return RedirectResponse(url=redirect_to)
