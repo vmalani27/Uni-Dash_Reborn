@@ -111,7 +111,7 @@ class _GmailNotificationsListState extends State<GmailNotificationsList>
           _unprocessedCount = unprocessed;
           _isOrganizedView =
               unprocessed < result.notifications.length &&
-              result.notifications.length > 0;
+              result.notifications.isNotEmpty;
         });
       }
     } catch (_) {
@@ -163,7 +163,7 @@ class _GmailNotificationsListState extends State<GmailNotificationsList>
         _isFirstSync = firstSync;
         _isOrganizedView =
             unprocessed < result.notifications.length &&
-            result.notifications.length > 0;
+            result.notifications.isNotEmpty;
       });
 
       // If first sync, refresh faster to pick up incoming emails

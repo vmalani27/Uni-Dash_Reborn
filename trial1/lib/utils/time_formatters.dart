@@ -1,5 +1,6 @@
 /// Pure time formatting utilities.
 /// No widget dependencies. No state. Just calculations.
+library;
 
 String formatDeadline(DateTime deadline) {
   final now = DateTime.now();

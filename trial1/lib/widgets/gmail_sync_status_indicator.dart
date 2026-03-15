@@ -5,10 +5,10 @@ class GmailSyncStatusIndicator extends StatelessWidget {
   final String message;
 
   const GmailSyncStatusIndicator({
-    Key? key,
+    super.key,
     required this.highlightColor,
     this.message = 'Syncing emails...',
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

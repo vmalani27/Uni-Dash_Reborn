@@ -18,6 +18,16 @@ class BackendService {
     return user.uid;
   }
 
+  // Helper to build headers for all requests
+  static Map<String, String> _defaultHeaders(String idToken, {bool json = false}) {
+    final headers = {
+      "Authorization": "Bearer $idToken",
+      "ngrok-skip-browser-warning": "true",
+    };
+    if (json) headers["Content-Type"] = "application/json";
+    return headers;
+  }
+
   // Fetch Gmail sync status
   static Future<String> fetchGmailSyncStatus(String uid) async {
     final user = FirebaseAuth.instance.currentUser;
@@ -25,7 +35,7 @@ class BackendService {
     final idToken = await user.getIdToken();
     final response = await http.get(
       Uri.parse("$baseUrl/gmail/sync/status"),
-      headers: {"Authorization": "Bearer $idToken"},
+      headers: _defaultHeaders(idToken!),
     );
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
@@ -44,10 +54,7 @@ class BackendService {
     final idToken = await user.getIdToken();
     final response = await http.post(
       Uri.parse("$baseUrl/gmail/sync-trigger"), // Changed to match likely endpoint pattern
-      headers: {
-        "Authorization": "Bearer $idToken",
-        "Content-Type": "application/json",
-      },
+      headers: _defaultHeaders(idToken!, json: true),
       body: jsonEncode({"uid": uid}),
     );
     if (response.statusCode != 200 && response.statusCode != 201) {
@@ -68,7 +75,7 @@ class BackendService {
     final idToken = await user.getIdToken();
     final response = await http.get(
       Uri.parse("$baseUrl/notifications/gmail/list-all?limit=$limit"),
-      headers: {"Authorization": "Bearer $idToken"},
+      headers: _defaultHeaders(idToken!),
     );
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
@@ -87,19 +94,12 @@ class BackendService {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw Exception("No Firebase user");
     final idToken = await user.getIdToken();
-
-    print('[BackendService] Fetching Gmail message detail for: $gmailId');
     final response = await http.get(
       Uri.parse("$baseUrl/notifications/gmail/get-mail/$gmailId"),
-      headers: {"Authorization": "Bearer $idToken"},
+      headers: _defaultHeaders(idToken!),
     );
-
-    print('[BackendService] Response status: ${response.statusCode}');
-    print('[BackendService] Response body: ${response.body}');
-
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body) as Map<String, dynamic>;
-      print('[BackendService] Parsed response: $data');
       return data;
     } else {
       throw Exception("Failed to fetch Gmail message detail: ${response.body}");
@@ -137,7 +137,7 @@ class BackendService {
     final idToken = await user.getIdToken();
     final response = await http.get(
       Uri.parse("$baseUrl/gmail/sync/stats"),
-      headers: {"Authorization": "Bearer $idToken"},
+      headers: _defaultHeaders(idToken!),
     );
     if (response.statusCode == 200) {
       return jsonDecode(response.body);
@@ -153,17 +153,14 @@ class BackendService {
   static Future<Map<String, dynamic>> fetchUserProfile() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw Exception("No Firebase user");
-
     final idToken = await user.getIdToken();
-
     try {
       final response = await http
           .get(
             Uri.parse("$baseUrl/user/profile"),
-            headers: {"Authorization": "Bearer $idToken"},
+            headers: _defaultHeaders(idToken!),
           )
           .timeout(const Duration(seconds: 10));
-
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
       } else if (response.statusCode == 401) {
@@ -186,15 +183,10 @@ class BackendService {
   }) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw Exception("No Firebase user");
-
     final idToken = await user.getIdToken();
-
     final response = await http.post(
       Uri.parse("$baseUrl/user/profile-setup"),
-      headers: {
-        "Authorization": "Bearer $idToken",
-        "Content-Type": "application/json",
-      },
+      headers: _defaultHeaders(idToken!, json: true),
       body: jsonEncode({
         "name": name,
         "branch": branch,
@@ -202,7 +194,6 @@ class BackendService {
         "sid": sid,
       }),
     );
-
     if (response.statusCode == 200) {
       return jsonDecode(response.body);
     } else {
@@ -219,29 +210,20 @@ class BackendService {
   static Future<void> startGoogleOAuth() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw Exception("No Firebase user");
-
     final idToken = await user.getIdToken();
-
-    // Determine the platform-specific redirect URL
-    String redirectTo = "unidash://oauth/success"; // Default mobile deep link
+    String redirectTo = "unidash://oauth/success";
     if (kIsWeb) {
-      // Use the current domain for web apps (with #/oauth/success if using hash routing)
-      redirectTo = "${Uri.base.origin}/#/oauth/success"; 
-      // NOTE: Remove the # if you are using path url strategy instead of hash strategy
+      redirectTo = "${Uri.base.origin}/#/oauth/success";
     }
-
     final response = await http.get(
-      Uri.parse("$baseUrl/auth/google/url?redirect_to=${Uri.encodeComponent(redirectTo)}"),
-      headers: {"Authorization": "Bearer $idToken"},
+      Uri.parse("$baseUrl/auth/google/url?redirect_to=\${Uri.encodeComponent(redirectTo)}"),
+      headers: _defaultHeaders(idToken!),
     );
-
     if (response.statusCode != 200) {
       throw Exception("Failed to get Google OAuth URL");
     }
-
     final data = jsonDecode(response.body);
     final authUrl = data["auth_url"];
-
     final uri = Uri.parse(authUrl);
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
       throw Exception("Could not launch Google OAuth");
@@ -254,18 +236,12 @@ class BackendService {
   static Future<void> exchangeAuthCode(String code) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw Exception("No Firebase user");
-
     final idToken = await user.getIdToken();
-
     final response = await http.post(
       Uri.parse("$baseUrl/auth/google/exchange"),
-      headers: {
-        "Authorization": "Bearer $idToken",
-        "Content-Type": "application/json",
-      },
+      headers: _defaultHeaders(idToken!, json: true),
       body: jsonEncode({"code": code}),
     );
-
     if (response.statusCode == 200) {
       debugPrint("Google OAuth connected successfully");
     } else {
@@ -280,25 +256,17 @@ class BackendService {
   static Future<void> logout() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw Exception("No Firebase user");
-
     final idToken = await user.getIdToken();
-
     try {
       final response = await http.post(
         Uri.parse("$baseUrl/user/logout"),
-        headers: {
-          "Authorization": "Bearer $idToken",
-          "Content-Type": "application/json",
-        },
+        headers: _defaultHeaders(idToken!, json: true),
       );
-
       if (response.statusCode != 200) {
         debugPrint("Backend logout warning: ${response.body}");
-        // Continue with client-side logout even if backend fails
       }
     } catch (e) {
       debugPrint("Backend logout error: $e");
-      // Continue with client-side logout even if backend fails
     }
   }
 
@@ -310,31 +278,16 @@ class BackendService {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw Exception("No Firebase user");
     final idToken = await user.getIdToken();
-
-    print(
-      '[BackendService] Fetching Gmail notifications: offset=$offset, limit=$limit',
-    );
     final response = await http.get(
-      Uri.parse(
-        "$baseUrl/notifications/gmail/list-all?offset=$offset&limit=$limit",
-      ),
-      headers: {"Authorization": "Bearer $idToken"},
+      Uri.parse("$baseUrl/notifications/gmail/list-all?offset=$offset&limit=$limit"),
+      headers: _defaultHeaders(idToken!),
     );
-
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
-      print(
-        '[BackendService] Raw response type: ${data.runtimeType}, data: $data',
-      );
-
-      // Backend returns {"notifications": [...]}
       if (data is Map<String, dynamic> && data.containsKey('notifications')) {
         final notifications = data['notifications'] as List<dynamic>;
-        print('[BackendService] Fetched ${notifications.length} notifications');
         return notifications;
       } else if (data is List<dynamic>) {
-        // Direct list response
-        print('[BackendService] Fetched ${data.length} notifications');
         return data;
       } else {
         throw Exception("Unexpected response format: ${data.runtimeType}");
