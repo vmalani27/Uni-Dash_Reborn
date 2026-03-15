@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 import asyncio
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from app.routers import user_routers, oauth_routes
 from app.routers import notifications
 from app.routers import gmail_sync_routes
@@ -32,6 +33,16 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+# Allow all origins for development and web app testing
+# Note: Before production, this should be restricted to specific domains (e.g., your Firebase hosting URL)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allows all origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all methods
+    allow_headers=["*"],  # Allows all headers
+)
 
 app.include_router(user_routers.router)
 app.include_router(oauth_routes.router)
