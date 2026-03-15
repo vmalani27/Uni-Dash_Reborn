@@ -6,37 +6,42 @@ on:
       - staging
 
 jobs:
-  deploy-staging-frontend:
-    runs-on: self-hosted
+  build-frontend:
+    runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: trial1
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Flutter
+      - uses: actions/checkout@v4
+      - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.19.0'
-
-      - name: Create .env file for Flutter Web
-        run: |
-          echo "${{ secrets.FLUTTER_ENV }}" > .env
-
+          channel: stable
+      - name: Create .env file
+        run: echo "${{ secrets.FLUTTER_ENV }}" > .env
       - name: Install dependencies
         run: flutter pub get
-
-      - name: Build Flutter web
+      - name: Build web
         run: flutter build web --release
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-web-build
+          path: trial1/build/web
 
-      - name: Delete old HTML files
-        run: |
-          sudo rm -rf /var/www/unidash/*
-
-      - name: Copy build files to web server
-        run: |
-          sudo cp -r build/web/* /var/www/unidash/
-
-      # Add more steps as needed for cache busting, versioning, etc.
+  deploy-frontend:
+    needs: build-frontend
+    runs-on: self-hosted
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: flutter-web-build
+          path: web-build
+      - name: Clean old frontend
+        run: sudo rm -rf /var/www/unidash/*
+      - name: Deploy new frontend
+        run: sudo cp -r web-build/* /var/www/unidash/
+      # Optionally reload nginx
+      - name: Reload nginx
+        run: sudo systemctl reload nginx || true
