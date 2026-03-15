@@ -20,6 +20,7 @@ backend/.env
 backend/WEB_CLIENT_OAUTH_SECRET.json
 backend/app/core/credentials.json
 trial1/.env
+trial1/assets/env_config
 trial1/client_secret_551724754459-qa0mnvf692mj8s9gkmu6n7otjfslbtuo.apps.googleusercontent.com.json
 secrets/
 secrets.rar
