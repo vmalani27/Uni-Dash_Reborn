@@ -8,54 +8,89 @@ class IntroScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isWide = screenWidth > 900;
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.background,
-      body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1200),
-          child: isWide
-              ? Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Branding/Intro (left)
-                    const Expanded(child: BrandingSection()),
-                    // Auth Card (right, anchored to top)
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.only(top: 120),
-                        child: Align(
-                          alignment: Alignment.topCenter,
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 420),
-                            child: const AuthCard(),
+      body: LayoutBuilder(builder: (context, constraints) {
+        final isWide = constraints.maxWidth >= 900;
+
+        if (isWide) {
+          // ── DESKTOP ──────────────────────────────────────────────
+          return Column(
+            children: [
+              Expanded(
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 1000),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 520),
+                          child: const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+                            child: BrandingSection(),
                           ),
                         ),
-                      ),
-                    ),
-                  ],
-                )
-              : SingleChildScrollView(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 12),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const BrandingSection(),
-                        const SizedBox(height: 32),
+                        const SizedBox(width: 60),
                         ConstrainedBox(
                           constraints: const BoxConstraints(maxWidth: 420),
-                          child: const AuthCard(),
+                          child: const Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 48),
+                            child: AuthCard(),
+                          ),
                         ),
                       ],
                     ),
                   ),
                 ),
-        ),
-      ),
+              ),
+              const _IntroFooter(),
+            ],
+          );
+        }
+
+        // ── MOBILE ───────────────────────────────────────────────
+        return Column(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 16, bottom: 8, left: 20, right: 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      const BrandingSection(),
+                      const SizedBox(height: 20),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 520),
+                        child: const AuthCard(),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const _IntroFooter(), // ← always visible, never scrolls away
+          ],
+        );
+      }),
     );
   }
 }
 
+class _IntroFooter extends StatelessWidget {
+  const _IntroFooter({Key? key}) : super(key: key);
 
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Text(
+        '© 2026 Uni-Dash. All rights reserved.',
+        style: Theme.of(context).textTheme.bodySmall,
+        textAlign: TextAlign.center,
+      ),
+    );
+  }
+}
