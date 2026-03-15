@@ -31,12 +31,12 @@ class _AnimatedMailToInsightState extends State<AnimatedMailToInsight> with Sing
           final dx = 60.0 * t;
           return Row(
             children: [
-              Icon(Icons.email_outlined, color: kTextSecondary, size: 22),
+              Icon(Icons.email_outlined, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.75), size: 22),
               Transform.translate(
                 offset: Offset(dx, 0),
                 child: Opacity(
                   opacity: 1 - t * 0.5,
-                  child: Icon(Icons.arrow_forward_rounded, color: kTextSecondary, size: 18),
+                  child: Icon(Icons.arrow_forward_rounded, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.75), size: 18),
                 ),
               ),
               const SizedBox(width: 8),
@@ -44,11 +44,11 @@ class _AnimatedMailToInsightState extends State<AnimatedMailToInsight> with Sing
                 offset: Offset(dx * 1.2, 0),
                 child: Opacity(
                   opacity: 0.5 + t * 0.5,
-                  child: Icon(Icons.insights_outlined, color: kAccentPrimary, size: 22),
+                  child: Icon(Icons.insights_outlined, color: Theme.of(context).colorScheme.primary, size: 22),
                 ),
               ),
               const SizedBox(width: 8),
-              Text('Smart Inbox', style: Theme.of(context).textTheme.labelLarge?.copyWith(color: kTextSecondary)),
+              Text('Smart Inbox', style: Theme.of(context).textTheme.labelLarge?.copyWith(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.75))),
             ],
           );
         },

@@ -27,9 +27,9 @@ class _FeatureRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(icon, color: kAccentPrimary, size: 20),
+        Icon(icon, color: Theme.of(context).colorScheme.primary, size: 20),
         const SizedBox(width: 10),
-        Text(text, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: kTextSecondary, fontSize: 15)),
+        Text(text, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.75), fontSize: 15)),
       ],
     );
   }

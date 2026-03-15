@@ -8,18 +8,18 @@ class AuthCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      color: kBgSurface,
+      color: Theme.of(context).colorScheme.surface,
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18),
         side: BorderSide(
-          color: kBgElevated.withOpacity(0.8),
+          color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.8),
           width: 1.2,
         ),
       ),
-      child: const Padding(
-        padding: EdgeInsets.symmetric(vertical: 20, horizontal: 24),
-        child: AuthForm(),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
+        child: const AuthForm(),
       ),
     );
   }

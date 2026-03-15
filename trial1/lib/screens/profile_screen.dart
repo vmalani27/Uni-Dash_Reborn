@@ -5,7 +5,9 @@ import 'package:trial1/services/authentication_service.dart';
 import '../theme.dart';
 
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key});
+  final VoidCallback? themeToggle;
+  final ThemeMode? themeMode;
+  const ProfileScreen({super.key, this.themeToggle, this.themeMode});
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -49,22 +51,22 @@ class _ProfileScreenState extends State<ProfileScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: kBgPrimary,
+      backgroundColor: Theme.of(context).colorScheme.background,
       appBar: AppBar(
-        backgroundColor: kBgPrimary,
+        backgroundColor: Theme.of(context).colorScheme.background,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: kTextPrimary),
+          icon: Icon(Icons.arrow_back, color: Theme.of(context).colorScheme.onBackground),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: const Text("Profile", style: TextStyle(color: kTextPrimary)),
+        title: Text("Profile", style: TextStyle(color: Theme.of(context).colorScheme.onBackground)),
       ),
       body: FutureBuilder<UserProfile>(
         future: _profileFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(
-              child: CircularProgressIndicator(color: kAccentPrimary),
+            return Center(
+              child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary),
             );
           } else if (snapshot.hasError) {
             return Center(
@@ -73,15 +75,15 @@ class _ProfileScreenState extends State<ProfileScreen>
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.error_outline,
-                      color: Colors.red,
+                      color: Theme.of(context).colorScheme.error,
                       size: 64,
                     ),
                     const SizedBox(height: 16),
-                    const Text(
+                    Text(
                       'Failed to load profile',
-                      style: TextStyle(color: Colors.red, fontSize: 16),
+                      style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 16),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 24),
@@ -98,10 +100,10 @@ class _ProfileScreenState extends State<ProfileScreen>
               ),
             );
           } else if (!snapshot.hasData) {
-            return const Center(
+            return Center(
               child: Text(
                 'No profile data found.',
-                style: TextStyle(color: kTextSecondary),
+                style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.75)),
               ),
             );
           }
@@ -114,14 +116,14 @@ class _ProfileScreenState extends State<ProfileScreen>
                 Container(
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
-                    color: kBgSurface,
+                    color: Theme.of(context).colorScheme.surface,
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: Column(
                     children: [
                       CircleAvatar(
                         radius: 48,
-                        backgroundColor: kAccentPrimary.withOpacity(0.2),
+                        backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.2),
                         child: Text(
                           profile.name.isNotEmpty
                               ? profile.name[0].toUpperCase()
@@ -129,25 +131,25 @@ class _ProfileScreenState extends State<ProfileScreen>
                           style: const TextStyle(
                             fontSize: 36,
                             fontWeight: FontWeight.bold,
-                            color: kAccentPrimary,
+                            color: null,
                           ),
                         ),
                       ),
                       const SizedBox(height: 16),
                       Text(
                         profile.name,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.w600,
-                          color: kTextPrimary,
+                          color: Theme.of(context).colorScheme.onBackground,
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         profile.email,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 14,
-                          color: kTextSecondary,
+                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.75),
                         ),
                       ),
                     ],
@@ -156,7 +158,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                 const SizedBox(height: 24),
                 // Profile details card
                 Card(
-                  color: kBgSurface,
+                  color: Theme.of(context).colorScheme.surface,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
@@ -166,12 +168,12 @@ class _ProfileScreenState extends State<ProfileScreen>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
+                        Text(
                           'Academic Details',
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w600,
-                            color: kTextPrimary,
+                            color: Theme.of(context).colorScheme.onBackground,
                           ),
                         ),
                         const SizedBox(height: 16),
@@ -187,7 +189,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                 const SizedBox(height: 24),
                 // OAuth connection card
                 Card(
-                  color: kBgSurface,
+                  color: Theme.of(context).colorScheme.surface,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
@@ -202,32 +204,32 @@ class _ProfileScreenState extends State<ProfileScreen>
                             Container(
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
-                                color: profile.oauthConnected
-                                    ? Colors.green.withOpacity(0.1)
-                                    : kAccentPrimary.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Icon(
-                                profile.oauthConnected
-                                    ? Icons.check_circle
-                                    : Icons.mail_outline,
-                                color: profile.oauthConnected
-                                    ? Colors.green
-                                    : kAccentPrimary,
-                                size: 24,
-                              ),
+                                  color: profile.oauthConnected
+                                      ? Colors.green.withOpacity(0.1)
+                                      : Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Icon(
+                                  profile.oauthConnected
+                                      ? Icons.check_circle
+                                      : Icons.mail_outline,
+                                  color: profile.oauthConnected
+                                      ? Colors.green
+                                      : Theme.of(context).colorScheme.primary,
+                                  size: 24,
+                                ),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  const Text(
+                                  Text(
                                     'Gmail Connection',
                                     style: TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.w600,
-                                      color: kTextPrimary,
+                                      color: Theme.of(context).colorScheme.onBackground,
                                     ),
                                   ),
                                   const SizedBox(height: 4),
@@ -239,7 +241,7 @@ class _ProfileScreenState extends State<ProfileScreen>
                                       fontSize: 14,
                                       color: profile.oauthConnected
                                           ? Colors.green
-                                          : kTextSecondary,
+                                          : Theme.of(context).colorScheme.onSurface.withOpacity(0.75),
                                     ),
                                   ),
                                 ],
@@ -256,15 +258,15 @@ class _ProfileScreenState extends State<ProfileScreen>
                                   ? null
                                   : _handleOAuthConnect,
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: kAccentPrimary,
-                                foregroundColor: Colors.black,
+                                backgroundColor: Theme.of(context).colorScheme.primary,
+                                foregroundColor: Theme.of(context).colorScheme.onPrimary,
                               ),
                               child: _connectingOAuth
-                                  ? const SizedBox(
+                                  ? SizedBox(
                                       height: 20,
                                       width: 20,
                                       child: CircularProgressIndicator(
-                                        color: Colors.black,
+                                        color: Theme.of(context).colorScheme.onPrimary,
                                         strokeWidth: 2,
                                       ),
                                     )
@@ -283,16 +285,16 @@ class _ProfileScreenState extends State<ProfileScreen>
                   child: ElevatedButton(
                     onPressed: _loggingOut ? null : _handleLogout,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red.withOpacity(0.2),
-                      foregroundColor: Colors.red,
-                      side: const BorderSide(color: Colors.red, width: 1),
+                      backgroundColor: Theme.of(context).colorScheme.error.withOpacity(0.12),
+                      foregroundColor: Theme.of(context).colorScheme.error,
+                      side: BorderSide(color: Theme.of(context).colorScheme.error, width: 1),
                     ),
                     child: _loggingOut
-                        ? const SizedBox(
+                        ? SizedBox(
                             height: 20,
                             width: 20,
                             child: CircularProgressIndicator(
-                              color: Colors.red,
+                              color: Theme.of(context).colorScheme.error,
                               strokeWidth: 2,
                             ),
                           )
@@ -318,14 +320,14 @@ class _ProfileScreenState extends State<ProfileScreen>
         children: [
           Text(
             label,
-            style: const TextStyle(fontSize: 14, color: kTextSecondary),
+            style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.75)),
           ),
           Text(
             value.isNotEmpty ? value : '-',
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w500,
-              color: kTextPrimary,
+              color: Theme.of(context).colorScheme.onBackground,
             ),
           ),
         ],
@@ -334,7 +336,10 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   Widget _buildDivider() {
-    return Divider(color: kTextDisabled.withOpacity(0.2), height: 1);
+    return Divider(
+      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2),
+      height: 1,
+    );
   }
 
   Future<void> _handleOAuthConnect() async {
@@ -346,12 +351,12 @@ class _ProfileScreenState extends State<ProfileScreen>
       await BackendService.startGoogleOAuth();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
+          SnackBar(
+            content: const Text(
               'Complete OAuth in your browser. You will be redirected back automatically.',
             ),
-            backgroundColor: kAccentPrimary,
-            duration: Duration(seconds: 4),
+            backgroundColor: Theme.of(context).colorScheme.primary,
+            duration: const Duration(seconds: 4),
           ),
         );
       }
@@ -360,7 +365,7 @@ class _ProfileScreenState extends State<ProfileScreen>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to start OAuth: $e'),
-            backgroundColor: Colors.red,
+            backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
       }
@@ -377,11 +382,11 @@ class _ProfileScreenState extends State<ProfileScreen>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: kBgSurface,
-        title: const Text('Logout', style: TextStyle(color: kTextPrimary)),
-        content: const Text(
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        title: Text('Logout', style: TextStyle(color: Theme.of(context).colorScheme.onBackground)),
+        content: Text(
           'Are you sure you want to logout?',
-          style: TextStyle(color: kTextSecondary),
+          style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.75)),
         ),
         actions: [
           TextButton(
@@ -390,7 +395,7 @@ class _ProfileScreenState extends State<ProfileScreen>
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Logout', style: TextStyle(color: Colors.red)),
+            child: Text('Logout', style: TextStyle(color: Theme.of(context).colorScheme.error)),
           ),
         ],
       ),
@@ -416,7 +421,7 @@ class _ProfileScreenState extends State<ProfileScreen>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Logout failed: $e'),
-            backgroundColor: Colors.red,
+            backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
       }

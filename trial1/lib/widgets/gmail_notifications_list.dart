@@ -229,8 +229,8 @@ class _GmailNotificationsListState extends State<GmailNotificationsList>
 
     return RefreshIndicator(
       onRefresh: _loadNotifications,
-      color: kAccentPrimary,
-      backgroundColor: kBgSurface,
+      color: Theme.of(context).colorScheme.primary,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       child: CustomScrollView(
         controller: _scrollController,
         physics: const AlwaysScrollableScrollPhysics(),
@@ -275,7 +275,7 @@ class _GmailNotificationsListState extends State<GmailNotificationsList>
                     height: 24,
                     child: CircularProgressIndicator(
                       strokeWidth: 2.5,
-                      valueColor: AlwaysStoppedAnimation(kAccentPrimary),
+                      valueColor: AlwaysStoppedAnimation(Theme.of(context).colorScheme.primary),
                     ),
                   ),
                 ),
@@ -314,13 +314,13 @@ class _GmailNotificationsListState extends State<GmailNotificationsList>
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: kUrgencyCritical.withOpacity(0.1),
+                color: kUrgencyCritical.withOpacity(0.1), // keep as is, theme constant
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 Icons.wifi_off_rounded,
                 size: 40,
-                color: kUrgencyCritical.withOpacity(0.7),
+                color: kUrgencyCritical.withOpacity(0.7), // keep as is, theme constant
               ),
             ),
             const SizedBox(height: 20),
@@ -358,7 +358,7 @@ class _GmailNotificationsListState extends State<GmailNotificationsList>
               Container(
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  color: kAccentPrimary.withOpacity(0.08),
+                  color: Theme.of(context).colorScheme.primary.withOpacity(0.08),
                   shape: BoxShape.circle,
                 ),
                 child: SizedBox(
@@ -366,7 +366,7 @@ class _GmailNotificationsListState extends State<GmailNotificationsList>
                   height: 48,
                   child: CircularProgressIndicator(
                     strokeWidth: 3,
-                    valueColor: AlwaysStoppedAnimation(kAccentPrimary),
+                    valueColor: AlwaysStoppedAnimation(Theme.of(context).colorScheme.primary),
                   ),
                 ),
               ),
@@ -380,7 +380,7 @@ class _GmailNotificationsListState extends State<GmailNotificationsList>
                 'Syncing your emails for the first time.\nThis may take a minute.',
                 style: Theme.of(
                   context,
-                ).textTheme.bodyMedium?.copyWith(color: kTextSecondary),
+                ).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7)),
                 textAlign: TextAlign.center,
               ),
             ],
@@ -399,13 +399,13 @@ class _GmailNotificationsListState extends State<GmailNotificationsList>
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: kBgSurface,
+                color: Theme.of(context).colorScheme.surface,
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 Icons.inbox_outlined,
                 size: 48,
-                color: kTextSecondary.withOpacity(0.4),
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
               ),
             ),
             const SizedBox(height: 24),

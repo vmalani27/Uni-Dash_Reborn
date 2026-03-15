@@ -11,7 +11,7 @@ class IntroScreen extends StatelessWidget {
     final screenWidth = MediaQuery.of(context).size.width;
     final isWide = screenWidth > 900;
     return Scaffold(
-      backgroundColor: kBgPrimary,
+      backgroundColor: Theme.of(context).colorScheme.background,
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1200),

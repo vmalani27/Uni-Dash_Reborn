@@ -26,18 +26,18 @@ class BrandingSection extends StatelessWidget {
             width: 56,
             height: 56,
             decoration: BoxDecoration(
-              color: kBgSurface,
+              color: Theme.of(context).colorScheme.surface,
               borderRadius: BorderRadius.circular(16),
             ),
             child: Center(
-              child: Icon(Icons.auto_awesome, color: kAccentPrimary, size: 36),
+              child: Icon(Icons.auto_awesome, color: Theme.of(context).colorScheme.primary, size: 36),
             ),
           ),
           SizedBox(height: isMobile ? 24 : 36),
           Text(
             'UniDash',
             style: theme.textTheme.displayLarge?.copyWith(
-                  color: kTextPrimary,
+                  color: Theme.of(context).colorScheme.onBackground,
                   fontWeight: FontWeight.w900,
                   letterSpacing: -2,
                   fontSize: isMobile ? 36 : 44,
@@ -48,7 +48,7 @@ class BrandingSection extends StatelessWidget {
           Text(
             'AI Academic Assistant',
             style: theme.textTheme.titleMedium?.copyWith(
-                  color: kAccentPrimary,
+                  color: Theme.of(context).colorScheme.primary,
                   fontWeight: FontWeight.w600,
                   fontSize: isMobile ? 16 : 20,
                 ),
@@ -58,7 +58,7 @@ class BrandingSection extends StatelessWidget {
           Text(
             'Turn your university emails into organized, actionable insights. Stay focused, never miss a deadline.',
             style: theme.textTheme.bodyLarge?.copyWith(
-                  color: kTextSecondary.withOpacity(0.85),
+                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.85),
                   fontSize: isMobile ? 15 : 17,
                   height: 1.6,
                 ),
@@ -68,7 +68,7 @@ class BrandingSection extends StatelessWidget {
           // Divider (hide on very small screens)
           if (!isMobile)
             Divider(
-              color: kBgElevated.withOpacity(0.5),
+              color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
               thickness: 1,
               endIndent: isNarrow ? 0 : 120,
             ),

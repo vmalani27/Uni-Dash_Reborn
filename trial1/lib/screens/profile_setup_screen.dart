@@ -4,7 +4,9 @@ import 'package:trial1/services/api_services.dart';
 import '../theme.dart';
 
 class ProfileSetupScreen extends StatefulWidget {
-  const ProfileSetupScreen({super.key});
+  final VoidCallback? themeToggle;
+  final ThemeMode? themeMode;
+  const ProfileSetupScreen({super.key, this.themeToggle, this.themeMode});
 
   @override
   State<ProfileSetupScreen> createState() => _ProfileSetupScreenState();
@@ -31,14 +33,16 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
     return Scaffold(
-      backgroundColor: kBgPrimary,
+      backgroundColor: colorScheme.background,
       appBar: AppBar(
-        backgroundColor: kBgPrimary,
+        backgroundColor: colorScheme.background,
         elevation: 0,
-        title: const Text(
+        title: Text(
           'Complete Your Profile',
-          style: TextStyle(color: kTextPrimary),
+          style: textTheme.titleLarge?.copyWith(color: colorScheme.onSurface),
         ),
         centerTitle: true,
         automaticallyImplyLeading: false,
@@ -47,7 +51,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
           child: Card(
-            color: kBgSurface,
+            color: colorScheme.surface,
             elevation: 0,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
@@ -60,19 +64,15 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Text(
+                    Text(
                       'Tell us about yourself',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w600,
-                        color: kTextPrimary,
-                      ),
+                      style: textTheme.titleLarge?.copyWith(fontSize: 20, color: colorScheme.onSurface),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 8),
-                    const Text(
+                    Text(
                       'We need these details to personalize your experience',
-                      style: TextStyle(fontSize: 14, color: kTextSecondary),
+                      style: textTheme.bodyMedium?.copyWith(fontSize: 14, color: colorScheme.onSurface.withOpacity(0.7)),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 32),
@@ -122,25 +122,25 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: Colors.red.withOpacity(0.1),
+                          color: colorScheme.error.withOpacity(0.08),
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
-                            color: Colors.red.withOpacity(0.3),
+                            color: colorScheme.error.withOpacity(0.28),
                           ),
                         ),
                         child: Row(
                           children: [
-                            const Icon(
+                            Icon(
                               Icons.error_outline,
-                              color: Colors.red,
+                              color: colorScheme.error,
                               size: 20,
                             ),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
                                 _errorMessage!,
-                                style: const TextStyle(
-                                  color: Colors.red,
+                                style: textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.error,
                                   fontSize: 13,
                                 ),
                               ),
@@ -153,27 +153,28 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                     ElevatedButton(
                       onPressed: _isLoading ? null : _handleSubmit,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: kAccentPrimary,
-                        foregroundColor: Colors.black,
+                        backgroundColor: colorScheme.primary,
+                        foregroundColor: colorScheme.onPrimary,
                         minimumSize: const Size.fromHeight(48),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),
                         ),
                       ),
                       child: _isLoading
-                          ? const SizedBox(
+                          ? SizedBox(
                               width: 22,
                               height: 22,
                               child: CircularProgressIndicator(
-                                color: Colors.black,
+                                color: colorScheme.onPrimary,
                                 strokeWidth: 2.5,
                               ),
                             )
-                          : const Text(
+                          : Text(
                               'Continue',
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
+                                color: colorScheme.onPrimary,
                               ),
                             ),
                     ),
@@ -193,26 +194,28 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     required String? Function(String?) validator,
     TextInputType? keyboardType,
   }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
-      style: const TextStyle(color: kTextPrimary),
+      style: textTheme.bodyLarge?.copyWith(color: colorScheme.onSurface),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: const TextStyle(color: kTextSecondary),
+        labelStyle: textTheme.bodyMedium?.copyWith(color: colorScheme.onSurface.withOpacity(0.7)),
         filled: true,
-        fillColor: kBgElevated,
+        fillColor: colorScheme.surfaceVariant,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: kTextDisabled.withOpacity(0.2)),
+          borderSide: BorderSide(color: colorScheme.onSurface.withOpacity(0.12)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: kAccentPrimary, width: 2),
+          borderSide: BorderSide(color: colorScheme.primary, width: 2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),

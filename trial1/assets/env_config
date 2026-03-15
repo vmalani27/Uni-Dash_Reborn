@@ -1,0 +1,5 @@
+
+
+PRODUCTION_BACKEND_URL=https://complicatedly-acarpous-deadra.ngrok-free.dev/api
+
+STAGING_BACKEND_URL=https://complicatedly-acarpous-deadra.ngrok-free.dev/staging/api

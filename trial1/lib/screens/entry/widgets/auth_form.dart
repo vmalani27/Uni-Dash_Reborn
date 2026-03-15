@@ -45,7 +45,7 @@ class _AuthFormState extends State<AuthForm> {
         Text(
           _isRegister ? 'Create account' : 'Sign in',
           style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: kTextPrimary,
+                color: Theme.of(context).colorScheme.onBackground,
                 fontWeight: FontWeight.w700,
                 fontSize: isSmall ? 20 : 22,
               ),
@@ -55,7 +55,7 @@ class _AuthFormState extends State<AuthForm> {
           Text(
             _isRegister ? 'Join UniDash to get started' : 'Welcome back to UniDash',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: kTextSecondary,
+              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.75),
               fontSize: 13,
             ),
           )
@@ -65,12 +65,12 @@ class _AuthFormState extends State<AuthForm> {
           controller: _emailController,
           keyboardType: TextInputType.emailAddress,
           autofillHints: const [AutofillHints.email],
-          style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: kTextPrimary),
+          style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).colorScheme.onBackground),
           decoration: InputDecoration(
             labelText: 'Email',
-            labelStyle: TextStyle(color: kTextSecondary),
+            labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.75)),
             filled: true,
-            fillColor: kBgElevated,
+            fillColor: Theme.of(context).colorScheme.surfaceVariant,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide.none,
@@ -84,12 +84,12 @@ class _AuthFormState extends State<AuthForm> {
           controller: _passwordController,
           obscureText: true,
           autofillHints: const [AutofillHints.password],
-          style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: kTextPrimary),
+          style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).colorScheme.onBackground),
           decoration: InputDecoration(
             labelText: 'Password',
-            labelStyle: TextStyle(color: kTextSecondary),
+            labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.75)),
             filled: true,
-            fillColor: kBgElevated,
+            fillColor: Theme.of(context).colorScheme.surfaceVariant,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide.none,
@@ -104,12 +104,12 @@ class _AuthFormState extends State<AuthForm> {
             controller: _confirmController,
             obscureText: true,
             autofillHints: const [AutofillHints.newPassword],
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: kTextPrimary),
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).colorScheme.onBackground),
             decoration: InputDecoration(
               labelText: 'Confirm Password',
-              labelStyle: TextStyle(color: kTextSecondary),
+              labelStyle: TextStyle(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.75)),
               filled: true,
-              fillColor: kBgElevated,
+              fillColor: Theme.of(context).colorScheme.surfaceVariant,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide.none,
@@ -124,13 +124,13 @@ class _AuthFormState extends State<AuthForm> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: Colors.red.withOpacity(0.1),
+              color: Theme.of(context).colorScheme.error.withOpacity(0.08),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.red.withOpacity(0.3), width: 0.5),
+              border: Border.all(color: Theme.of(context).colorScheme.error.withOpacity(0.2), width: 0.5),
             ),
             child: Text(
               _errorText!,
-              style: const TextStyle(color: Colors.red, fontSize: 12),
+              style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 12),
             ),
           ),
         ],
@@ -139,8 +139,8 @@ class _AuthFormState extends State<AuthForm> {
           width: double.infinity,
           child: ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: kAccentPrimary,
-              foregroundColor: Colors.black,
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              foregroundColor: Theme.of(context).colorScheme.onPrimary,
               elevation: 0,
               padding: const EdgeInsets.symmetric(vertical: 12),
               shape: RoundedRectangleBorder(
@@ -150,10 +150,10 @@ class _AuthFormState extends State<AuthForm> {
             ),
             onPressed: _isLoading ? null : _isRegister ? _onRegister : _onSignIn,
             child: _isLoading
-                ? const SizedBox(
+                    ? SizedBox(
                     width: 20,
                     height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.black),
+                    child: CircularProgressIndicator(strokeWidth: 2.5, color: Theme.of(context).colorScheme.onPrimary),
                   )
                 : Text(_isRegister ? 'Create Account' : 'Sign In'),
           ),
@@ -166,7 +166,7 @@ class _AuthFormState extends State<AuthForm> {
               Text(
                 _isRegister ? 'Already have an account? ' : 'No account yet? ',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: kTextSecondary,
+                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.75),
                   fontSize: 13,
                 ),
               ),
@@ -180,7 +180,7 @@ class _AuthFormState extends State<AuthForm> {
                         });
                       },
                 style: TextButton.styleFrom(
-                  foregroundColor: kAccentPrimary,
+                  foregroundColor: Theme.of(context).colorScheme.primary,
                   padding: EdgeInsets.zero,
                   minimumSize: const Size(0, 0),
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
