@@ -17,12 +17,15 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
-      - name: Create .env file
-        run: echo "${{ secrets.FLUTTER_ENV }}" > .env
+      - name: Ensure assets directory exists
+        run: mkdir -p assets
+
+      - name: Create env file
+        run: echo "${{ secrets.FLUTTER_ENV }}" > assets/env_config
       
       - name: Debug print STAGING env line
         run: |
-          grep '^STAGING' .env || cat .env
+          grep '^STAGING' assets/env_config || cat assets/env_config
       
       - name: Debug assets
         run: |

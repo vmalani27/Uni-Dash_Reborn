@@ -15,7 +15,7 @@ void main() async {
   
   // NOTE: For Web, you must pass DefaultFirebaseOptions.currentPlatform
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  await dotenv.load(fileName: ".env");
+  await dotenv.load(fileName: "assets/env_config");
 
   // Source - https://stackoverflow.com/a/63131245
   // Posted by Matias de Andrea
