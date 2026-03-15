@@ -19,6 +19,8 @@ jobs:
           channel: stable
       - name: Create .env file
         run: echo "${{ secrets.FLUTTER_ENV }}" > .env
+      - name: Debug print STAGING env line
+        run: grep '^STAGING' .env || cat .env
       - name: Install dependencies
         run: flutter pub get
       - name: Build web
