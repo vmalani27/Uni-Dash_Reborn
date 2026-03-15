@@ -39,7 +39,7 @@ jobs:
           name: flutter-web-build
           path: web-build
       - name: Clean old frontend
-        run: sudo rm -rf /var/www/unidash/*
+        run: sudo rm -rf /var/www/unidash/* || true
       - name: Deploy new frontend
         run: sudo cp -r web-build/* /var/www/unidash/
       # Optionally reload nginx
