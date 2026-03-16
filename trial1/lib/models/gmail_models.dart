@@ -1,3 +1,43 @@
+/// Structured insights extracted from email (instructor, course, action items).
+/// Populated by backend AcademicContextEngine enrichment.
+class StructuredInsights {
+  final String? instructorName;
+  final String? instructorEmail;
+  final String? courseCode;
+  final String? courseName;
+  final List<String> actionItems; // What student needs to do
+  final bool submissionRequired;
+  final String? submissionFormat; // e.g., 'PDF', 'Code', 'ZIP'
+  final double confidence; // 0.0-1.0
+  final bool enrichedByLlm; // true if small LLM was used
+
+  const StructuredInsights({
+    this.instructorName,
+    this.instructorEmail,
+    this.courseCode,
+    this.courseName,
+    this.actionItems = const [],
+    this.submissionRequired = false,
+    this.submissionFormat,
+    this.confidence = 0.6,
+    this.enrichedByLlm = false,
+  });
+
+  factory StructuredInsights.fromJson(Map<String, dynamic> json) {
+    return StructuredInsights(
+      instructorName: json['instructor_name'] as String?,
+      instructorEmail: json['instructor_email'] as String?,
+      courseCode: json['course_code'] as String?,
+      courseName: json['course_name'] as String?,
+      actionItems: (json['action_items'] as List?)?.map((e) => e.toString()).toList() ?? [],
+      submissionRequired: json['submission_required'] as bool? ?? false,
+      submissionFormat: json['submission_format'] as String?,
+      confidence: (json['confidence'] as num?)?.toDouble() ?? 0.6,
+      enrichedByLlm: json['enriched_by_llm'] as bool? ?? false,
+    );
+  }
+}
+
 class GmailNotificationPreview {
   final int id;
   final String gmailId;
@@ -8,8 +48,8 @@ class GmailNotificationPreview {
   final DateTime? deadlineIso;
   final String? deadlineConfidence;
   final double academicScore;
-  final String
-  normalizedTopic; // ASSIGNMENT, EXAM, ACADEMIC_ADMIN, OPPORTUNITY, INFORMATION, OTHER
+  final String normalizedTopic; // ASSIGNMENT, EXAM, ACADEMIC_ADMIN, OPPORTUNITY, INFORMATION, OTHER
+  final StructuredInsights? structuredInsights; // Optional enrichment from backend
 
   GmailNotificationPreview({
     required this.id,
@@ -22,6 +62,7 @@ class GmailNotificationPreview {
     this.deadlineConfidence,
     required this.academicScore,
     required this.normalizedTopic,
+    this.structuredInsights,
   });
 
   factory GmailNotificationPreview.fromJson(Map<String, dynamic> json) {
@@ -40,6 +81,9 @@ class GmailNotificationPreview {
       deadlineConfidence: json['deadline_confidence'] as String?,
       academicScore: (json['academic_score'] as num?)?.toDouble() ?? 0.0,
       normalizedTopic: json['normalized_topic'] as String? ?? 'OTHER',
+      structuredInsights: json['structured_insights'] != null
+          ? StructuredInsights.fromJson(json['structured_insights'] as Map<String, dynamic>)
+          : null,
     );
   }
 

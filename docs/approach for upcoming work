@@ -1,0 +1,50 @@
+This is a well-architected system. Based on your AI service code and architecture diagram, here's the concrete roadmap:Here's the concrete transition plan, then a visual of the new data architecture:Click any box for a deep-dive prompt. Here's the exact build order:
+
+**Step 1 — Flutter model (do this today)**
+
+```dart
+// lib/models/academic_event.dart
+enum AcademicEventType { assignment, exam, announcement, opportunity, information }
+
+class AcademicEvent { 
+  final String id;
+  final AcademicEventType type;
+  final String title;
+  final String? course;
+  final DateTime? deadline;
+  final String urgency;       // Critical / High / Medium / Low / None
+  final int academicScore;    // use your existing field directly
+  final String sourceEmailId;
+  final String summary;
+
+  const AcademicEvent({...});
+}
+```
+
+**Step 2 — Mapper function**
+
+Your `GmailNotificationPreview` already has `normalized_topic`, `deadline_iso`, `academic_score`, and `urgency` — the mapper is trivial:
+
+```dart
+AcademicEvent mapNotificationToEvent(GmailNotificationPreview n) {
+  return AcademicEvent(
+    id: n.gmailId,
+    type: _topicToType(n.normalizedTopic),
+    title: n.subject,
+    course: _extractCourse(n.summary), // regex or null for now
+    deadline: n.deadlineIso,
+    urgency: n.urgency ?? 'None',
+    academicScore: n.academicScore ?? 0,
+    sourceEmailId: n.gmailId,
+    summary: n.summary ?? '',
+  );
+}
+```
+
+**Step 3 — Dashboard consumes `List<AcademicEvent>` not emails**
+
+Sort by `academicScore` descending, then group by `type`. The email list view becomes a detail screen — only opened when tapping a card.
+
+**Step 4 — Backend change comes last**, only after the Flutter UI is stable. Your existing AI pipeline already produces everything needed — it's just a new endpoint that returns the same data shaped differently.
+
+The key insight: you don't need to change a single line of your AI service or database schema yet. The transformation happens entirely in the Flutter data layer.
