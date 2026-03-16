@@ -1,6 +1,16 @@
 import re
 import unicodedata
 
+# Maximum characters to send to LLM to reduce token usage
+TRUNCATE_LIMIT = 800
+
+# Keywords for "Level 0" cheap filtering (bypass LLM)
+TRIVIAL_KEYWORDS = [
+    "thank you", "thanks for", "welcome to", "newsletter", "unsubscribed",
+    "subscription", "verify your email", "password reset", "one-time password",
+    "otp", "sign-in attempt", "no-reply", "don't reply", "automated message"
+]
+
 
 # ---------------------------
 # Basic normalization
@@ -57,6 +67,24 @@ def extract_domain(email: str) -> str:
 
 
 # ---------------------------
+# Level 0: Cheap filter for trivial emails
+# ---------------------------
+def is_trivial_email(subject: str, body: str) -> bool:
+    """
+    Returns True if the email is likely a generic notification, 
+    newsletter, or automated message that doesn't need AI extraction.
+    """
+    content = f"{subject or ''} {body or ''}".lower()
+    
+    # Check for trivial keywords
+    for kw in TRIVIAL_KEYWORDS:
+        if kw in content:
+            return True
+            
+    return False
+
+
+# ---------------------------
 # Final AI preprocessing pipeline
 # ---------------------------
 def preprocess_email_for_llm(subject: str, body: str, sender: str):
@@ -67,6 +95,10 @@ def preprocess_email_for_llm(subject: str, body: str, sender: str):
     text = remove_signatures(text)
     text = mask_urls(text)
     text = text.lower()
+    
+    # Aggressive truncation for LLM efficiency
+    if len(text) > TRUNCATE_LIMIT:
+        text = text[:TRUNCATE_LIMIT] + "..."
 
     sender_email = extract_email(sender)
     sender_domain = extract_domain(sender_email)

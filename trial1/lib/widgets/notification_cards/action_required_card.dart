@@ -22,13 +22,13 @@ class ActionRequiredCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       decoration: BoxDecoration(
-        border: const Border(
-          left: BorderSide(color: Colors.red, width: 3),
+        border: Border(
+          left: BorderSide(color: kUrgencyCritical, width: 3),
         ),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Card(
-        color: kBgSurface,
+        color: Theme.of(context).colorScheme.surface,
         elevation: 0.5,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
@@ -41,8 +41,8 @@ class ActionRequiredCard extends StatelessWidget {
           leading: PriorityDot(academicScore: notification.academicScore),
           title: Text(
             notification.subject,
-            style: const TextStyle(
-              color: kTextPrimary,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurface,
               fontSize: 14,
               fontWeight: FontWeight.w500,
             ),
@@ -56,8 +56,8 @@ class ActionRequiredCard extends StatelessWidget {
               children: [
                 Text(
                   notification.snippet,
-                  style: const TextStyle(
-                    color: kTextSecondary,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
                     fontSize: 12,
                     height: 1.4,
                   ),
@@ -74,8 +74,8 @@ class ActionRequiredCard extends StatelessWidget {
                       notification.internalDate != null
                           ? formatTimeAgo(notification.internalDate!)
                           : '',
-                      style: const TextStyle(
-                        color: kTextSecondary,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
                         fontSize: 11,
                       ),
                     ),

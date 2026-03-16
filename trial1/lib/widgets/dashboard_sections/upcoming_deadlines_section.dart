@@ -27,7 +27,7 @@ class UpcomingDeadlinesSection extends StatelessWidget {
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w500,
-              color: kTextPrimary,
+              color: Theme.of(context).colorScheme.onBackground,
             ),
           ),
         ),
@@ -45,7 +45,7 @@ class UpcomingDeadlinesSection extends StatelessWidget {
                 margin: const EdgeInsets.only(right: 8),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: kBgSurface,
+                  color: Theme.of(context).colorScheme.surface,
                   borderRadius: BorderRadius.circular(8),
                   boxShadow: [
                     BoxShadow(
@@ -62,17 +62,17 @@ class UpcomingDeadlinesSection extends StatelessWidget {
                       notification.subject,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontWeight: FontWeight.w500,
                         fontSize: 14,
-                        color: kTextPrimary,
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
                     const Spacer(),
                     Text(
                       formatDeadline(notification.deadlineIso!),
-                      style: const TextStyle(
-                        color: Colors.red,
+                      style: TextStyle(
+                        color: kUrgencyHigh,
                         fontSize: 12,
                         fontWeight: FontWeight.w500,
                       ),

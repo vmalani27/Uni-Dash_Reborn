@@ -1,0 +1,49 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Create Firebase credentials file
+        run: |
+          echo '${{ secrets.FIREBASE_ADMIN_CREDENTIALS }}' > backend/credentials.json
+
+      - name: Create environment variables file
+        run: |
+          echo '${{ secrets.ENVIRONMENT_VARIABLES }}' > backend/.env
+
+
+      - name: Build Docker image
+        working-directory: backend
+        run: docker build -t unidash-backend .
+
+      - name: Stop old container
+        run: |
+          docker stop unidash-backend || true
+          docker rm unidash-backend || true
+
+      - name: Start new container
+        run: |
+          docker run -d \
+          --name unidash-backend \
+          --restart unless-stopped \
+          -p 8000:8000 \
+          --health-cmd "curl -f http://localhost:8000/health || exit 1" \
+          --health-interval 30s \
+          --health-timeout 10s \
+          --health-retries 3 \
+          -v ${{ github.workspace }}/backend/.env:/backend/.env \
+          -v ${{ github.workspace }}/backend/credentials.json:/backend/app/core/credentials.json \
+          unidash-backend
+
+      - name: Clean Unused Containers
+        run: docker image prune -f

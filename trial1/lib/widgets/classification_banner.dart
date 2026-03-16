@@ -29,12 +29,12 @@ class ClassificationBanner extends StatelessWidget {
         if (unprocessedCount > 0)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-            child: Container(
+              child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
-                color: kAccentPrimary.withOpacity(0.06),
+                color: Theme.of(context).colorScheme.primary.withOpacity(0.06),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: kAccentPrimary.withOpacity(0.12)),
+                border: Border.all(color: Theme.of(context).colorScheme.primary.withOpacity(0.12)),
               ),
               child: Row(
                 children: [
@@ -43,14 +43,14 @@ class ClassificationBanner extends StatelessWidget {
                     height: 16,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      color: kAccentPrimary,
+                      color: Theme.of(context).colorScheme.primary,
                     ),
                   ),
                   const SizedBox(width: 10),
                   Text(
                     'Processing $unprocessedCount email${unprocessedCount == 1 ? '' : 's'}…',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: kAccentPrimary,
+                      color: Theme.of(context).colorScheme.primary,
                       fontWeight: FontWeight.w500,
                     ),
                   ),

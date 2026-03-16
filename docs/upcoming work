@@ -1,0 +1,213 @@
+Yes — and your instinct here is correct. The next step is **UI structure first, AI sophistication second**. If the interface cannot express the information properly, improving the AI will not improve the user experience. Right now your backend already produces useful signals (topic, urgency, deadline, score), but the UI treats them like **tags on a message**, not like **structured academic context**.
+
+The better sequence is:
+
+First build the **information architecture of the UI** so it can express richer context.
+Then improve the AI so it can populate those fields more accurately.
+
+If you reverse this order, you will keep adding smarter models but the user will still see the same flat feed.
+
+---
+
+### Why UI should come first
+
+Right now your UI has a **message-centric layout**. It assumes the main object is the email. But the product you described is actually **context-centric**.
+
+The main objects should be things like:
+
+* Upcoming deadlines
+* Assignments
+* Exams
+* Announcements
+* Opportunities
+
+Emails should just be **the source of those objects**.
+
+Your backend already calculates:
+
+* `deadline_iso`
+* `normalized_topic`
+* `academic_score`
+* `ai_summary`
+* `ai_label_urgency`
+
+That is already enough to build a much stronger interface.
+
+For example:
+
+Instead of showing:
+
+Assignment → email summary
+
+You could show:
+
+Assignment
+Course: Deep Learning
+Instructor: Ritika Jani
+Due in: 2 days
+Source: Classroom announcement
+
+Then the email appears as **supporting evidence**, not the main item.
+
+Once the UI is capable of showing structured context like this, improving the AI becomes meaningful.
+
+---
+
+### About multi-model orchestration
+
+Yes — and this is actually the direction systems like this naturally evolve toward.
+
+Right now your AI pipeline is essentially:
+
+```
+Email → LLM → Labels + Summary
+```
+
+Later it can become something like:
+
+```
+Email
+   ↓
+Preprocessing
+   ↓
+Classification model
+   ↓
+Extraction model
+   ↓
+Reasoning model
+   ↓
+Academic context engine
+```
+
+Different models can do different jobs:
+
+Classification model
+Determines topic and urgency.
+
+Extraction model
+Pulls structured data like course name, instructor, dates.
+
+Reasoning model
+Decides what action the student needs to take.
+
+Summarization model
+Generates the UI summary.
+
+This is called **pipeline orchestration**, and it scales better than asking one LLM to do everything.
+
+---
+
+### The Ollama concurrency problem
+
+You are correct here as well. Ollama is excellent for **development and batch inference**, but it is not designed for high concurrency.
+
+The issues you will face are:
+
+* single model lock during generation
+* high VRAM contention
+* blocking inference requests
+* slow queue buildup
+
+For a prototype this is fine. For real usage you would eventually want something like:
+
+Local inference server with request queue
+OR
+Hosted inference provider
+
+However you do not need to solve this right now.
+
+The architecture you already implemented is actually very good for this stage:
+
+```
+try local inference
+fallback to OpenRouter
+```
+
+This is exactly how production systems behave.
+
+---
+
+### The real scalability question
+
+The more important scaling problem is **how often you run AI**.
+
+Right now the system is designed well because:
+
+AI runs **during ingestion**, not during UI requests.
+
+That means the UI is always reading **precomputed intelligence**, which is scalable.
+
+If you ever run AI **on demand when the user opens the dashboard**, the system will break immediately.
+
+You avoided that mistake.
+
+---
+
+### What you should do next
+
+Focus on **three UI changes first**.
+
+1. Add a **dashboard overview section**
+   Show upcoming deadlines, important items, and urgent notifications.
+
+2. Replace vertical category stacking with **tabs or sidebar filters**
+   Users should switch between categories, not scroll through them.
+
+3. Enrich message cards with **structured fields**
+   Course, instructor, due date, urgency indicator.
+
+These changes will make the interface feel like an **academic assistant** instead of a categorized email list.
+
+Only after that should you improve the AI outputs.
+
+---
+
+### About your academic context engine idea
+
+That idea is actually the most interesting part of your system.
+
+Right now you are extracting signals from emails.
+
+The next step is building a **persistent academic model of the student**.
+
+For example:
+
+* known courses
+* instructors
+* recurring events
+* submission patterns
+* academic priorities
+
+When the system knows those things, it can start answering questions like:
+
+* which emails actually matter to this student
+* which announcements are irrelevant
+* which deadlines are critical
+
+At that point the system stops being an email classifier and becomes a **personal academic intelligence layer**.
+
+---
+
+### One reassuring point
+
+The architecture you already built is actually well positioned for growth.
+
+You already have:
+
+* ingestion pipeline
+* classification layer
+* scoring engine
+* hybrid inference routing
+* asynchronous processing
+
+That is already most of the infrastructure required for a contextual AI system.
+
+Right now you are simply at the stage where **the UI is not yet expressing the intelligence the backend already has**.
+
+Fix that first.
+
+---
+
+If you want, I can also show you something extremely useful next:
+
+How a **proper academic dashboard layout** would look using the data your backend already produces, without writing any new AI code.

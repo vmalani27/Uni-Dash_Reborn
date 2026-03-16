@@ -2,13 +2,23 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 // ─── Core Palette ───────────────────────────────────────────
-const Color kBgPrimary = Color(0xFF0F1115);
-const Color kBgSurface = Color(0xFF171A21);
-const Color kBgElevated = Color(0xFF1E222B);
+// Dark tokens
+const Color kBgPrimaryDark = Color(0xFF0F1115);
+const Color kBgSurfaceDark = Color(0xFF171A21);
+const Color kBgElevatedDark = Color(0xFF1E222B);
+const Color kSidebarDark = Color(0xFF181B22);
+const Color kTextPrimaryDark = Color(0xFFE6E6E6);
+const Color kTextSecondaryDark = Color(0xFF9CA3AF);
+const Color kTextDisabledDark = Color(0xFF6B7280);
 
-const Color kTextPrimary = Color(0xFFE6E6E6);
-const Color kTextSecondary = Color(0xFF9CA3AF);
-const Color kTextDisabled = Color(0xFF6B7280);
+// Light tokens
+const Color kBgPrimaryLight = Color(0xFFF6F7F9); // page background
+const Color kBgSurfaceLight = Color(0xFFFFFFFF); // card background
+const Color kBgElevatedLight = Color(0xFFF2F3F7); // raised surface
+const Color kSidebarLight = Color(0xFFE9EAEC); // sidebar background
+const Color kTextPrimaryLight = Color(0xFF23272F);
+const Color kTextSecondaryLight = Color(0xFF5A5F6B);
+const Color kTextDisabledLight = Color(0xFFB0B4BE);
 
 const Color kAccentPrimary = Color(0xFFE59A23);
 const Color kAccentSecondary = Color(0xFFF4C76B);
@@ -100,86 +110,48 @@ Color urgencyColor(String? urgency) {
 // ─── Text Theme ─────────────────────────────────────────────
 TextTheme _buildTextTheme() {
   final base = GoogleFonts.interTextTheme();
-  return base.copyWith(
-    displayLarge: base.displayLarge?.copyWith(
-      fontSize: 28,
-      fontWeight: FontWeight.w700,
-      color: kTextPrimary,
-      letterSpacing: -0.5,
-    ),
-    titleLarge: base.titleLarge?.copyWith(
-      fontSize: 20,
-      fontWeight: FontWeight.w600,
-      color: kTextPrimary,
-    ),
-    titleMedium: base.titleMedium?.copyWith(
-      fontSize: 16,
-      fontWeight: FontWeight.w600,
-      color: kTextPrimary,
-    ),
-    bodyLarge: base.bodyLarge?.copyWith(
-      fontSize: 15,
-      height: 1.5,
-      color: kTextSecondary,
-    ),
-    bodyMedium: base.bodyMedium?.copyWith(
-      fontSize: 14,
-      height: 1.5,
-      color: kTextSecondary,
-    ),
-    bodySmall: base.bodySmall?.copyWith(fontSize: 12, color: kTextDisabled),
-    labelLarge: base.labelLarge?.copyWith(
-      fontSize: 14,
-      fontWeight: FontWeight.w600,
-      color: kTextPrimary,
-    ),
-    labelMedium: base.labelMedium?.copyWith(
-      fontSize: 12,
-      fontWeight: FontWeight.w500,
-      color: kTextSecondary,
-    ),
-    labelSmall: base.labelSmall?.copyWith(
-      fontSize: 11,
-      fontWeight: FontWeight.w500,
-      color: kTextDisabled,
-      letterSpacing: 0.3,
-    ),
-  );
+  // Use colorScheme tokens at usage site, not here. This avoids undefined identifier errors.
+  return base;
 }
 
 // ─── Dark Theme ─────────────────────────────────────────────
 final ThemeData uniDashDarkTheme = ThemeData(
   brightness: Brightness.dark,
-  scaffoldBackgroundColor: kBgPrimary,
-  textTheme: _buildTextTheme(),
-
+  scaffoldBackgroundColor: kBgPrimaryDark,
+  textTheme: GoogleFonts.interTextTheme().apply(
+    bodyColor: kTextPrimaryDark,
+    displayColor: kTextPrimaryDark,
+  ),
   colorScheme: const ColorScheme.dark(
     primary: kAccentPrimary,
     secondary: kAccentSecondary,
-    surface: kBgSurface,
+    surface: kBgSurfaceDark,
+    surfaceVariant: kSidebarDark,
+    background: kBgPrimaryDark,
     onPrimary: Colors.black,
-    onSurface: kTextPrimary,
+    onSurface: kTextPrimaryDark,
+    onBackground: kTextPrimaryDark,
   ),
-
   appBarTheme: AppBarTheme(
-    backgroundColor: kBgPrimary,
+    backgroundColor: kBgPrimaryDark,
     elevation: 0,
     scrolledUnderElevation: 0,
-    iconTheme: const IconThemeData(color: kTextPrimary),
+    iconTheme: const IconThemeData(color: kTextPrimaryDark),
     titleTextStyle: GoogleFonts.inter(
       fontSize: 20,
       fontWeight: FontWeight.w600,
-      color: kTextPrimary,
+      color: kTextPrimaryDark,
     ),
   ),
-
   cardTheme: CardThemeData(
-    color: kBgSurface,
+    color: kBgSurfaceDark,
     elevation: 0,
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
     margin: EdgeInsets.zero,
   ),
-
+  drawerTheme: const DrawerThemeData(
+    backgroundColor: kSidebarDark,
+  ),
   elevatedButtonTheme: ElevatedButtonThemeData(
     style: ElevatedButton.styleFrom(
       backgroundColor: kAccentPrimary,
@@ -190,59 +162,126 @@ final ThemeData uniDashDarkTheme = ThemeData(
       textStyle: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 14),
     ),
   ),
-
   textButtonTheme: TextButtonThemeData(
     style: TextButton.styleFrom(
-      foregroundColor: kTextSecondary,
+      foregroundColor: kTextSecondaryDark,
       textStyle: GoogleFonts.inter(fontWeight: FontWeight.w500),
     ),
   ),
-
   segmentedButtonTheme: SegmentedButtonThemeData(
     style: ButtonStyle(
       backgroundColor: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) {
           return kAccentPrimary.withOpacity(0.15);
         }
-        return kBgSurface;
+        return kBgSurfaceDark;
       }),
       foregroundColor: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) {
           return kAccentPrimary;
         }
-        return kTextSecondary;
+        return kTextSecondaryDark;
       }),
       side: WidgetStateProperty.all(
-        BorderSide(color: kTextDisabled.withOpacity(0.2)),
+        BorderSide(color: kTextDisabledDark.withOpacity(0.2)),
       ),
       shape: WidgetStateProperty.all(
         RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     ),
   ),
-
   snackBarTheme: SnackBarThemeData(
-    backgroundColor: kBgElevated,
-    contentTextStyle: GoogleFonts.inter(color: kTextPrimary, fontSize: 14),
+    backgroundColor: kBgElevatedDark,
+    contentTextStyle: GoogleFonts.inter(color: kTextPrimaryDark, fontSize: 14),
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     behavior: SnackBarBehavior.floating,
   ),
-
-  dividerColor: kTextDisabled.withOpacity(0.15),
-  disabledColor: kTextDisabled,
+  dividerColor: kTextDisabledDark.withOpacity(0.15),
+  disabledColor: kTextDisabledDark,
 );
 
-// ─── Light Theme (minimal) ──────────────────────────────────
+// ─── Light Theme ───────────────────────────────────────────
 final ThemeData uniDashLightTheme = ThemeData(
   brightness: Brightness.light,
-  scaffoldBackgroundColor: const Color(0xFFF6F7F9),
-
-  colorScheme: ColorScheme.light(
-    primary: kAccentPrimary,
-    surface: Colors.white,
-    onPrimary: Colors.black,
-    onSurface: Colors.black87,
+  scaffoldBackgroundColor: kBgPrimaryLight,
+  textTheme: GoogleFonts.interTextTheme().apply(
+    bodyColor: kTextPrimaryLight,
+    displayColor: kTextPrimaryLight,
   ),
-
-  textTheme: const TextTheme(bodyMedium: TextStyle(color: Colors.black87)),
+  colorScheme: const ColorScheme.light(
+    primary: kAccentPrimary,
+    secondary: kAccentSecondary,
+    surface: kBgSurfaceLight,
+    surfaceVariant: kSidebarLight,
+    background: kBgPrimaryLight,
+    onPrimary: Colors.black,
+    onSurface: kTextPrimaryLight,
+    onBackground: kTextPrimaryLight,
+  ),
+  appBarTheme: AppBarTheme(
+    backgroundColor: kBgPrimaryLight,
+    elevation: 0,
+    scrolledUnderElevation: 0,
+    iconTheme: const IconThemeData(color: kTextPrimaryLight),
+    titleTextStyle: GoogleFonts.inter(
+      fontSize: 20,
+      fontWeight: FontWeight.w600,
+      color: kTextPrimaryLight,
+    ),
+  ),
+  cardTheme: CardThemeData(
+    color: kBgSurfaceLight,
+    elevation: 0,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    margin: EdgeInsets.zero,
+  ),
+  drawerTheme: const DrawerThemeData(
+    backgroundColor: kSidebarLight,
+  ),
+  elevatedButtonTheme: ElevatedButtonThemeData(
+    style: ElevatedButton.styleFrom(
+      backgroundColor: kAccentPrimary,
+      foregroundColor: Colors.black,
+      elevation: 0,
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      textStyle: GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 14),
+    ),
+  ),
+  textButtonTheme: TextButtonThemeData(
+    style: TextButton.styleFrom(
+      foregroundColor: kTextSecondaryLight,
+      textStyle: GoogleFonts.inter(fontWeight: FontWeight.w500),
+    ),
+  ),
+  segmentedButtonTheme: SegmentedButtonThemeData(
+    style: ButtonStyle(
+      backgroundColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) {
+          return kAccentPrimary.withOpacity(0.10);
+        }
+        return kBgSurfaceLight;
+      }),
+      foregroundColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) {
+          return kAccentPrimary;
+        }
+        return kTextSecondaryLight;
+      }),
+      side: WidgetStateProperty.all(
+        BorderSide(color: kTextDisabledLight.withOpacity(0.18)),
+      ),
+      shape: WidgetStateProperty.all(
+        RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    ),
+  ),
+  snackBarTheme: SnackBarThemeData(
+    backgroundColor: kBgElevatedLight,
+    contentTextStyle: GoogleFonts.inter(color: kTextPrimaryLight, fontSize: 14),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    behavior: SnackBarBehavior.floating,
+  ),
+  dividerColor: kTextDisabledLight.withOpacity(0.13),
+  disabledColor: kTextDisabledLight,
 );

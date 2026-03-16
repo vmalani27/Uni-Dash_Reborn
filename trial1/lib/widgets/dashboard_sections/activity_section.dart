@@ -27,7 +27,7 @@ class ActivitySection extends StatelessWidget {
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w500,
-              color: kTextPrimary,
+              color: Theme.of(context).textTheme.bodyLarge?.color,
             ),
           ),
         ),
@@ -37,7 +37,10 @@ class ActivitySection extends StatelessWidget {
             child: Center(
               child: Text(
                 'No activity',
-                style: TextStyle(color: kTextSecondary, fontSize: 14),
+                style: TextStyle(
+                  color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.6),
+                  fontSize: 14,
+                ),
               ),
             ),
           )

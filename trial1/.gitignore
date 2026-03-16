@@ -3,7 +3,7 @@
 .packages
 build/
 pubspec.lock
-
+assets/env_config
 # Android Gradle
 .android/
 gradle-wrapper.jar

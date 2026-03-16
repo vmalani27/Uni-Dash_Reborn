@@ -20,7 +20,7 @@ class ActivityCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      color: kBgSurface,
+      color: Theme.of(context).colorScheme.surface,
       elevation: 0.5,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
@@ -33,8 +33,8 @@ class ActivityCard extends StatelessWidget {
         leading: PriorityDot(academicScore: notification.academicScore),
         title: Text(
           notification.subject,
-          style: const TextStyle(
-            color: kTextPrimary,
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurface,
             fontSize: 14,
             fontWeight: FontWeight.w500,
           ),
@@ -48,8 +48,8 @@ class ActivityCard extends StatelessWidget {
             children: [
               Text(
                 notification.snippet,
-                style: const TextStyle(
-                  color: kTextSecondary,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
                   fontSize: 12,
                   height: 1.4,
                 ),
@@ -66,8 +66,8 @@ class ActivityCard extends StatelessWidget {
                     notification.internalDate != null
                         ? formatTimeAgo(notification.internalDate!)
                         : '',
-                    style: const TextStyle(
-                      color: kTextSecondary,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
                       fontSize: 11,
                     ),
                   ),

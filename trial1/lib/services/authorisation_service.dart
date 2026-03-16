@@ -7,98 +7,77 @@ import 'package:trial1/services/api_services.dart';
 import 'package:trial1/theme.dart';
 
 class AuthGate extends StatelessWidget {
-  const AuthGate({super.key});
+  final VoidCallback? themeToggle;
+  final ThemeMode? themeMode;
+  const AuthGate({super.key, this.themeToggle, this.themeMode});
 
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, authSnapshot) {
-        // Firebase loading state
+        final colorScheme = Theme.of(context).colorScheme;
         if (authSnapshot.connectionState == ConnectionState.waiting) {
           return Scaffold(
-            backgroundColor: kBgPrimary,
-            body: const Center(
-              child: CircularProgressIndicator(color: kAccentPrimary),
+            backgroundColor: colorScheme.background,
+            body: Center(
+              child: CircularProgressIndicator(color: colorScheme.primary),
             ),
           );
         }
-
-        // User not authenticated → show IntroScreen
         if (!authSnapshot.hasData) {
           return const IntroScreen();
         }
-
-        // User authenticated → fetch profile and route accordingly
+        // Authenticated, fetch profile
         return FutureBuilder<Map<String, dynamic>>(
           future: BackendService.fetchUserProfile(),
           builder: (context, profileSnapshot) {
-            // Profile loading state
             if (profileSnapshot.connectionState == ConnectionState.waiting) {
               return Scaffold(
-                backgroundColor: kBgPrimary,
-                body: const Center(
-                  child: CircularProgressIndicator(color: kAccentPrimary),
+                backgroundColor: colorScheme.background,
+                body: Center(
+                  child: CircularProgressIndicator(color: colorScheme.primary),
                 ),
               );
             }
-
-            // Profile fetch error
             if (profileSnapshot.hasError) {
               return Scaffold(
-                backgroundColor: kBgPrimary,
+                backgroundColor: colorScheme.background,
                 body: Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.error_outline,
-                        color: Colors.red,
+                        color: colorScheme.error,
                         size: 64,
                       ),
                       const SizedBox(height: 16),
-                      const Text(
+                      Text(
                         'Failed to load profile',
-                        style: TextStyle(color: Colors.red, fontSize: 16),
-                      ),
-                      const SizedBox(height: 24),
-                      ElevatedButton(
-                        onPressed: () {
-                          // Trigger rebuild by popping and pushing
-                          Navigator.of(context).pushReplacement(
-                            MaterialPageRoute(builder: (_) => const AuthGate()),
-                          );
-                        },
-                        child: const Text('Retry'),
+                        style: TextStyle(color: colorScheme.error, fontSize: 16),
                       ),
                     ],
                   ),
                 ),
               );
             }
-
-            // No profile data
             if (!profileSnapshot.hasData) {
               return Scaffold(
-                backgroundColor: kBgPrimary,
-                body: const Center(
+                backgroundColor: colorScheme.background,
+                body: Center(
                   child: Text(
                     'No profile found',
-                    style: TextStyle(color: kTextSecondary),
+                    style: TextStyle(color: colorScheme.onBackground.withOpacity(0.7)),
                   ),
                 ),
               );
             }
-
-            // Profile exists → route based on completion status
             final profile = profileSnapshot.data!;
             final completed = profile["profile_completed"] ?? false;
-
-            if (!completed) {
-              return const ProfileSetupScreen();
-            }
-
-            return const HomeScreen();
+            return completed
+                ? HomeScreen(themeToggle: themeToggle, themeMode: themeMode)
+                : ProfileSetupScreen(themeToggle: themeToggle, themeMode: themeMode);
           },
         );
       },

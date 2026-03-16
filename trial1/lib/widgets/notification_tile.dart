@@ -28,7 +28,7 @@ class NotificationTile extends StatelessWidget {
         closedShape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14),
         ),
-        closedColor: kBgSurface,
+        closedColor: Theme.of(context).cardColor,
         onClosed: (_) => HapticFeedback.lightImpact(),
         closedBuilder: (context, openContainer) {
           return InkWell(
@@ -80,7 +80,7 @@ class NotificationTile extends StatelessWidget {
                   Text(
                     notification.subject,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: kTextPrimary.withOpacity(0.85),
+                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.85),
                       fontWeight: FontWeight.w500,
                     ),
                     maxLines: 1,
@@ -92,7 +92,7 @@ class NotificationTile extends StatelessWidget {
                   Text(
                     notification.snippet,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: kTextSecondary,
+                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
                       height: 1.4,
                     ),
                     maxLines: 2,
@@ -229,16 +229,18 @@ class _EmailDetailLoaderState extends State<_EmailDetailLoader> {
       future: _detailFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            backgroundColor: kBgPrimary,
+          return Scaffold(
+            backgroundColor: Theme.of(context).colorScheme.background,
             body: Center(
-              child: CircularProgressIndicator(color: kAccentPrimary),
+              child: CircularProgressIndicator(
+                color: Theme.of(context).colorScheme.primary,
+              ),
             ),
           );
         }
         if (snapshot.hasError) {
           return Scaffold(
-            backgroundColor: kBgPrimary,
+            backgroundColor: Theme.of(context).colorScheme.background,
             appBar: AppBar(leading: const CloseButton()),
             body: Center(child: Text('Error: ${snapshot.error}')),
           );

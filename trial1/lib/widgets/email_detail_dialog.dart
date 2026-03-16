@@ -121,20 +121,20 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: kBgPrimary,
+      backgroundColor: Theme.of(context).colorScheme.background,
       body: CustomScrollView(
         slivers: [
           // App bar
           SliverAppBar(
-            backgroundColor: kBgPrimary,
+            backgroundColor: Theme.of(context).colorScheme.background,
             elevation: 0,
             scrolledUnderElevation: 0,
             pinned: true,
             leading: IconButton(
-              icon: const Icon(
+              icon: Icon(
                 Icons.arrow_back_ios_new,
                 size: 20,
-                color: kTextPrimary,
+                color: Theme.of(context).colorScheme.onBackground,
               ),
               onPressed: () => Navigator.of(context).pop(),
             ),
@@ -166,7 +166,7 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
                         width: 40,
                         height: 40,
                         decoration: BoxDecoration(
-                          color: kAccentPrimary.withValues(alpha: 0.15),
+                          color: Theme.of(context).colorScheme.primary.withOpacity(0.15),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Center(
@@ -174,8 +174,8 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
                             _message.sender.isNotEmpty
                                 ? _message.sender[0].toUpperCase()
                                 : '?',
-                            style: const TextStyle(
-                              color: kAccentPrimary,
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.primary,
                               fontWeight: FontWeight.w700,
                               fontSize: 16,
                             ),
@@ -233,7 +233,7 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
                                 Set<WidgetState> states,
                               ) {
                                 if (states.contains(WidgetState.selected)) {
-                                  return kAccentPrimary.withValues(alpha: 0.15);
+                                  return Theme.of(context).colorScheme.primary.withOpacity(0.15);
                                 }
                                 return Colors.transparent;
                               }),
@@ -242,9 +242,9 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
                                 Set<WidgetState> states,
                               ) {
                                 if (states.contains(WidgetState.selected)) {
-                                  return kAccentPrimary;
+                                  return Theme.of(context).colorScheme.primary;
                                 }
-                                return kTextSecondary;
+                                return Theme.of(context).colorScheme.onSurface.withOpacity(0.7);
                               }),
                         ),
                       ),
@@ -260,16 +260,16 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: kBgSurface,
+                        color: Theme.of(context).colorScheme.surface,
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
-                          color: kTextDisabled.withValues(alpha: 0.1),
+                          color: Theme.of(context).disabledColor.withOpacity(0.1),
                         ),
                       ),
                       child: Text(
                         _message.bodyText,
                         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: kTextPrimary,
+                          color: Theme.of(context).colorScheme.onBackground,
                           height: 1.7,
                         ),
                       ),
@@ -289,12 +289,12 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: kBgSurface,
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: kAccentPrimary.withValues(alpha: 0.2)),
+        border: Border.all(color: Theme.of(context).colorScheme.primary.withOpacity(0.2)),
         boxShadow: [
           BoxShadow(
-            color: kAccentPrimary.withValues(alpha: 0.05),
+            color: Theme.of(context).colorScheme.primary.withOpacity(0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -309,12 +309,12 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
               Container(
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: kAccentPrimary.withValues(alpha: 0.1),
+                  color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
                   Icons.auto_awesome,
-                  color: kAccentPrimary,
+                  color: null, // Use default icon color
                   size: 16,
                 ),
               ),
@@ -322,7 +322,7 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
               Text(
                 'AI Analysis',
                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: kAccentPrimary,
+                  color: Theme.of(context).colorScheme.primary,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -352,7 +352,7 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
               if (_message.aiLabelSource != null)
                 _buildChip(
                   _message.aiLabelSource!,
-                  kTextSecondary,
+                  Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
                   Icons.verified_user_outlined,
                 ),
             ],
@@ -364,9 +364,9 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
-                color: kUrgencyHigh.withValues(alpha: 0.08),
+                color: kUrgencyHigh.withOpacity(0.08),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: kUrgencyHigh.withValues(alpha: 0.2)),
+                border: Border.all(color: kUrgencyHigh.withOpacity(0.2)),
               ),
               child: Row(
                 children: [
@@ -388,7 +388,7 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
             Text(
               'Summary',
               style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: kTextSecondary,
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
                 letterSpacing: 0.5,
               ),
             ),
@@ -397,7 +397,7 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
               _message.aiSummary!,
               style: Theme.of(
                 context,
-              ).textTheme.bodyLarge?.copyWith(height: 1.6, color: kTextPrimary),
+              ).textTheme.bodyLarge?.copyWith(height: 1.6, color: Theme.of(context).colorScheme.onBackground),
             ),
           ],
         ],
@@ -409,7 +409,7 @@ class _EmailDetailScreenState extends State<EmailDetailScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
+        color: color.withOpacity(0.1),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(

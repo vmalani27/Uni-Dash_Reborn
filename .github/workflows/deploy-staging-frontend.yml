@@ -1,0 +1,64 @@
+name: Deploy Staging Frontend
+
+on:
+  push:
+    branches:
+      - staging
+
+jobs:
+  build-frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: trial1
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Ensure assets directory exists
+        run: mkdir -p assets
+
+      - name: Create env file
+        run: echo "${{ secrets.FLUTTER_ENV }}" > assets/env_config
+      
+      - name: Debug print STAGING env line
+        run: |
+          grep '^STAGING' assets/env_config || cat assets/env_config
+      
+      - name: Debug assets
+        run: |
+          echo "Current directory:"
+          pwd
+          echo "Files:"
+          ls -la
+          echo ".env content:"
+          cat .env || echo ".env missing"
+      
+      - name: Install dependencies
+        run: flutter pub get
+      - name: Build web
+        run: flutter build web --release
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-web-build
+          path: trial1/build/web
+
+  deploy-frontend:
+    needs: build-frontend
+    runs-on: self-hosted
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: flutter-web-build
+          path: web-build
+      - name: Clean old frontend
+        run: sudo rm -rf /var/www/unidash/* || true
+      - name: Deploy new frontend
+        run: sudo cp -r web-build/* /var/www/unidash/
+      # Optionally reload nginx
+      - name: Reload nginx
+        run: sudo systemctl reload nginx || true

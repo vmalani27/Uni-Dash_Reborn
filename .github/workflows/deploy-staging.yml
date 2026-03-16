@@ -1,12 +1,12 @@
-name: Deploy Backend
+name: Deploy Staging Backend
 
 on:
   push:
     branches:
-      - main
+      - staging
 
 jobs:
-  deploy:
+  deploy-staging:
     runs-on: self-hosted
 
     steps:
@@ -18,29 +18,38 @@ jobs:
           echo '${{ secrets.FIREBASE_ADMIN_CREDENTIALS }}' > backend/credentials.json
 
       - name: Create environment variables file
+        # Using a staging specific secret if available, otherwise fallback to standard
         run: |
-          echo '${{ secrets.ENVIRONMENT_VARIABLES }}' > backend/.env
-
+          if [ -n "${{ secrets.STAGING_ENVIRONMENT_VARIABLES }}" ]; then
+            echo '${{ secrets.STAGING_ENVIRONMENT_VARIABLES }}' > backend/.env
+          else
+            echo '${{ secrets.ENVIRONMENT_VARIABLES }}' > backend/.env
+          fi
 
       - name: Build Docker image
         working-directory: backend
-        run: docker build -t unidash-backend .
+        run: docker build -t unidash-backend-staging .
 
       - name: Stop old container
         run: |
-          docker stop unidash-backend || true
-          docker rm unidash-backend || true
+          docker stop unidash-backend-staging || true
+          docker rm unidash-backend-staging || true
 
       - name: Start new container
         run: |
+          # Note: Staging bound to port 8001 on the host, 8000 in container
           docker run -d \
-          --name unidash-backend \
+          --name unidash-backend-staging \
           --restart unless-stopped \
-          -p 8000:8000 \
+          -p 8001:8000 \
           --health-cmd "curl -f http://localhost:8000/health || exit 1" \
           --health-interval 30s \
           --health-timeout 10s \
           --health-retries 3 \
           -v ${{ github.workspace }}/backend/.env:/backend/.env \
           -v ${{ github.workspace }}/backend/credentials.json:/backend/app/core/credentials.json \
-          unidash-backend
+          unidash-backend-staging
+    
+
+      - name: Clean Unused Containers
+        run: docker image prune -f

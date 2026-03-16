@@ -16,8 +16,9 @@ class TopicSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (notifications.isEmpty)
+    if (notifications.isEmpty) {
       return const SliverToBoxAdapter(child: SizedBox.shrink());
+    }
 
     final color = topicColor(normalizedTopic);
     final label = topicLabel(normalizedTopic);

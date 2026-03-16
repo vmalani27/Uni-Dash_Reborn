@@ -5,9 +5,12 @@ import 'package:trial1/services/api_services.dart';
 import 'package:trial1/widgets/gmail_notifications_list.dart';
 import 'package:trial1/widgets/skeleton_loader.dart';
 import '../theme.dart';
+import 'main_scaffold.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final VoidCallback? themeToggle;
+  final ThemeMode? themeMode;
+  const HomeScreen({super.key, this.themeToggle, this.themeMode});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -49,24 +52,41 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  int _selectedIndex = 0;
+
+  void _onSidebarNav(int index) {
+    setState(() => _selectedIndex = index);
+    switch (index) {
+      case 0:
+        // Dashboard (current)
+        break;
+      case 1:
+        // Deadlines (TODO: implement)
+        break;
+      case 2:
+        // Assignments (TODO: implement)
+        break;
+      case 3:
+        Navigator.of(context).pushNamed('/profile');
+        break;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final firstName = _profile?.name.split(' ').first ?? 'Student';
-
-    return Scaffold(
-      backgroundColor: kBgPrimary,
-      body: NestedScrollView(
-        headerSliverBuilder: (context, innerBoxIsScrolled) => [
-          SliverAppBar(
-            backgroundColor: kBgPrimary,
-            elevation: 0,
-            scrolledUnderElevation: 0,
-            floating: true,
-            snap: true,
-            toolbarHeight: 60,
-            title: Row(
+    return MainScaffold(
+      selectedIndex: _selectedIndex,
+      onDestinationSelected: _onSidebarNav,
+      themeToggle: widget.themeToggle,
+      themeMode: widget.themeMode,
+      child: Column(
+        children: [
+          Container(
+            color: Theme.of(context).colorScheme.background,
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            child: Row(
               children: [
-                // Avatar
                 GestureDetector(
                   onTap: () => _navigateToProfile(),
                   child: Container(
@@ -74,7 +94,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     height: 36,
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
-                        colors: [kAccentPrimary, kAccentSecondary],
+                        colors: [Theme.of(context).colorScheme.primary, Theme.of(context).colorScheme.secondary],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
@@ -83,8 +103,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: Center(
                       child: Text(
                         firstName[0].toUpperCase(),
-                        style: const TextStyle(
-                          color: Colors.black,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onPrimary,
                           fontWeight: FontWeight.w700,
                           fontSize: 16,
                         ),
@@ -109,22 +129,19 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                 ),
+                IconButton(
+                  icon: Icon(
+                    Icons.settings_outlined,
+                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.75),
+                    size: 22,
+                  ),
+                  onPressed: _navigateToProfile,
+                ),
               ],
             ),
-            actions: [
-              IconButton(
-                icon: const Icon(
-                  Icons.settings_outlined,
-                  color: kTextSecondary,
-                  size: 22,
-                ),
-                onPressed: _navigateToProfile,
-              ),
-              const SizedBox(width: 8),
-            ],
           ),
+          Expanded(child: _buildBody()),
         ],
-        body: _buildBody(),
       ),
     );
   }
@@ -199,9 +216,9 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          color: kBgSurface,
+          color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: kAccentPrimary.withOpacity(0.1)),
+          border: Border.all(color: Theme.of(context).colorScheme.primary.withOpacity(0.1)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -211,15 +228,15 @@ class _HomeScreenState extends State<HomeScreen> {
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
-                    kAccentPrimary.withOpacity(0.15),
-                    kAccentSecondary.withOpacity(0.08),
+                    Theme.of(context).colorScheme.primary.withOpacity(0.15),
+                    Theme.of(context).colorScheme.secondary.withOpacity(0.08),
                   ],
                 ),
                 borderRadius: BorderRadius.circular(14),
               ),
-              child: const Icon(
+              child: Icon(
                 Icons.mail_outline,
-                color: kAccentPrimary,
+                color: Theme.of(context).colorScheme.primary,
                 size: 28,
               ),
             ),

@@ -18,7 +18,8 @@ from datetime import datetime
 
 # ─── Config ──────────────────────────────────────────────────
 INGESTION_INTERVAL_SECONDS = 180   # 3 minutes
-AI_LOOP_DELAY_SECONDS = 1.5       # delay between AI inferences
+AI_LOOP_DELAY_SECONDS = 5.0       # delay between AI batch inferences
+AI_BATCH_SIZE = 10                # number of emails to process at once
 STARTUP_DELAY_SECONDS = 10        # wait for app to fully start
 
 _start_time = None
@@ -45,11 +46,10 @@ def _sync_user(uid: str, limit: int = 50):
         db.close()
 
 
-def _process_one_email():
+def _process_batch_emails():
     """
-    Blocking: picks one unprocessed email and runs AI inference.
-    Returns: (gmail_id, topic) on success, None if nothing to process.
-    Raises: ConnectionError/Timeout if Ollama is unreachable (retryable).
+    Blocking: picks a batch of unprocessed emails and runs AI inference.
+    Returns: List of (gmail_id, topic) on success, empty list if nothing to process.
     """
     from app.core.database import SupabaseSessionLocal
     from app.models.gmail.gmail_message import GmailMessage
@@ -57,7 +57,7 @@ def _process_one_email():
 
     db = SupabaseSessionLocal()
     try:
-        message = (
+        messages = (
             db.query(GmailMessage)
             .filter(
                 (GmailMessage.ai_status == None) |
@@ -65,38 +65,34 @@ def _process_one_email():
                 (GmailMessage.ai_status == "failed")
             )
             .order_by(GmailMessage.created_at.asc())
+            .limit(AI_BATCH_SIZE)
             .with_for_update(skip_locked=True)
-            .first()
+            .all()
         )
 
-        if message is None:
-            return None
+        if not messages:
+            return []
 
-        # Atomically lock the row before heavy ML execution
-        message.ai_status = "processing"
+        # Lock them all
+        for msg in messages:
+            msg.ai_status = "processing"
         db.commit()
 
-        gmail_id = message.gmail_id
-        subject = message.subject[:50] if message.subject else ""
-        print(f"[AI_WORKER] Processing: {gmail_id} | {subject}…")
+        print(f"[AI_WORKER] Processing batch of {len(messages)} email(s)...")
 
         try:
-            AIService.run_email_inference(message)
+            results_map = AIService.run_batch_email_inference(messages, db)
             db.commit()
-            topic = message.normalized_topic
-            print(f"[AI_WORKER] Classified: {gmail_id} → {topic}")
-            return (gmail_id, topic)
-
-        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
-            # Ollama unreachable — don't mark as processed, will retry
-            db.rollback() # Ensure processing lock is removed so it can retry later
-            raise
+            
+            summary = [m.gmail_id for m in messages if m.ai_processed]
+            if summary:
+                print(f"[AI_WORKER] Batch completed: {len(summary)} succeeded.")
+            return summary
 
         except Exception as e:
-            print(f"[AI_WORKER] Failed: {gmail_id}: {e}")
-            # Commit the failure state so that ai_status="failed" persists
-            db.commit()
-            return None 
+            print(f"[AI_WORKER] Batch failed: {e}")
+            db.rollback()
+            return []
 
     finally:
         db.close()
@@ -171,11 +167,11 @@ async def ai_processing_loop():
                 await asyncio.sleep(60)
                 continue
 
-            result = await asyncio.to_thread(_process_one_email)
+            result = await asyncio.to_thread(_process_batch_emails)
 
-            if result is None:
+            if not result:
                 # Nothing to process — sleep longer
-                await asyncio.sleep(10)
+                await asyncio.sleep(15)
                 continue
 
         except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
