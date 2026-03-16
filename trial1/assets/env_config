@@ -1,0 +1,7 @@
+oauth2_client_id_web=551724754459-jfr5qel37k6b1pemdg6hgme5upjeljr6
+ANDROID_GOOGLE_CLIENT_ID=551724754459-qa0mnvf692mj8s9gkmu6n7otjfslbtuo
+
+
+PRODUCTION_BACKEND_URL=https://complicatedly-acarpous-deadra.ngrok-free.dev/api
+
+STAGING_BACKEND_URL=https://complicatedly-acarpous-deadra.ngrok-free.dev/staging/api
