@@ -37,6 +37,9 @@ class GmailMessage(Base):
     
     # Academic intelligence score
     academic_score = Column(Integer, default=0)
+    
+    # Global tracking ID for admin broadcasts caching
+    unidash_broadcast_id = Column(String, index=True, nullable=True)
 
 
 

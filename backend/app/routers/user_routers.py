@@ -79,6 +79,17 @@ def get_or_create_user(
         is not None
     )
 
+    # Determine whether the user connected an admin-capable Gmail account
+    # (i.e. token scopes include gmail.send)
+    admin_connected = False
+    token = db.query(OAuthToken).filter(OAuthToken.uid == uid).first()
+    if token and token.scopes:
+        try:
+            if "gmail.send" in token.scopes:
+                admin_connected = True
+        except Exception:
+            admin_connected = False
+
     # Explicitly shape the response rather than returning the ORM object
     # This prevents accidental exposure of internal fields
     return UserOut(
@@ -90,6 +101,7 @@ def get_or_create_user(
         sid=user.sid,
         profile_completed=user.profile_completed,
         oauth_connected=oauth_connected,
+        admin_connected=admin_connected,
     )
 
 

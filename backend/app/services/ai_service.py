@@ -474,6 +474,29 @@ class AIService:
                 msg.ai_status = "completed"
                 results[gid] = {"status": "success"}
 
+                # CROSS-POLLINATION (The Magic)
+                # If this processed message was an Admin Broadcast, instantly update
+                # any other pending messages in the DB that share this broadcast_id.
+                if msg.unidash_broadcast_id:
+                    print(f"[AI BATCH] Cross-pollinating broadcast {msg.unidash_broadcast_id}...")
+                    try:
+                        db.query(GmailMessage).filter(
+                            GmailMessage.unidash_broadcast_id == msg.unidash_broadcast_id,
+                            GmailMessage.ai_status != "completed"
+                        ).update({
+                            "ai_summary": msg.ai_summary,
+                            "ai_label_topic": msg.ai_label_topic,
+                            "normalized_topic": msg.normalized_topic,
+                            "ai_label_urgency": msg.ai_label_urgency,
+                            "deadline_iso": msg.deadline_iso,
+                            "deadline_confidence": msg.deadline_confidence,
+                            "academic_score": msg.academic_score,
+                            "ai_status": "completed",
+                            "ai_processed": True
+                        })
+                    except Exception as cross_e:
+                        print(f"[AI BATCH] Failed to cross-pollinate: {cross_e}")
+
         except Exception as e:
             print(f"[AI BATCH] Batch inference catastrophic failure: {e}")
             for item in to_process:

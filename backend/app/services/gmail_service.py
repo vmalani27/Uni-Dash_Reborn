@@ -101,6 +101,7 @@ class GmailService:
 
                 sender = headers_map.get("From", "")
                 subject = headers_map.get("Subject", "")
+                broadcast_id = headers_map.get("X-UniDash-Broadcast-ID", None)
                 text_body, html_body = parse_gmail_payload(full.get("payload", {}))
 
                 # Fallback to parsing text from HTML if text is empty
@@ -108,6 +109,36 @@ class GmailService:
                     from bs4 import BeautifulSoup
                     soup = BeautifulSoup(html_body, "html.parser")
                     text_body = soup.get_text(separator="\n").strip()
+
+                # Check cache for Instant Bypassing
+                ai_status = "pending"
+                ai_summary = None
+                ai_label_topic = None
+                normalized_topic = "OTHER"
+                ai_label_urgency = None
+                deadline_iso = None
+                deadline_confidence = "None"
+                academic_score = 0
+                ai_processed = False
+                
+                if broadcast_id:
+                    # Look for any existing parsed email with the same broadcast_id
+                    cached_msg = db.query(GmailMessage).filter(
+                        GmailMessage.unidash_broadcast_id == broadcast_id,
+                        GmailMessage.ai_status == "completed"
+                    ).first()
+                    
+                    if cached_msg:
+                        ai_status = "completed"
+                        ai_summary = cached_msg.ai_summary
+                        ai_label_topic = cached_msg.ai_label_topic
+                        normalized_topic = cached_msg.normalized_topic
+                        ai_label_urgency = cached_msg.ai_label_urgency
+                        deadline_iso = cached_msg.deadline_iso
+                        deadline_confidence = cached_msg.deadline_confidence
+                        academic_score = cached_msg.academic_score
+                        ai_processed = True
+                        print(f"[FULL SYNC] Instant Cache Hit for broadcast {broadcast_id}!")
 
                 # Create and store message
                 db.add(
@@ -121,7 +152,16 @@ class GmailService:
                         internal_date=internal_date,
                         body_text=text_body,
                         body_html=html_body,
-                        ai_status="pending"
+                        unidash_broadcast_id=broadcast_id,
+                        ai_status=ai_status,
+                        ai_summary=ai_summary,
+                        ai_label_topic=ai_label_topic,
+                        normalized_topic=normalized_topic,
+                        ai_label_urgency=ai_label_urgency,
+                        deadline_iso=deadline_iso,
+                        deadline_confidence=deadline_confidence,
+                        academic_score=academic_score,
+                        ai_processed=ai_processed
                     )
                 )
 
@@ -291,6 +331,7 @@ class GmailService:
                         continue
 
                     subject = headers_map.get("Subject", "")
+                    broadcast_id = headers_map.get("X-UniDash-Broadcast-ID", None)
                     print(f"[INCREMENTAL SYNC] Inserting new message: {gmail_id}")
                     print(f"[INCREMENTAL SYNC]   Subject: {subject}")
                     print(f"[INCREMENTAL SYNC]   From: {sender}")
@@ -303,6 +344,36 @@ class GmailService:
                         soup = BeautifulSoup(html_body, "html.parser")
                         text_body = soup.get_text(separator="\n").strip()
                     
+                    # Check cache for Instant Bypassing
+                    ai_status = "pending"
+                    ai_summary = None
+                    ai_label_topic = None
+                    normalized_topic = "OTHER"
+                    ai_label_urgency = None
+                    deadline_iso = None
+                    deadline_confidence = "None"
+                    academic_score = 0
+                    ai_processed = False
+                    
+                    if broadcast_id:
+                        # Look for any existing parsed email with the same broadcast_id
+                        cached_msg = db.query(GmailMessage).filter(
+                            GmailMessage.unidash_broadcast_id == broadcast_id,
+                            GmailMessage.ai_status == "completed"
+                        ).first()
+                        
+                        if cached_msg:
+                            ai_status = "completed"
+                            ai_summary = cached_msg.ai_summary
+                            ai_label_topic = cached_msg.ai_label_topic
+                            normalized_topic = cached_msg.normalized_topic
+                            ai_label_urgency = cached_msg.ai_label_urgency
+                            deadline_iso = cached_msg.deadline_iso
+                            deadline_confidence = cached_msg.deadline_confidence
+                            academic_score = cached_msg.academic_score
+                            ai_processed = True
+                            print(f"[INCREMENTAL SYNC] Instant Cache Hit for broadcast {broadcast_id}!")
+
                     db.add(
                         GmailMessage(
                             uid=uid,
@@ -314,7 +385,16 @@ class GmailService:
                             internal_date=internal_date,
                             body_text=text_body,
                             body_html=html_body,
-                            ai_status="pending"
+                            unidash_broadcast_id=broadcast_id,
+                            ai_status=ai_status,
+                            ai_summary=ai_summary,
+                            ai_label_topic=ai_label_topic,
+                            normalized_topic=normalized_topic,
+                            ai_label_urgency=ai_label_urgency,
+                            deadline_iso=deadline_iso,
+                            deadline_confidence=deadline_confidence,
+                            academic_score=academic_score,
+                            ai_processed=ai_processed
                         )
                     )
 
