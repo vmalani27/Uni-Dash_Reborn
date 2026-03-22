@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../../theme.dart';
 
 class AnimatedMailToInsight extends StatefulWidget {
   const AnimatedMailToInsight({super.key});

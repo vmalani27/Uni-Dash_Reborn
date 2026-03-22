@@ -7,10 +7,6 @@ import 'package:trial1/services/api_services.dart';
 class SyncEventService {
   /// Subscribe to sync status updates via Server-Sent Events
   /// Returns a stream of sync status updates
-  ///
-  /// The backend controls when the stream closes (sends 'stream_closed').
-  /// The frontend should NOT close on completed/failed — the backend's
-  /// waiting window handles the lifecycle.
   static Stream<Map<String, dynamic>> subscribeSyncStatus(String uid) async* {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
@@ -51,8 +47,10 @@ class SyncEventService {
               final data = jsonDecode(jsonStr) as Map<String, dynamic>;
               print('[SSE] Received: $data');
 
-              // Only close when backend explicitly says stream_closed
-              if (data['status'] == 'stream_closed') {
+              // Close stream if status is completed/failed or stream closed
+              if (data['status'] == 'stream_closed' ||
+                  data['status'] == 'completed' ||
+                  data['status'] == 'failed') {
                 yield data;
                 client.close();
                 return;

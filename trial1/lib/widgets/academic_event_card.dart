@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:trial1/models/academic_event.dart';
-import 'package:trial1/models/gmail_models.dart' show StructuredInsights;
 import 'package:trial1/theme.dart';
 
 /// Dashboard card for a single AcademicEvent.

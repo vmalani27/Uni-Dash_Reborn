@@ -1,5 +1,6 @@
 import 'package:trial1/models/gmail_models.dart';
 import 'package:trial1/services/smart_gmail_service.dart';
+import 'package:trial1/services/api_services.dart';
 
 class GmailSyncServiceResult {
   final List<GmailNotificationPreview> notifications;
@@ -23,5 +24,10 @@ class GmailSyncService {
       notifications: notifications,
       syncStatus: 'completed',
     );
+  }
+
+  /// Load the complete unified dashboard.
+  static Future<Map<String, dynamic>> loadDashboard() async {
+    return await BackendService.fetchUnifiedDashboard();
   }
 }

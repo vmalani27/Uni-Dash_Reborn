@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:trial1/models/gmail_models.dart';
 import 'package:trial1/services/api_services.dart';
-import 'package:trial1/widgets/email_detail_dialog.dart';
+import 'package:trial1/widgets/email_detail_screen.dart';
 import '../theme.dart';
 
 /// A single notification tile with topic chip, urgency border, and deadline badge.
@@ -80,7 +80,9 @@ class NotificationTile extends StatelessWidget {
                   Text(
                     notification.subject,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.85),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withOpacity(0.85),
                       fontWeight: FontWeight.w500,
                     ),
                     maxLines: 1,
@@ -92,7 +94,9 @@ class NotificationTile extends StatelessWidget {
                   Text(
                     notification.snippet,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withOpacity(0.7),
                       height: 1.4,
                     ),
                     maxLines: 2,
@@ -230,7 +234,7 @@ class _EmailDetailLoaderState extends State<_EmailDetailLoader> {
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return Scaffold(
-            backgroundColor: Theme.of(context).colorScheme.background,
+            backgroundColor: Theme.of(context).colorScheme.surface,
             body: Center(
               child: CircularProgressIndicator(
                 color: Theme.of(context).colorScheme.primary,
@@ -240,7 +244,7 @@ class _EmailDetailLoaderState extends State<_EmailDetailLoader> {
         }
         if (snapshot.hasError) {
           return Scaffold(
-            backgroundColor: Theme.of(context).colorScheme.background,
+            backgroundColor: Theme.of(context).colorScheme.surface,
             appBar: AppBar(leading: const CloseButton()),
             body: Center(child: Text('Error: ${snapshot.error}')),
           );

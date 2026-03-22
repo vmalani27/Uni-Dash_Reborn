@@ -5,10 +5,13 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:trial1/firebase_options.dart';
 import 'package:trial1/screens/home_screen.dart';
+import 'package:trial1/screens/item_details_screen.dart';
+import 'package:trial1/models/academic_models.dart';
 import 'package:trial1/screens/profile_screen.dart';
 import 'package:trial1/screens/profile_setup_screen.dart';
 import 'package:trial1/services/authorisation_service.dart';
 import 'package:trial1/services/oauth_callback_handler.dart';
+import 'package:trial1/widgets/academic_dashboard_view.dart';
 import 'theme.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'config.dart';
@@ -16,7 +19,7 @@ import 'config.dart';
 void main() async {
   debugPrint('=== ENTERED main() at ${DateTime.now()} ===');
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // NOTE: For Web, you must pass DefaultFirebaseOptions.currentPlatform
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   await dotenv.load(fileName: "assets/env_config");
@@ -26,9 +29,9 @@ void main() async {
   // Retrieved 2026-01-22, License - CC BY-SA 4.0
 
   DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
-  
+
   String backendUrl;
-  
+
   if (kIsWeb) {
     print('Running on Web - using BACKEND_URL');
     backendUrl = AppConfig.getBackendUrl(
@@ -109,12 +112,15 @@ class _MyAppState extends State<MyApp> {
   }
 
   void _toggleTheme() {
-    final platformDark = WidgetsBinding.instance.window.platformBrightness == Brightness.dark;
+    final platformDark =
+        WidgetsBinding.instance.window.platformBrightness == Brightness.dark;
     final current = _themeMode.value;
     if (current == ThemeMode.system) {
       _themeMode.value = platformDark ? ThemeMode.light : ThemeMode.dark;
     } else {
-      _themeMode.value = current == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
+      _themeMode.value = current == ThemeMode.dark
+          ? ThemeMode.light
+          : ThemeMode.dark;
     }
   }
 
@@ -135,13 +141,48 @@ class _MyAppState extends State<MyApp> {
             debugPrint('=== Navigating to route: \'${settings.name}\' ===');
             switch (settings.name) {
               case '/':
-                return MaterialPageRoute(builder: (_) => AuthGate(themeToggle: _toggleTheme, themeMode: mode));
+                return MaterialPageRoute(
+                  builder: (_) =>
+                      AuthGate(themeToggle: _toggleTheme, themeMode: mode),
+                );
               case '/dashboard':
-                return MaterialPageRoute(builder: (_) => HomeScreen(themeToggle: _toggleTheme, themeMode: mode));
+                return MaterialPageRoute(
+                  builder: (_) =>
+                      HomeScreen(themeToggle: _toggleTheme, themeMode: mode),
+                );
+              case '/dashboard/list':
+                final args = settings.arguments;
+                String? filter;
+                if (args is Map<String, dynamic> && args['filter'] is String) {
+                  filter = args['filter'] as String;
+                }
+                return MaterialPageRoute(
+                  builder: (_) => Scaffold(
+                    appBar: AppBar(title: const Text('All Items')),
+                    body: AcademicDashboardView(initialFilter: filter),
+                  ),
+                );
               case '/profile':
-                return MaterialPageRoute(builder: (_) => ProfileScreen(themeToggle: _toggleTheme, themeMode: mode));
+                return MaterialPageRoute(
+                  builder: (_) =>
+                      ProfileScreen(themeToggle: _toggleTheme, themeMode: mode),
+                );
               case '/profile-setup':
-                return MaterialPageRoute(builder: (_) => ProfileSetupScreen(themeToggle: _toggleTheme, themeMode: mode));
+                return MaterialPageRoute(
+                  builder: (_) => ProfileSetupScreen(
+                    themeToggle: _toggleTheme,
+                    themeMode: mode,
+                  ),
+                );
+              case '/item':
+                // Expect an AcademicItem instance in settings.arguments
+                final args = settings.arguments;
+                if (args is AcademicItem) {
+                  return MaterialPageRoute(
+                    builder: (_) => ItemDetailsScreen(item: args),
+                  );
+                }
+                return null;
               default:
                 return null;
             }

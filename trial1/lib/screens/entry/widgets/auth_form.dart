@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../../theme.dart';
 import '../../../services/authentication_service.dart';
 
 class AuthForm extends StatefulWidget {
@@ -43,7 +42,7 @@ class _AuthFormState extends State<AuthForm> {
         color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
       ),
       filled: true,
-      fillColor: isDark ? const Color(0xFF1E222B) : Theme.of(context).colorScheme.surfaceVariant,
+      fillColor: isDark ? const Color(0xFF1E222B) : Theme.of(context).colorScheme.surfaceContainerHighest,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: BorderSide(
@@ -84,7 +83,7 @@ class _AuthFormState extends State<AuthForm> {
         Text(
           _isRegister ? 'Create account' : 'Sign in',
           style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: Theme.of(context).colorScheme.onBackground,
+                color: Theme.of(context).colorScheme.onSurface,
                 fontWeight: FontWeight.w700,
                 fontSize: isSmall ? 20 : 22,
               ),
@@ -104,7 +103,7 @@ class _AuthFormState extends State<AuthForm> {
           controller: _emailController,
           keyboardType: TextInputType.emailAddress,
           autofillHints: const [AutofillHints.email],
-          style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).colorScheme.onBackground),
+          style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).colorScheme.onSurface),
           decoration: _fieldDecoration(context, 'Email'),
         ),
         const SizedBox(height: 12),
@@ -112,7 +111,7 @@ class _AuthFormState extends State<AuthForm> {
           controller: _passwordController,
           obscureText: true,
           autofillHints: const [AutofillHints.password],
-          style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).colorScheme.onBackground),
+          style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).colorScheme.onSurface),
           decoration: _fieldDecoration(context, 'Password'),
         ),
         if (_isRegister) ...[
@@ -121,7 +120,7 @@ class _AuthFormState extends State<AuthForm> {
             controller: _confirmController,
             obscureText: true,
             autofillHints: const [AutofillHints.newPassword],
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).colorScheme.onBackground),
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).colorScheme.onSurface),
             decoration: _fieldDecoration(context, 'Confirm Password'),
           ),
         ],

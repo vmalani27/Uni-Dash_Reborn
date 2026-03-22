@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:trial1/models/UserProfile.dart';
 import 'package:trial1/services/api_services.dart';
 import 'package:trial1/services/authentication_service.dart';
-import '../theme.dart';
 
 class ProfileScreen extends StatefulWidget {
   final VoidCallback? themeToggle;
@@ -13,8 +12,7 @@ class ProfileScreen extends StatefulWidget {
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen>
-    with WidgetsBindingObserver {
+class _ProfileScreenState extends State<ProfileScreen> {
   late Future<UserProfile> _profileFuture;
   bool _connectingOAuth = false;
   bool _loggingOut = false;
@@ -22,25 +20,12 @@ class _ProfileScreenState extends State<ProfileScreen>
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
     _profileFuture = _fetchProfile();
   }
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    super.didChangeAppLifecycleState(state);
-    // Refresh profile when app resumes (e.g., after OAuth in browser)
-    if (state == AppLifecycleState.resumed) {
-      setState(() {
-        _profileFuture = _fetchProfile();
-      });
-    }
   }
 
   Future<UserProfile> _fetchProfile() async {
@@ -51,22 +36,30 @@ class _ProfileScreenState extends State<ProfileScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.background,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.background,
+        backgroundColor: Theme.of(context).colorScheme.surface,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Theme.of(context).colorScheme.onBackground),
+          icon: Icon(
+            Icons.arrow_back,
+            color: Theme.of(context).colorScheme.onSurface,
+          ),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: Text("Profile", style: TextStyle(color: Theme.of(context).colorScheme.onBackground)),
+        title: Text(
+          "Profile",
+          style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
+        ),
       ),
       body: FutureBuilder<UserProfile>(
         future: _profileFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return Center(
-              child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary),
+              child: CircularProgressIndicator(
+                color: Theme.of(context).colorScheme.primary,
+              ),
             );
           } else if (snapshot.hasError) {
             return Center(
@@ -83,7 +76,10 @@ class _ProfileScreenState extends State<ProfileScreen>
                     const SizedBox(height: 16),
                     Text(
                       'Failed to load profile',
-                      style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 16),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                        fontSize: 16,
+                      ),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 24),
@@ -103,208 +99,466 @@ class _ProfileScreenState extends State<ProfileScreen>
             return Center(
               child: Text(
                 'No profile data found.',
-                style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.75)),
+                style: TextStyle(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withOpacity(0.75),
+                ),
               ),
             );
           }
           final profile = snapshot.data!;
+          final accent = Theme.of(context).colorScheme.primary;
           return SingleChildScrollView(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              children: [
-                // Profile header
-                Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surface,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Column(
-                    children: [
-                      CircleAvatar(
-                        radius: 48,
-                        backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.2),
-                        child: Text(
-                          profile.name.isNotEmpty
-                              ? profile.name[0].toUpperCase()
-                              : '?',
-                          style: const TextStyle(
-                            fontSize: 36,
-                            fontWeight: FontWeight.bold,
-                            color: null,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        profile.name,
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w600,
-                          color: Theme.of(context).colorScheme.onBackground,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        profile.email,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.75),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 24),
-                // Profile details card
-                Card(
-                  color: Theme.of(context).colorScheme.surface,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(20.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Academic Details',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                            color: Theme.of(context).colorScheme.onBackground,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        _buildInfoRow('Branch', profile.branch),
-                        _buildDivider(),
-                        _buildInfoRow('Semester', profile.semester.toString()),
-                        _buildDivider(),
-                        _buildInfoRow('Roll Number', profile.sid),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                // OAuth connection card
-                Card(
-                  color: Theme.of(context).colorScheme.surface,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(20.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
+            padding: const EdgeInsets.symmetric(vertical: 28),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1024),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Header: horizontal avatar + name + email + status
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(20.0),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                  color: profile.oauthConnected
-                                      ? Colors.green.withOpacity(0.1)
-                                      : Theme.of(context).colorScheme.primary.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(8),
+                            CircleAvatar(
+                              radius: 44,
+                              backgroundColor: accent.withOpacity(0.12),
+                              child: Text(
+                                profile.name.isNotEmpty
+                                    ? profile.name[0].toUpperCase()
+                                    : '?',
+                                style: TextStyle(
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.bold,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onPrimary,
                                 ),
-                                child: Icon(
-                                  profile.oauthConnected
-                                      ? Icons.check_circle
-                                      : Icons.mail_outline,
-                                  color: profile.oauthConnected
-                                      ? Colors.green
-                                      : Theme.of(context).colorScheme.primary,
-                                  size: 24,
-                                ),
+                              ),
                             ),
-                            const SizedBox(width: 12),
+                            const SizedBox(width: 20),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    'Gmail Connection',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                      color: Theme.of(context).colorScheme.onBackground,
-                                    ),
+                                    profile.name,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .headlineSmall
+                                        ?.copyWith(
+                                          fontWeight: FontWeight.w700,
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.onSurface,
+                                        ),
                                   ),
-                                  const SizedBox(height: 4),
+                                  const SizedBox(height: 6),
                                   Text(
-                                    profile.oauthConnected
-                                        ? 'Connected and syncing'
-                                        : 'Not connected',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: profile.oauthConnected
-                                          ? Colors.green
-                                          : Theme.of(context).colorScheme.onSurface.withOpacity(0.75),
-                                    ),
+                                    profile.email,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onSurface
+                                              .withOpacity(0.75),
+                                        ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  // small status badge
+                                  Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 6,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: accent.withOpacity(0.12),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Icon(
+                                              Icons.check_circle,
+                                              size: 14,
+                                              color: accent,
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              profile.oauthConnected
+                                                  ? 'Gmail Connected — Syncing'
+                                                  : 'Gmail Not Connected',
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .bodySmall
+                                                  ?.copyWith(
+                                                    color: Theme.of(
+                                                      context,
+                                                    ).colorScheme.onSurface,
+                                                  ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
                             ),
+                            // optional quick actions column
+                            Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                if (!profile.oauthConnected)
+                                  ElevatedButton(
+                                    onPressed: _connectingOAuth
+                                        ? null
+                                        : _handleOAuthConnect,
+                                    child: _connectingOAuth
+                                        ? const SizedBox(
+                                            height: 16,
+                                            width: 16,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
+                                          )
+                                        : const Text('Connect'),
+                                  ),
+                                const SizedBox(height: 8),
+                                IconButton(
+                                  icon: Icon(
+                                    Icons.edit,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurface.withOpacity(0.7),
+                                  ),
+                                  onPressed: () {},
+                                ),
+                              ],
+                            ),
                           ],
                         ),
-                        if (!profile.oauthConnected) ...[
-                          const SizedBox(height: 16),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: _connectingOAuth
-                                  ? null
-                                  : _handleOAuthConnect,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Theme.of(context).colorScheme.primary,
-                                foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                              ),
-                              child: _connectingOAuth
-                                  ? SizedBox(
-                                      height: 20,
-                                      width: 20,
-                                      child: CircularProgressIndicator(
-                                        color: Theme.of(context).colorScheme.onPrimary,
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : const Text('Connect Gmail'),
+                      ),
+                    ),
+
+                    const SizedBox(height: 28),
+
+                    // Academic details grid
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(18.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Academic Details',
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurface,
+                                  ),
+                            ),
+                            const SizedBox(height: 12),
+                            LayoutBuilder(
+                              builder: (context, constraints) {
+                                final itemWidth =
+                                    (constraints.maxWidth - 40) / 3;
+                                return Wrap(
+                                  spacing: 12,
+                                  runSpacing: 12,
+                                  children: [
+                                    _buildSmallInfoCard(
+                                      Icons.account_tree_outlined,
+                                      'Branch',
+                                      profile.branch,
+                                      itemWidth,
+                                    ),
+                                    _buildSmallInfoCard(
+                                      Icons.schedule_outlined,
+                                      'Semester',
+                                      profile.semester.toString(),
+                                      itemWidth,
+                                    ),
+                                    _buildSmallInfoCard(
+                                      Icons.badge_outlined,
+                                      'Roll',
+                                      profile.sid,
+                                      itemWidth,
+                                    ),
+                                  ],
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    // System status (lightweight)
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(18.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'System Status',
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurface,
+                                  ),
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                _statusRow(
+                                  Theme.of(context),
+                                  'Gmail Sync',
+                                  profile.oauthConnected
+                                      ? 'Active'
+                                      : 'Disconnected',
+                                  profile.oauthConnected
+                                      ? Colors.green
+                                      : Colors.orange,
+                                ),
+                                const SizedBox(width: 24),
+                                FutureBuilder<Map<String, dynamic>>(
+                                  future: BackendService.fetchHealth(),
+                                  builder: (context, snap) {
+                                    final ok =
+                                        snap.hasData &&
+                                        snap.data!['ok'] == true;
+                                    final ai = snap.hasData
+                                        ? (snap.data!['details']
+                                                          as Map<
+                                                            String,
+                                                            dynamic
+                                                          >? ??
+                                                      {})['ai_worker']
+                                                  as String? ??
+                                              'unknown'
+                                        : 'loading';
+                                    return Row(
+                                      children: [
+                                        _statusRow(
+                                          Theme.of(context),
+                                          'AI Processing',
+                                          ok ? 'Running' : 'Stopped',
+                                          ok ? Colors.green : Colors.orange,
+                                        ),
+                                        const SizedBox(width: 24),
+                                        _statusRow(
+                                          Theme.of(context),
+                                          'Last Sync',
+                                          'a few minutes ago',
+                                          Colors.green,
+                                        ),
+                                      ],
+                                    );
+                                  },
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    // Integrations card
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(18.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Integrations',
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurface,
+                                  ),
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.surface,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.mail_outline, color: accent),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                'Gmail',
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .bodyLarge
+                                                    ?.copyWith(
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                profile.oauthConnected
+                                                    ? 'Gmail Connected'
+                                                    : 'Not connected',
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .bodyMedium
+                                                    ?.copyWith(
+                                                      color: Theme.of(context)
+                                                          .colorScheme
+                                                          .onSurface
+                                                          .withOpacity(0.8),
+                                                    ),
+                                              ),
+                                              const SizedBox(height: 6),
+                                              Text(
+                                                'Emails are syncing',
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .bodySmall
+                                                    ?.copyWith(
+                                                      color: Theme.of(context)
+                                                          .colorScheme
+                                                          .onSurface
+                                                          .withOpacity(0.6),
+                                                    ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                SizedBox(
+                                  width: 200,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.surface,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Icon(
+                                              Icons.class_,
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .onSurface
+                                                  .withOpacity(0.6),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              'Google Classroom',
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .bodyMedium
+                                                  ?.copyWith(
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          'Coming Soon',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodySmall
+                                              ?.copyWith(
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .onSurface
+                                                    .withOpacity(0.6),
+                                              ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    // Logout (outlined, subtle) aligned to end
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        OutlinedButton(
+                          onPressed: _loggingOut ? null : _handleLogout,
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Theme.of(
+                              context,
+                            ).colorScheme.onSurface,
+                            side: BorderSide(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.error.withOpacity(0.6),
                             ),
                           ),
-                        ],
+                          child: _loggingOut
+                              ? const SizedBox(
+                                  height: 16,
+                                  width: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Text('Logout'),
+                        ),
                       ],
                     ),
-                  ),
+                  ],
                 ),
-                const SizedBox(height: 24),
-                // Logout button
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _loggingOut ? null : _handleLogout,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Theme.of(context).colorScheme.error.withOpacity(0.12),
-                      foregroundColor: Theme.of(context).colorScheme.error,
-                      side: BorderSide(color: Theme.of(context).colorScheme.error, width: 1),
-                    ),
-                    child: _loggingOut
-                        ? SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(
-                              color: Theme.of(context).colorScheme.error,
-                              strokeWidth: 2,
-                            ),
-                          )
-                        : const Text(
-                            'Logout',
-                            style: TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                  ),
-                ),
-              ],
+              ),
             ),
           );
         },
@@ -320,18 +574,103 @@ class _ProfileScreenState extends State<ProfileScreen>
         children: [
           Text(
             label,
-            style: TextStyle(fontSize: 14, color: Theme.of(context).colorScheme.onSurface.withOpacity(0.75)),
+            style: TextStyle(
+              fontSize: 14,
+              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.75),
+            ),
           ),
           Text(
             value.isNotEmpty ? value : '-',
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w500,
-              color: Theme.of(context).colorScheme.onBackground,
+              color: Theme.of(context).colorScheme.onSurface,
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildSmallInfoCard(
+    IconData icon,
+    String label,
+    String value,
+    double maxWidth,
+  ) {
+    double w = maxWidth;
+    if (w.isInfinite || w <= 0) w = 260;
+    if (w > 360) w = 360;
+    if (w < 140) w = 140;
+
+    return SizedBox(
+      width: w,
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: Theme.of(context).colorScheme.primary),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withOpacity(0.7),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    value,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _statusRow(ThemeData theme, String title, String value, Color color) {
+    return Row(
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 8),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurface.withOpacity(0.8),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              value,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
@@ -383,10 +722,15 @@ class _ProfileScreenState extends State<ProfileScreen>
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: Theme.of(context).colorScheme.surface,
-        title: Text('Logout', style: TextStyle(color: Theme.of(context).colorScheme.onBackground)),
+        title: Text(
+          'Logout',
+          style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
+        ),
         content: Text(
           'Are you sure you want to logout?',
-          style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.75)),
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.75),
+          ),
         ),
         actions: [
           TextButton(
@@ -395,7 +739,10 @@ class _ProfileScreenState extends State<ProfileScreen>
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: Text('Logout', style: TextStyle(color: Theme.of(context).colorScheme.error)),
+            child: Text(
+              'Logout',
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
           ),
         ],
       ),

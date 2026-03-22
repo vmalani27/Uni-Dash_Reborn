@@ -1,5 +1,6 @@
 /// Structured insights extracted from email (instructor, course, action items).
 /// Populated by backend AcademicContextEngine enrichment.
+library;
 import 'package:trial1/models/gmail_models.dart' show StructuredInsights;
 
 enum AcademicEventType { assignment, exam, academic, opportunity, information, other }

@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:trial1/models/gmail_models.dart';
-import 'package:trial1/models/academic_event.dart';
+import 'package:trial1/models/academic_models.dart';
+import 'package:trial1/models/dashboard_models.dart';
 import 'package:trial1/services/gmail_sync_service.dart';
-import 'package:trial1/services/event_mapper.dart';
-import 'package:trial1/services/api_services.dart';
-import 'package:trial1/widgets/academic_event_card.dart';
+import 'package:trial1/widgets/dashboard/focus_section.dart';
+import 'package:trial1/widgets/dashboard/category_scroll_section.dart';
+import 'package:trial1/widgets/dashboard/timeline_section.dart';
+import 'package:trial1/widgets/dashboard/ai_inbox_section.dart';
 import 'package:trial1/widgets/skeleton_loader.dart';
-import 'package:trial1/theme.dart';
 import 'dart:async';
 
 /// Academic Dashboard — organized event view.
@@ -25,22 +25,21 @@ class AcademicDashboard extends StatefulWidget {
   State<AcademicDashboard> createState() => _AcademicDashboardState();
 }
 
-class _AcademicDashboardState extends State<AcademicDashboard> with WidgetsBindingObserver {
+class _AcademicDashboardState extends State<AcademicDashboard>
+    with WidgetsBindingObserver {
   bool _loading = true;
   String? _error;
-  List<AcademicEvent> _events = [];
-  Map<AcademicEventType, List<AcademicEvent>> _groupedEvents = {};
+  UnifiedDashboardData? _dashboardData;
+  int _selectedViewIndex = 0; // 0: Dashboard, 1: AI Inbox
 
   late ScrollController _scrollController;
   Timer? _autoRefreshTimer;
-  late RefreshController _refreshController;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _scrollController = ScrollController();
-    _refreshController = RefreshController();
     _loadEvents();
     _startAutoRefresh();
   }
@@ -73,13 +72,11 @@ class _AcademicDashboardState extends State<AcademicDashboard> with WidgetsBindi
 
   Future<void> _silentRefresh() async {
     try {
-      final result = await GmailSyncService.loadNotificationsInstant();
+      final data = await GmailSyncService.loadDashboard();
       if (!mounted) return;
 
-      final events = mapNotificationsToEvents(result);
       setState(() {
-        _events = events;
-        _groupedEvents = groupEventsByType(events);
+        _dashboardData = UnifiedDashboardData.fromJson(data);
       });
     } catch (e) {
       // Silent fail on background refresh
@@ -93,25 +90,20 @@ class _AcademicDashboardState extends State<AcademicDashboard> with WidgetsBindi
     });
 
     try {
-      final result = await GmailSyncService.loadNotificationsInstant();
-      final events = mapNotificationsToEvents(result);
-
+      final data = await GmailSyncService.loadDashboard();
       if (mounted) {
         setState(() {
-          _events = events;
-          _groupedEvents = groupEventsByType(events);
+          _dashboardData = UnifiedDashboardData.fromJson(data);
           _loading = false;
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _error = 'Failed to load events. Please try again.';
+          _error = 'Failed to load dashboard. Please try again.';
           _loading = false;
         });
       }
-    } finally {
-      _refreshController.refreshComplete();
     }
   }
 
@@ -119,7 +111,7 @@ class _AcademicDashboardState extends State<AcademicDashboard> with WidgetsBindi
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    if (_loading && _events.isEmpty) {
+    if (_loading && _dashboardData == null) {
       return const Padding(
         padding: EdgeInsets.symmetric(horizontal: 0),
         child: SkeletonNotificationList(),
@@ -130,229 +122,211 @@ class _AcademicDashboardState extends State<AcademicDashboard> with WidgetsBindi
       return _buildErrorState(context);
     }
 
-    if (_events.isEmpty) {
+    if (_dashboardData == null ||
+        (_dashboardData!.focus.isEmpty && _dashboardData!.grouped.isEmpty)) {
       return _buildEmptyState(context);
     }
 
-    return RefreshIndicator(
-      onRefresh: _loadEvents,
-      color: colorScheme.primary,
-      backgroundColor: colorScheme.surface,
-      child: ListView(
-        controller: _scrollController,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        children: [
-          // Summary stats
-          _buildSummaryBar(context),
-          const SizedBox(height: 16),
-
-          // Events grouped by type
-          ...typeDisplayOrder
-              .where((type) => _groupedEvents.containsKey(type) && _groupedEvents[type]!.isNotEmpty)
-              .map((type) => _buildTypeSection(context, type, _groupedEvents[type]!))
-              .expand((widget) => [widget, const SizedBox(height: 16)]),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSummaryBar(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final critical = _events.where((e) => e.urgency == 'Critical').length;
-    final total = _events.length;
-    final activeCount = _events.where((e) => e.isActive).length;
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: colorScheme.primary.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: colorScheme.primary.withOpacity(0.15)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _SummaryItem(
-            label: 'Total',
-            value: total.toString(),
-            color: colorScheme.onSurface,
-          ),
-          _SummaryItem(
-            label: 'Active',
-            value: activeCount.toString(),
-            color: colorScheme.primary,
-          ),
-          _SummaryItem(
-            label: 'Critical',
-            value: critical.toString(),
-            color: kUrgencyCritical,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTypeSection(BuildContext context, AcademicEventType type, List<AcademicEvent> events) {
-    final colorScheme = Theme.of(context).colorScheme;
-
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Type header
-        Text(
-          _typeLabel(type),
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w700,
-            color: colorScheme.onSurface,
+        _buildViewSelector(context),
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: _loadEvents,
+            color: colorScheme.primary,
+            backgroundColor: colorScheme.surface,
+            child: _selectedViewIndex == 0
+                ? _buildMainDashboard(context)
+                : _buildAiInbox(context),
           ),
         ),
-        const SizedBox(height: 8),
-
-        // Events for this type
-        ...events.map((event) => AcademicEventCard(
-          event: event,
-          onTap: () => _navigateToDetail(event),
-        )),
       ],
     );
   }
 
-  Widget _buildErrorState(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+  Widget _buildViewSelector(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      child: SegmentedButton<int>(
+        segments: const [
+          ButtonSegment(
+            value: 0,
+            label: Text('Dashboard'),
+            icon: Icon(Icons.dashboard_outlined),
+          ),
+          ButtonSegment(
+            value: 1,
+            label: Text('AI Inbox'),
+            icon: Icon(Icons.auto_awesome_outlined),
+          ),
+        ],
+        selected: {_selectedViewIndex},
+        onSelectionChanged: (value) {
+          setState(() {
+            _selectedViewIndex = value.first;
+          });
+        },
+        showSelectedIcon: false,
+      ),
+    );
+  }
 
+  Widget _buildMainDashboard(BuildContext context) {
+    final data = _dashboardData!;
+
+    return ListView(
+      controller: _scrollController,
+      padding: const EdgeInsets.only(top: 8, bottom: 32),
+      children: [
+        // Smart banner from backend
+        if (data.banner != null) ...[
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12.0,
+                vertical: 8.0,
+              ),
+              decoration: BoxDecoration(
+                color:
+                    Theme.of(context).snackBarTheme.backgroundColor ??
+                    Theme.of(context).colorScheme.surface,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: Theme.of(context).dividerColor.withOpacity(0.12),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.info_outline, size: 18),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      data.banner!['message'] ?? '',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  TextButton(onPressed: () {}, child: const Text('View')),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
+        // 1. Focus Section
+        FocusSection(items: data.focus, onItemTap: _navigateToItemDetail),
+        const SizedBox(height: 24),
+
+        // 2. Categories Scroll
+        CategoryScrollSection(
+          title: 'Assignments',
+          items: data.grouped['ASSIGNMENT'] ?? [],
+          onItemTap: _navigateToItemDetail,
+        ),
+        const SizedBox(height: 16),
+        CategoryScrollSection(
+          title: 'Exams',
+          items: data.grouped['EXAM'] ?? [],
+          onItemTap: _navigateToItemDetail,
+        ),
+        const SizedBox(height: 16),
+        CategoryScrollSection(
+          title: 'Opportunities',
+          items: data.grouped['OPPORTUNITY'] ?? [],
+          onItemTap: _navigateToItemDetail,
+        ),
+        const SizedBox(height: 24),
+
+        // 3. Timeline (render backend-provided groups)
+        TimelineSection(
+          groups: data.timelineGroups,
+          onItemTap: _navigateToItemDetail,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAiInbox(BuildContext context) {
+    return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      child: Padding(
+        padding: const EdgeInsets.only(top: 8.0, bottom: 32.0),
+        child: AiInboxSection(messages: []),
+      ),
+    );
+  }
+
+  void _navigateToItemDetail(dynamic raw) {
+    AcademicItem item;
+    if (raw is AcademicItem) {
+      item = raw;
+    } else if (raw is Map<String, dynamic>) {
+      DateTime? due;
+      if (raw['time'] != null) {
+        try {
+          due = DateTime.parse(raw['time'] as String).toLocal();
+        } catch (_) {
+          due = null;
+        }
+      }
+      item = AcademicItem(
+        id: raw['id'] is int
+            ? raw['id'] as int
+            : int.tryParse('${raw['id']}') ?? 0,
+        sourceEmailId: raw['source_email_id'] as String? ?? '',
+        entityType:
+            raw['type'] as String? ??
+            raw['entity_type'] as String? ??
+            'INFORMATION',
+        title: raw['title'] as String? ?? 'Untitled',
+        description: raw['description'] as String? ?? '',
+        dueDate: due,
+        location: raw['location'] as String?,
+        courseCode: raw['course_code'] as String?,
+        professor: raw['professor'] as String?,
+        academicScore: (raw['academic_score'] as num?)?.toDouble() ?? 0.0,
+        completed: raw['completed'] as bool? ?? false,
+      );
+    } else {
+      return;
+    }
+    // TODO: Reuse existing detail navigation logic if applicable
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Focusing on: ${item.title}'),
+        duration: const Duration(seconds: 1),
+      ),
+    );
+  }
+
+  Widget _buildErrorState(BuildContext context) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: kUrgencyCritical.withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Icons.error_outline,
-              color: kUrgencyCritical.withOpacity(0.7),
-              size: 48,
-            ),
-          ),
-          const SizedBox(height: 20),
-          Text(
-            _error!,
-            style: Theme.of(context).textTheme.bodyMedium,
-            textAlign: TextAlign.center,
-          ),
+          const Icon(Icons.error_outline, size: 48, color: Colors.red),
           const SizedBox(height: 16),
-          ElevatedButton.icon(
-            onPressed: _loadEvents,
-            icon: const Icon(Icons.refresh),
-            label: const Text('Retry'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: colorScheme.primary,
-              foregroundColor: colorScheme.onPrimary,
-            ),
-          ),
+          Text(_error ?? 'An error occurred'),
+          const SizedBox(height: 16),
+          ElevatedButton(onPressed: _loadEvents, child: const Text('Retry')),
         ],
       ),
     );
   }
 
   Widget _buildEmptyState(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Center(
+    return const Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.inbox_outlined,
-            size: 64,
-            color: colorScheme.onSurface.withOpacity(0.3),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'No events yet',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: colorScheme.onSurface.withOpacity(0.5),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'New academic emails will appear here',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: colorScheme.onSurface.withOpacity(0.4),
-            ),
-          ),
+          Icon(Icons.inbox_outlined, size: 48, color: Colors.grey),
+          SizedBox(height: 16),
+          Text('No items found'),
         ],
       ),
     );
   }
-
-  void _navigateToDetail(AcademicEvent event) {
-    // TODO: Navigate to email detail view with event.sourceEmailId
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Opening: ${event.title}'),
-        duration: const Duration(seconds: 1),
-      ),
-    );
-  }
-
-  String _typeLabel(AcademicEventType type) {
-    switch (type) {
-      case AcademicEventType.assignment:
-        return '📝 Assignments';
-      case AcademicEventType.exam:
-        return '🧪 Exams';
-      case AcademicEventType.academic:
-        return '🎓 Academic';
-      case AcademicEventType.opportunity:
-        return '🚀 Opportunities';
-      case AcademicEventType.information:
-        return 'ℹ️ Information';
-      case AcademicEventType.other:
-        return '📧 Other';
-    }
-  }
-}
-
-/// Summary stat display (label + value).
-class _SummaryItem extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color color;
-
-  const _SummaryItem({
-    required this.label,
-    required this.value,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w700,
-            color: color,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: color.withOpacity(0.7),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// Refresh controller stub for pull-to-refresh pattern (can use real_pull_to_refresh pkg).
-class RefreshController {
-  void refreshComplete() {}
 }

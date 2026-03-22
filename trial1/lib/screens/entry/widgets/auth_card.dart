@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../../theme.dart';
 import 'auth_form.dart';
 
 class AuthCard extends StatelessWidget {
@@ -13,7 +12,7 @@ class AuthCard extends StatelessWidget {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18),
         side: BorderSide(
-          color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.8),
+          color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.8),
           width: 1.2,
         ),
       ),

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../../theme.dart';
 import 'feature_list.dart';
 class BrandingSection extends StatelessWidget {
   const BrandingSection({super.key});
@@ -33,7 +32,7 @@ class BrandingSection extends StatelessWidget {
         Text(
           'UniDash',
           style: theme.textTheme.displayLarge?.copyWith(
-            color: Theme.of(context).colorScheme.onBackground,
+            color: Theme.of(context).colorScheme.onSurface,
             fontWeight: FontWeight.w900,
             letterSpacing: -2,
             fontSize: isMobile ? 32 : 44,
@@ -63,7 +62,7 @@ class BrandingSection extends StatelessWidget {
         if (!isMobile) ...[
           const SizedBox(height: 28),
           Divider(
-            color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
+            color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.5),
             thickness: 1,
             endIndent: isNarrow ? 0 : 120,
           ),

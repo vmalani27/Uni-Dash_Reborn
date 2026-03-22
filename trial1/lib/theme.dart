@@ -24,12 +24,13 @@ const Color kAccentPrimary = Color(0xFFE59A23);
 const Color kAccentSecondary = Color(0xFFF4C76B);
 
 // ─── Topic Semantic Colors ──────────────────────────────────
-const Color kTopicAssignment = Color(0xFF60A5FA); // blue-400
-const Color kTopicExam = Color(0xFFF87171); // red-400
-const Color kTopicAcademic = Color(0xFFA78BFA); // violet-400
-const Color kTopicOpportunity = Color(0xFF34D399); // emerald-400
-const Color kTopicInformation = Color(0xFFFBBF24); // amber-400
-const Color kTopicOther = Color(0xFF9CA3AF); // gray-400
+// Entity / topic semantic colors (updated per design requirements)
+const Color kTopicAssignment = Color(0xFFF97316); // orange
+const Color kTopicExam = Color(0xFFEF4444); // red
+const Color kTopicAcademic = Color(0xFF60A5FA); // blue (admin/academic)
+const Color kTopicOpportunity = Color(0xFFA78BFA); // purple
+const Color kTopicInformation = Color(0xFFFBBF24); // amber
+const Color kTopicOther = Color(0xFF9CA3AF); // gray
 
 // ─── Urgency Colors ─────────────────────────────────────────
 const Color kUrgencyCritical = Color(0xFFEF4444);
@@ -126,11 +127,9 @@ final ThemeData uniDashDarkTheme = ThemeData(
     primary: kAccentPrimary,
     secondary: kAccentSecondary,
     surface: kBgSurfaceDark,
-    surfaceVariant: kSidebarDark,
-    background: kBgPrimaryDark,
+    surfaceContainerHighest: kSidebarDark,
     onPrimary: Colors.black,
     onSurface: kTextPrimaryDark,
-    onBackground: kTextPrimaryDark,
   ),
   appBarTheme: AppBarTheme(
     backgroundColor: kBgPrimaryDark,
@@ -144,14 +143,12 @@ final ThemeData uniDashDarkTheme = ThemeData(
     ),
   ),
   cardTheme: CardThemeData(
-    color: kBgSurfaceDark,
+    color: kBgElevatedDark,
     elevation: 0,
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
     margin: EdgeInsets.zero,
   ),
-  drawerTheme: const DrawerThemeData(
-    backgroundColor: kSidebarDark,
-  ),
+  drawerTheme: const DrawerThemeData(backgroundColor: kSidebarDark),
   elevatedButtonTheme: ElevatedButtonThemeData(
     style: ElevatedButton.styleFrom(
       backgroundColor: kAccentPrimary,
@@ -196,7 +193,7 @@ final ThemeData uniDashDarkTheme = ThemeData(
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     behavior: SnackBarBehavior.floating,
   ),
-  dividerColor: kTextDisabledDark.withOpacity(0.15),
+  dividerColor: kTextDisabledDark.withOpacity(0.22),
   disabledColor: kTextDisabledDark,
 );
 
@@ -212,11 +209,9 @@ final ThemeData uniDashLightTheme = ThemeData(
     primary: kAccentPrimary,
     secondary: kAccentSecondary,
     surface: kBgSurfaceLight,
-    surfaceVariant: kSidebarLight,
-    background: kBgPrimaryLight,
+    surfaceContainerHighest: kSidebarLight,
     onPrimary: Colors.black,
     onSurface: kTextPrimaryLight,
-    onBackground: kTextPrimaryLight,
   ),
   appBarTheme: AppBarTheme(
     backgroundColor: kBgPrimaryLight,
@@ -235,9 +230,7 @@ final ThemeData uniDashLightTheme = ThemeData(
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
     margin: EdgeInsets.zero,
   ),
-  drawerTheme: const DrawerThemeData(
-    backgroundColor: kSidebarLight,
-  ),
+  drawerTheme: const DrawerThemeData(backgroundColor: kSidebarLight),
   elevatedButtonTheme: ElevatedButtonThemeData(
     style: ElevatedButton.styleFrom(
       backgroundColor: kAccentPrimary,
