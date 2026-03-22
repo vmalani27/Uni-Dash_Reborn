@@ -6,7 +6,17 @@ from sqlalchemy.engine import URL
 from alembic import context
 from dotenv import load_dotenv
 
-load_dotenv()
+# Load dotenv file by name if provided, otherwise fall back to ../.env
+dotenv_file = os.path.join(os.path.dirname(__file__), '..', '.env.prod')
+from pathlib import Path
+_dotenv_path = Path(dotenv_file)
+if _dotenv_path.exists():
+    load_dotenv(str(_dotenv_path))
+    print(f"Loaded dotenv from: {_dotenv_path}")
+else:
+    # Fall back to default load (no-op if no .env present)
+    load_dotenv()
+    print(f"Dotenv file not found at {_dotenv_path}; called load_dotenv() fallback")
 
 # add project root / app to path so we can import app package
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
@@ -25,6 +35,8 @@ config._config = ConfigParser(interpolation=None)
 
 # Set DB URL from .env components
 from os import getenv
+
+
 db_user = getenv("DB_USER")
 db_pass = getenv("DB_PASS")
 db_host = getenv("DB_HOST")

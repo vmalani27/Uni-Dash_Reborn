@@ -13,16 +13,46 @@ import asyncio
 import time
 import traceback
 import requests
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
+from sqlalchemy import func
+from sqlalchemy.exc import OperationalError
 
 
 # ─── Config ──────────────────────────────────────────────────
 INGESTION_INTERVAL_SECONDS = 180   # 3 minutes
 AI_LOOP_DELAY_SECONDS = 5.0       # delay between AI batch inferences
-AI_BATCH_SIZE = 10                # number of emails to process at once
+AI_BATCH_SIZE = 5                 # number of emails to process at once (was 10, reduced for token limit)
 STARTUP_DELAY_SECONDS = 10        # wait for app to fully start
 
 _start_time = None
+
+# Worker tracking
+_worker_status = {
+    "ingestion": {
+        "last_run": None,
+        "last_error": None,
+        "total_synced": 0,
+        "total_processed": 0,
+        "total_updates": 0,
+        "status": "not_started"
+    },
+    "ai_processing": {
+        "last_run": None,
+        "last_error": None,
+        "total_synced": 0,
+        "total_processed": 0,
+        "total_updates": 0,
+        "status": "not_started"
+    },
+    "domain_stats": {
+        "last_run": None,
+        "last_error": None,
+        "total_synced": 0,
+        "total_processed": 0,
+        "total_updates": 0,
+        "status": "not_started"
+    }
+}
 
 
 def get_uptime() -> int:
@@ -30,6 +60,31 @@ def get_uptime() -> int:
     if _start_time is None:
         return 0
     return int(time.time() - _start_time)
+
+
+def get_worker_status() -> dict:
+    """Return real-time status of all background workers."""
+    status = {}
+    for worker_name, data in _worker_status.items():
+        last_run = data["last_run"]
+        seconds_since = None
+        if last_run:
+            seconds_since = int((datetime.now(timezone.utc) - last_run).total_seconds())
+        
+        status[worker_name] = {
+            "status": data["status"],
+            "last_run": last_run.isoformat() if last_run else None,
+            "seconds_since_last_run": seconds_since,
+            "total_processed": data["total_processed"],
+            "total_synced": data["total_synced"],
+            "total_updates": data["total_updates"],
+            "last_error": data["last_error"]
+        }
+    
+    return {
+        "uptime_seconds": get_uptime(),
+        "workers": status
+    }
 
 
 # ─── Blocking helpers (run in thread pool) ───────────────────
@@ -78,24 +133,47 @@ def _process_batch_emails():
             msg.ai_status = "processing"
         db.commit()
 
-        print(f"[AI_WORKER] Processing batch of {len(messages)} email(s)...")
+        print(f"[AI_WORKER] Processing up to {len(messages)} email(s) sequentially...")
 
+        succeeded = []
         try:
-            results_map = AIService.run_batch_email_inference(messages, db)
-            db.commit()
-            
-            summary = [m.gmail_id for m in messages if m.ai_processed]
-            if summary:
-                print(f"[AI_WORKER] Batch completed: {len(summary)} succeeded.")
-            return summary
+            for msg in messages:
+                try:
+                    # run single-email inference; this function updates the msg object fields
+                    result = AIService.run_email_inference(msg)
+                    # Persist AI fields
+                    db.commit()
+
+                    # Use AcademicContextEngine to create objects from the deep analysis (120B)
+                    try:
+                        from app.services.academic_context_engine import AcademicContextEngine
+                        parsed_payload = result.get("parsed_payload", {})
+                        # Pass DB session so engine can persist AcademicItem and FollowUps
+                        AcademicContextEngine.process_academic_objects(msg, parsed_payload, db)
+                        db.commit()
+                    except Exception as e_obj:
+                        print(f"[AI_WORKER] Object factory failed for {msg.gmail_id}: {e_obj}")
+
+                    succeeded.append(msg.gmail_id)
+                except Exception as e:
+                    print(f"[AI_WORKER] Failed processing {msg.gmail_id}: {e}")
+                    msg.ai_processed = False
+                    msg.ai_status = "failed"
+                    db.commit()
+
+            if succeeded:
+                print(f"[AI_WORKER] Completed: {len(succeeded)} succeeded.")
+            return succeeded
 
         except Exception as e:
-            print(f"[AI_WORKER] Batch failed: {e}")
+            print(f"[AI_WORKER] Sequential processing catastrophic failure: {e}")
             db.rollback()
             return []
 
     finally:
         db.close()
+
+
 
 
 def _count_users():
@@ -111,6 +189,28 @@ def _count_users():
         db.close()
 
 
+def _recover_stuck_processing():
+    """Reset messages left in 'processing' state (e.g., after a crash/restart) back to 'pending'."""
+    from app.core.database import SupabaseSessionLocal
+    from app.models.gmail.gmail_message import GmailMessage
+
+    db = SupabaseSessionLocal()
+    try:
+        # Reset any records marked 'processing' to 'pending' so they can be picked up again.
+        count = db.query(GmailMessage).filter(GmailMessage.ai_status == "processing").update({
+            "ai_status": "pending",
+            "ai_processed": False
+        })
+        db.commit()
+        if count:
+            print(f"[AI_WORKER] Recovered {count} stuck 'processing' message(s) -> set to 'pending'")
+    except Exception as e:
+        print(f"[AI_WORKER] Failed to recover stuck processing messages: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+
 # ─── Ingestion Loop ─────────────────────────────────────────
 
 async def ingestion_loop():
@@ -120,6 +220,7 @@ async def ingestion_loop():
     """
     global _start_time
     _start_time = time.time()
+    _worker_status["ingestion"]["status"] = "running"
 
     await asyncio.sleep(STARTUP_DELAY_SECONDS)
     print(f"[INGESTION] Background ingestion loop started (interval: {INGESTION_INTERVAL_SECONDS}s)")
@@ -128,6 +229,9 @@ async def ingestion_loop():
         try:
             uids = await asyncio.to_thread(_count_users)
             print(f"[INGESTION] Running for {len(uids)} user(s) at {datetime.utcnow().isoformat()}")
+            
+            _worker_status["ingestion"]["status"] = "running"
+            _worker_status["ingestion"]["last_run"] = datetime.now(timezone.utc)
 
             sem = asyncio.Semaphore(5)
 
@@ -135,6 +239,7 @@ async def ingestion_loop():
                 async with sem:
                     try:
                         await asyncio.to_thread(_sync_user, uid)
+                        _worker_status["ingestion"]["total_synced"] += 1
                         print(f"[INGESTION] Synced user {uid[:8]}…")
                     except Exception as e:
                         print(f"[INGESTION] Failed for user {uid[:8]}…: {e}")
@@ -143,6 +248,8 @@ async def ingestion_loop():
                 await asyncio.gather(*(bounded_sync(uid) for uid in uids))
 
         except Exception as e:
+            _worker_status["ingestion"]["status"] = "error"
+            _worker_status["ingestion"]["last_error"] = str(e)
             print(f"[INGESTION] Loop error: {e}")
             traceback.print_exc()
 
@@ -157,30 +264,62 @@ async def ai_processing_loop():
     Sleeps AI_LOOP_DELAY_SECONDS between each inference.
     """
     await asyncio.sleep(STARTUP_DELAY_SECONDS + 5)
+    # Recover any stuck messages left in 'processing' state from previous run/crash
+    await asyncio.to_thread(_recover_stuck_processing)
+    _worker_status["ai_processing"]["status"] = "running"
     print(f"[AI_WORKER] Background AI processing loop started (delay: {AI_LOOP_DELAY_SECONDS}s)")
 
     while True:
         try:
             # Skip if no users have connected Gmail yet
-            uids = await asyncio.to_thread(_count_users)
+            try:
+                uids = await asyncio.to_thread(_count_users)
+            except OperationalError as e:
+                # Database unreachable — set worker status and back off without
+                # crashing the entire application. The background worker will
+                # retry after a pause.
+                _worker_status["ai_processing"]["status"] = "db_unreachable"
+                _worker_status["ai_processing"]["last_error"] = str(e)
+                print(f"[AI_WORKER] Database unreachable, retrying in 60s: {e}")
+                await asyncio.sleep(60)
+                continue
             if len(uids) == 0:
+                _worker_status["ai_processing"]["status"] = "waiting_for_users"
                 await asyncio.sleep(60)
                 continue
 
-            result = await asyncio.to_thread(_process_batch_emails)
+            _worker_status["ai_processing"]["status"] = "running"
+            _worker_status["ai_processing"]["last_run"] = datetime.now(timezone.utc)
+            
+            try:
+                result = await asyncio.to_thread(_process_batch_emails)
+            except OperationalError as e:
+                _worker_status["ai_processing"]["status"] = "db_unreachable"
+                _worker_status["ai_processing"]["last_error"] = str(e)
+                print(f"[AI_WORKER] Database error during processing, retrying in 60s: {e}")
+                await asyncio.sleep(60)
+                continue
+
+            if result:
+                _worker_status["ai_processing"]["total_processed"] += len(result)
 
             if not result:
                 # Nothing to process — sleep longer
+                _worker_status["ai_processing"]["status"] = "idle"
                 await asyncio.sleep(15)
                 continue
 
         except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
             # Ollama unreachable — back off and retry
+            _worker_status["ai_processing"]["status"] = "offline_llm"
+            _worker_status["ai_processing"]["last_error"] = f"LLM offline: {str(e)}"
             print(f"[AI_WORKER] Ollama unreachable, retrying in 30s: {e}")
             await asyncio.sleep(30)
             continue
 
         except Exception as e:
+            _worker_status["ai_processing"]["status"] = "error"
+            _worker_status["ai_processing"]["last_error"] = str(e)
             print(f"[AI_WORKER] Loop error: {e}")
             traceback.print_exc()
 

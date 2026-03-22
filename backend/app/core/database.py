@@ -1,10 +1,9 @@
 '''============== code approved by developer after review since the developer himself wrote it =============='''
 from sqlalchemy import create_engine
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker, declarative_base
 import os
-from dotenv import load_dotenv
-
-load_dotenv()
+from fastapi import HTTPException
 
 ''' SupabaseSession: Connects to the cloud database (Supabase) for user and OAuth token management.
 
@@ -25,6 +24,19 @@ SupabaseSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=supa
 Base = declarative_base()
 
 def get_supabase_db():
+    # Perform a quick connectivity check so HTTP handlers receive a clear
+    # 503 response when the cloud user DB is unreachable instead of raising
+    # an internal 500 during query execution.
+    try:
+        # Try acquiring a lightweight connection from the engine.
+        conn = supabase_engine.connect()
+        conn.close()
+    except OperationalError as e:
+        # Convert low-level DB connectivity errors into a service-unavailable
+        # HTTP response. This prevents unhandled tracebacks from surfacing
+        # to callers and makes the failure explicit for the frontend.
+        raise HTTPException(status_code=503, detail="User database unreachable")
+
     db = SupabaseSessionLocal()
     try:
         yield db

@@ -1,9 +1,32 @@
 """
 Academic Context Engine - Deadline-aware intelligence for academic emails
+
+This engine handles:
+1. Deadline validation and normalization
+2. Academic score calculation (deterministic formula)
+3. Topic normalization to academic ontology (direct mapping)
+4. AcademicItem and FollowUp factory (object creation from LLM output)
 """
 
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+import re
+
+# ── Direct Topic Mapping ────────────────────────────────────────
+# Maps LLM-generated topic labels to academic ontology
+# This is a direct lookup (no string matching heuristics)
+
+TOPIC_TO_ENTITY = {
+    "Exam Notifications": "EXAM",
+    "Assignment or Submission": "ASSIGNMENT",
+    "Certification / Courses": "OPPORTUNITY",
+    "Internship / Placement Opportunities": "OPPORTUNITY",
+    "Events / Hackathons": "OPPORTUNITY",
+    "Timetable / Schedule Update": "ACADEMIC_ADMIN",
+    "Administrative / Fees / Counselling": "ACADEMIC_ADMIN",
+    "Important Announcements": "INFORMATION",
+    "General Information / Misc": "INFORMATION",
+}
 
 
 class AcademicContextEngine:
@@ -55,107 +78,208 @@ class AcademicContextEngine:
 
     @staticmethod
     def calculate_academic_score(
-        deadline_urgency: Optional[float],
+        deadline_urgency: Optional[float],  # 0–35 from calculate_deadline_urgency
         ai_urgency: str,
         topic: str,
-        source_trust: str,
-        time_decay_factor: float = 1.0
+        source_weight: float,               # now 0–25 from DomainProfile.source_weight
+        time_decay_factor: float = 1.0,
     ) -> float:
         """
-        Calculate final academic priority score combining all factors.
-
-        Weights:
-        - Deadline urgency: 40% (when available)
-        - AI urgency: 20% (fallback when no deadline)
-        - Topic importance: 20%
-        - Source trust: 15%
-        - Time decay: 5%
+        Score range: 0–100
+        
+        Components:
+          Deadline urgency  → 0–35  (35% weight, highest)
+          Topic importance  → 0–30  (30% weight)
+          Source trust      → 0–25  (25% weight, now dynamic)
+          AI urgency        → 0–7   (7%  weight, tiebreaker only)
+          Time decay        → 0–3   (3%  weight)
         """
 
-        # Deadline-based urgency (highest priority when available)
-        if deadline_urgency is not None:
-            deadline_score = deadline_urgency * 0.4
-        else:
-            deadline_score = 0
+        # Hard zero for untrusted sources — no accumulation from other fields
+        if source_weight == 0:
+            return 0.0
 
-        # AI urgency fallback (only when no deadline, capped at 60% of full weight)
-        if deadline_urgency is None:
-            ai_urgency_weights = {
-                "Critical": 35,
-                "High": 25,
-                "Medium": 15,
-                "Low": 8,
-                "None": 0
-            }
-            ai_urgency_score = ai_urgency_weights.get(ai_urgency, 0) * 0.6 * 0.2  # Cap at 60% of 20% weight
-        else:
-            ai_urgency_score = 0
+        # ── Deadline (0–35) ─────────────────────────────────────────
+        deadline_score = deadline_urgency if deadline_urgency is not None else 0.0
 
-        # Topic importance
+        # ── Topic (0–30) ─────────────────────────────────────────────
         topic_weights = {
-            "Exam Notifications": 30,
-            "Assignment or Submission": 28,
+            "Exam Notifications":               30,
+            "Assignment or Submission":         27,
             "Administrative / Fees / Counselling": 20,
-            "Timetable / Schedule Update": 18,
-            "Certification / Courses": 15,
-            "Internship / Placement Opportunities": 12,
-            "Events / Hackathons": 8,
-            "Important Announcements": 10,
-            "General Information / Misc": 0
+            "Timetable / Schedule Update":      18,
+            "Certification / Courses":          14,
+            "Important Announcements":          12,
+            "Internship / Placement Opportunities": 10,
+            "Events / Hackathons":              7,
+            "General Information / Misc":       3,  # Changed from 0 to 3 — generic academic info still has value
         }
-        topic_score = topic_weights.get(topic, 0) * 0.2
+        topic_score = topic_weights.get(topic, 0)
 
-        # Source trust
-        source_weights = {
-            "official": 25,
-            "faculty": 20,
-            "trusted": 15,
-            "unknown": 0
-        }
-        source_score = source_weights.get(source_trust, 0) * 0.15
+        # ── Source (0–25) — now dynamic ──────────────────────────────
+        # source_weight comes directly from DomainProfile.source_weight
+        # so no multiplication needed
 
-        # Time decay (recent emails get slight boost)
-        time_score = time_decay_factor * 5 * 0.05
+        # ── AI urgency tiebreaker (0–7) ──────────────────────────────
+        # Only applies when no deadline — avoids double-counting
+        ai_weights = {"Critical": 7, "High": 5, "Medium": 3, "Low": 1, "None": 0}
+        ai_score = ai_weights.get(ai_urgency, 0) if deadline_urgency is None else 0
 
-        # Final score
-        total_score = deadline_score + ai_urgency_score + topic_score + source_score + time_score
+        # ── Time decay (0–3) ─────────────────────────────────────────
+        time_score = round(time_decay_factor * 3, 2)
 
-        return round(total_score, 2)
-
+        total = deadline_score + topic_score + source_weight + ai_score + time_score
+        return round(min(total, 100), 2)
     @staticmethod
     def normalize_topic(label_topic: str) -> str:
-        """
-        Normalize LLM-generated topic to your academic ontology.
+        """Normalize LLM topic label to academic ontology using direct mapping.
         
-        Categories:
-        - ASSIGNMENT: Coursework, projects, submissions
-        - EXAM: Exams, tests, assessments
-        - ACADEMIC_ADMIN: Schedules, fees, counselling, admin announcements
-        - OPPORTUNITY: Internships, placements, hackathons, certifications
-        - INFORMATION: General info, announcements
-        - OTHER: Everything else
+        This replaces fuzzy string matching with a deterministic lookup.
+        The LLM is constrained to output one of 9 fixed labels, so mapping is exact.
+        
+        Args:
+            label_topic: One of the 9 LLM topic labels
+        
+        Returns:
+            One of: EXAM, ASSIGNMENT, ACADEMIC_ADMIN, OPPORTUNITY, INFORMATION, OTHER
         """
         if not label_topic:
             return "OTHER"
         
-        label_topic = label_topic.lower()
+        return TOPIC_TO_ENTITY.get(label_topic, "OTHER")
+
+    @staticmethod
+    def clean_title(raw_title: str) -> str:
+        """Clean email subject to a concise title.
+        Removes common prefixes like 'Re:', 'Fwd:', and trims whitespace.
+        """
+        if not raw_title:
+            return ""
+        # Remove common email prefixes
+        cleaned = re.sub(r'^(Re|Fwd|FW|FWD):\s*', '', raw_title, flags=re.IGNORECASE)
+        # Collapse multiple spaces
+        cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+        return cleaned
+
+
+    @staticmethod
+    def process_academic_objects(message, parsed_data: dict, db) -> None:
+        """
+        Takes the parsed JSON output from the AI and builds AcademicItems and FollowUps
+        if the email warrants it.
+        """
+        from app.models.academic_objects import AcademicItem
+        from app.models.gmail.follow_up import FollowUp
         
-        if "assignment" in label_topic or "submission" in label_topic:
-            return "ASSIGNMENT"
+        requires_action = parsed_data.get("requires_action", False)
+        # We only create Academic Objects for important things (requires action or high score)
+        if not requires_action and message.academic_score < 40 and message.normalized_topic not in ["EXAM", "ASSIGNMENT", "OPPORTUNITY"]:
+            return
+
+        # We'll check for an existing AcademicItem after extracting course metadata
+
+        # Attempt to glean metadata from the calendar/action items
+        calendar_events = parsed_data.get("calendar_events", [])
         
-        if "exam" in label_topic or "test" in label_topic or "assessment" in label_topic:
-            return "EXAM"
+        location = None
+        course_code = None
+        due_date = message.deadline_iso
         
-        if any(x in label_topic for x in ["schedule", "timetable", "administrative", "fees", "counselling"]):
-            return "ACADEMIC_ADMIN"
+        if calendar_events:
+            first_event = calendar_events[0]
+            location = first_event.get("location")
+            course_code = first_event.get("course_code")
+            # Override due date with event date if available and no explicit deadline
+            if not due_date and "date" in first_event:
+                try:
+                    due_date = datetime.fromisoformat(first_event["date"]).replace(tzinfo=timezone.utc)
+                except ValueError:
+                    pass
         
-        if any(x in label_topic for x in ["internship", "placement", "hackathon", "certification", "course"]):
-            return "OPPORTUNITY"
+        # Better extraction of course codes via regex if missing
+        if not course_code:
+            import re
+            course_code_match = re.search(r'\b([A-Z]{2,4}\s?[\d]{3,4})\b', message.subject, re.IGNORECASE)
+            if course_code_match:
+                course_code = course_code_match.group(0).upper()
+
+        # Double check if an academic item already exists for this email or a similar one
+        existing_item = db.query(AcademicItem).filter(
+            (AcademicItem.source_email_id == message.gmail_id) |
+            (
+                (AcademicItem.uid == message.uid) & 
+                (AcademicItem.title == AcademicContextEngine.clean_title(message.subject)) &
+                (AcademicItem.entity_type == message.normalized_topic) &
+                (AcademicItem.course_code == course_code)
+            )
+        ).first()
+        if existing_item:
+            return  # Already processed
+                
+        # Extract actions into description
+        action_items = parsed_data.get("action_items", [])
+        description_parts = []
+        for action in action_items:
+            action_text = action.get('action', '')
+            by_date = action.get('by', '')
+            if action_text:
+                part = f"- {action_text}"
+                if by_date:
+                    part += f" (by {by_date})"
+                description_parts.append(part)
+                
+        # Use extracted action items; do not use snippet
+        description = "\n".join(description_parts) if description_parts else ""
         
-        if any(x in label_topic for x in ["announcement", "general information"]):
-            return "INFORMATION"
+        # Fallback description if empty — preserve full email body, not trimmed snippet
+        if not description:
+            # `message.body_text` contains the full extracted plain-text body
+            description = message.body_text or ""
+
+        # Clean title
+        clean_title = AcademicContextEngine.clean_title(message.subject)
+
+        # Create the Academic Item
+        item = AcademicItem(
+            source_email_id=message.gmail_id,
+            uid=message.uid,
+            entity_type=message.normalized_topic,
+            title=clean_title,
+            description=description,
+            due_date=due_date,
+            location=location,
+            course_code=course_code,
+            professor=None, # Will add professor extraction later
+            academic_score=message.academic_score
+        )
         
-        return "OTHER"
+        db.add(item)
+        
+        # Create FollowUp Chain
+        follow_up_chain = parsed_data.get("follow_up_chain", [])
+        
+        for f in follow_up_chain:
+            days_before = f.get("trigger_days_before", 0)
+            msg_text = f.get("message", "Reminder")
+            
+            if due_date:
+                trigger_at = due_date - timedelta(days=days_before)
+            elif message.internal_date:
+                trigger_at = message.internal_date + timedelta(days=1)
+            else:
+                trigger_at = datetime.now(timezone.utc)
+            
+            follow_up = FollowUp(
+                source_email_id=message.gmail_id, # Still uses gmail_id as foreign reference
+                trigger_at=trigger_at,
+                message=msg_text,
+                delivered=False,
+                dismissed=False
+            )
+            db.add(follow_up)
+        
+        # We don't commit here because the caller (`ai_service.py`) handles the transaction
+        # to ensure everything is atomic.
 
     @staticmethod
     def extract_structured_insights(
@@ -349,7 +473,7 @@ Return ONLY valid JSON (no markdown, no extra text):
         Enhance a notification with structured insights.
         
         Input notification_data should have:
-        - subject, body_text (or snippet)
+        - subject, body_text
         - academic_score, normalized_topic
         
         Output: same notification + 'structured_insights' key
@@ -361,7 +485,7 @@ Return ONLY valid JSON (no markdown, no extra text):
         
         insights = AcademicContextEngine.extract_structured_insights(
             subject=notification_data.get('subject', ''),
-            body_text=notification_data.get('body_text', notification_data.get('snippet', '')),
+            body_text=notification_data.get('body_text', ''),
             academic_score=academic_score,
             use_llm_enrichment=should_enrich,
             llm_client=llm_client,

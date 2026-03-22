@@ -1,14 +1,17 @@
-
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from sqlalchemy import desc
 from app.core.database import get_supabase_db
 from app.models.oauthToken import OAuthToken
 from app.models.gmail.gmail_message import GmailMessage
+from app.models.academic_objects import AcademicItem
 from app.utils.firebase_util import verify_firebase_token
 from app.utils.timezone_util import format_ist_datetime
 from app.services.gmail_service import get_paginated_messages, get_message_detail
 import re
 import unicodedata
+from datetime import timedelta
 
 # Safe normalization for email body text
 def normalize_email_text(text: str) -> str:
@@ -22,19 +25,21 @@ def normalize_email_text(text: str) -> str:
     return text.strip()
 
 
+# Request models
+class SnoozeRequest(BaseModel):
+    hours: int = 24
+
+
 router = APIRouter(prefix="/notifications", tags=["Notifications"])
 @router.get("/gmail/list-all")
 def list_gmail_notifications(
-    offset: int = Query(0, ge=0, description="Number of items to skip (0-based)"),
+    page: int = Query(1, ge=1, description="Page number (1-based)"),
     limit: int = Query(20, ge=1, le=100, description="Items per page"),
     include_stats: bool = Query(False, description="Include pagination stats"),
     firebase_data=Depends(verify_firebase_token),
     db: Session = Depends(get_supabase_db),
 ):
     uid = firebase_data["uid"]
-    
-    # Convert offset to page (page is 1-based, offset is 0-based)
-    page = (offset // limit) + 1
     
     # Get paginated messages using the service function
     messages, total = get_paginated_messages(uid, db, page, limit)
@@ -47,8 +52,6 @@ def list_gmail_notifications(
             "subject": m.subject,
             "snippet": m.snippet,
             "internal_date": format_ist_datetime(m.internal_date),
-            "normalized_topic": m.normalized_topic,
-            "academic_score": m.academic_score,
         }
         for m in messages
     ]
@@ -87,19 +90,90 @@ def get_gmail_message_detail(
         "thread_id": message.thread_id,
         "sender": message.sender,
         "subject": message.subject,
-        "body_html": message.body_html,
         "body_text": normalize_email_text(message.body_text),
         "internal_date": format_ist_datetime(message.internal_date),
-        "ai_summary": message.ai_summary,
-        "ai_label_topic": message.ai_label_topic,
-        "ai_label_urgency": message.ai_label_urgency,
-        "ai_label_source": message.ai_label_source,
-        "ai_processed": message.ai_processed,
-        "deadline_iso": message.deadline_iso.isoformat() if message.deadline_iso else None,
-        "deadline_confidence": message.deadline_confidence,
-        "academic_score": message.academic_score,
     }
     return mail_detail
+
+@router.get("/academic/dashboard")
+def get_academic_dashboard(
+    firebase_data=Depends(verify_firebase_token),
+    db: Session = Depends(get_supabase_db),
+):
+    """Fetch academic items (assignments, exams, events, opportunities) for logged-in user."""
+    uid = firebase_data["uid"]
+
+    # Query AcademicItem for this user, excluding dismissed items
+    items = db.query(AcademicItem).filter(
+        AcademicItem.uid == uid,
+        AcademicItem.dismissed == False
+    ).order_by(
+        desc(AcademicItem.academic_score),
+        AcademicItem.due_date.asc()
+    ).all()
+
+    # Organize items by entity type
+    grouped_items = {
+        "assignments": [],
+        "exams": [],
+        "admin": [],
+        "opportunities": [],
+        "information": []
+    }
+
+    focus_item = None
+    timeline = {}
+
+    for item in items:
+        # Determine entity type group
+        entity_group = grouped_items.get(item.entity_type.lower(), [])
+        grouped_items[item.entity_type.lower()] = entity_group  # Ensure the group exists
+        entity_group.append({
+            "id": item.id,
+            "title": item.title,
+            "due_date": item.due_date.isoformat() if item.due_date else None,
+            "location": item.location,
+            "course_code": item.course_code,
+            "completed": item.completed,
+        })
+
+        # Determine focus item (highest priority)
+        if not focus_item or (item.due_date and item.due_date < focus_item["due_date"]):
+            focus_item = {
+                "id": item.id,
+                "entity_type": item.entity_type,
+                "title": item.title,
+                "due_date": item.due_date,  # Keep as datetime for now
+                "location": item.location,
+                "course_code": item.course_code,
+                "completed": item.completed,
+            }
+
+        # Build timeline
+        if item.due_date:
+            date_key = item.due_date.date().isoformat()
+            if date_key not in timeline:
+                timeline[date_key] = []
+            timeline[date_key].append({
+                "id": item.id,
+                "entity_type": item.entity_type,
+                "title": item.title,
+            })
+
+    # Convert `focus_item["due_date"]` to ISO format when returning the response
+    if focus_item:
+        focus_item["due_date"] = focus_item["due_date"].isoformat()
+
+    return {
+        "focus": focus_item,
+        "assignments": grouped_items["assignments"],
+        "exams": grouped_items["exams"],
+        "admin": grouped_items["admin"],
+        "opportunities": grouped_items["opportunities"],
+        "timeline": [
+            {"date": date, "items": items} for date, items in sorted(timeline.items())
+        ]
+    }
 
 @router.post("/gmail/sync")
 def trigger_gmail_sync(
@@ -111,152 +185,93 @@ def trigger_gmail_sync(
     # Sync is now triggered via /gmail/sync/{uid} endpoint only
     return {"status": "no automatic sync; use /gmail/sync/{uid}"}
 
+# ─── Academic Item Actions ───────────────────────────────────────────
 
-@router.post("/gmail/classify-all")
-def classify_all_emails(
-    background_tasks: BackgroundTasks,
+@router.post("/academic/{item_id}/mark-done")
+def mark_academic_item_done(
+    item_id: int,
     firebase_data=Depends(verify_firebase_token),
     db: Session = Depends(get_supabase_db),
 ):
-    """
-    Bulk classify all unprocessed emails for the user.
-    
-    This endpoint:
-    - Finds all emails where ai_processed = False
-    - Queues them for AI inference (max 200 to avoid rate limits)
-    - Runs background job to populate normalized_topic and academic_score
-    - Returns immediate status
-    """
+    """Mark an academic item as completed."""
     uid = firebase_data["uid"]
+    item = db.query(AcademicItem).filter(
+        AcademicItem.id == item_id,
+        AcademicItem.uid == uid,
+    ).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
     
-    # Count unprocessed emails
-    unprocessed_count = db.query(GmailMessage).filter(
-        GmailMessage.uid == uid,
-        GmailMessage.ai_processed == False
-    ).count()
+    item.completed = True
+    db.commit()
+    return {"status": "success", "item_id": item_id}
+
+@router.post("/academic/{item_id}/add-to-calendar")
+def add_academic_item_to_calendar(
+    item_id: int,
+    request: SnoozeRequest,
+    firebase_data=Depends(verify_firebase_token),
+    db: Session = Depends(get_supabase_db),
+):
+    """Create a Google Calendar event for an academic item."""
+    uid = firebase_data["uid"]
+    item = db.query(AcademicItem).filter(
+        AcademicItem.id == item_id,
+        AcademicItem.uid == uid,
+    ).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
     
-    if unprocessed_count == 0:
-        return {
-            "status": "completed",
-            "message": "All emails already classified",
-            "processed": 0,
-            "total": 0
-        }
+    # Fetch OAuth token for this user
+    oauth_token = db.query(OAuthToken).filter(
+        OAuthToken.uid == uid
+    ).first()
+    if not oauth_token or not oauth_token.access_token:
+        raise HTTPException(status_code=401, detail="No Google OAuth token; please connect Gmail first")
     
-    # Limit to last 200 emails to avoid rate limits
-    limit = min(unprocessed_count, 200)
+    # Build calendar event
+    event = {
+        "summary": item.title,
+        "description": item.description,
+        "start": {
+            "dateTime": item.due_date.isoformat() if item.due_date else None,
+            "timeZone": "Asia/Kolkata"
+        },
+        "end": {
+            "dateTime": (item.due_date + timedelta(hours=1)).isoformat() if item.due_date else None,
+            "timeZone": "Asia/Kolkata"
+        },
+        "location": item.location or ""
+    }
     
-    # Queue background job
-    background_tasks.add_task(
-        _classify_emails_background,
-        uid=uid,
-        limit=limit
+    import requests
+    headers = {"Authorization": f"Bearer {oauth_token.access_token}"}
+    cal_response = requests.post(
+        "https://www.googleapis.com/calendar/v3/calendars/primary/events",
+        json=event,
+        headers=headers
     )
     
-    return {
-        "status": "in_progress",
-        "message": f"Started classifying {limit} emails",
-        "total_unprocessed": unprocessed_count,
-        "will_process": limit
-    }
-
-
-def _classify_emails_background(uid: str, limit: int):
-    """
-    Background job to classify emails.
-    Processes in batches with delays between LLM calls to respect rate limits.
-    Creates its own database session since the request session will be closed.
-    """
-    import time
-    from app.services.ai_service import AIService
-    from app.core.database import SupabaseSessionLocal
+    if cal_response.status_code != 200:
+        raise HTTPException(status_code=400, detail=f"Failed to create calendar event: {cal_response.text}")
     
-    print(f"[CLASSIFY] Starting bulk classification for uid={uid}, limit={limit}")
-    
-    # Create fresh database session for background job
-    db_session = SupabaseSessionLocal()
-    
-    try:
-        # Fetch unprocessed emails ordered by most recent first
-        messages = db_session.query(GmailMessage).filter(
-            GmailMessage.uid == uid,
-            GmailMessage.ai_processed == False
-        ).order_by(GmailMessage.internal_date.desc()).limit(limit).all()
-        
-        print(f"[CLASSIFY] Found {len(messages)} messages to process")
-        
-        processed = 0
-        failed = 0
-        
-        for i, message in enumerate(messages):
-            try:
-                print(f"[CLASSIFY] Processing {i+1}/{len(messages)}: {message.gmail_id}")
-                AIService.run_email_inference(message, db_session)
-                processed += 1
-            except Exception as e:
-                print(f"[CLASSIFY] Failed to process {message.gmail_id}: {e}")
-                failed += 1
-                # Mark as processed so it doesn't block completion status
-                try:
-                    message.ai_processed = True
-                    message.normalized_topic = "UNCLASSIFIED"
-                    message.ai_summary = f"Classification failed: {str(e)[:100]}"
-                    db_session.commit()
-                except:
-                    db_session.rollback()
-            
-            # Delay between calls to respect Ollama rate limits (1 call per second)
-            if i < len(messages) - 1:
-                time.sleep(1)
-        
-        print(f"[CLASSIFY] Completed: {processed} processed, {failed} failed")
-        return {
-            "processed": processed,
-            "failed": failed,
-            "total": len(messages)
-        }
-    finally:
-        db_session.close()
+    return {"status": "success", "item_id": item_id, "calendar_event_id": cal_response.json().get("id")}
 
-
-@router.get("/gmail/classify-status")
-def get_classify_status(
+@router.post("/academic/{item_id}/dismiss")
+def dismiss_academic_item(
+    item_id: int,
     firebase_data=Depends(verify_firebase_token),
     db: Session = Depends(get_supabase_db),
 ):
-    """
-    Get current classification progress.
-    Tracks progress relative to the batch size (max 200).
-    """
+    """Dismiss (permanently remove) an academic item from the dashboard."""
     uid = firebase_data["uid"]
-
-    # Count remaining unprocessed emails
-    unprocessed_count = db.query(GmailMessage).filter(
-        GmailMessage.uid == uid,
-        GmailMessage.ai_processed == False
-    ).count()
-
-    # Total emails eligible for classification (max 200)
-    total_emails = db.query(GmailMessage).filter(
-        GmailMessage.uid == uid
-    ).count()
-
-    total_to_process = min(total_emails, 200)
-
-    # Calculate how many processed in this batch
-    # = (total batch size) - (remaining unprocessed in batch)
-    processed_this_run = total_to_process - min(unprocessed_count, total_to_process)
-
-    if unprocessed_count == 0:
-        status = "completed"
-    elif processed_this_run > 0:
-        status = "running"
-    else:
-        status = "pending"
-
-    return {
-        "status": status,
-        "processed": max(processed_this_run, 0),
-        "total": total_to_process,
-        "unprocessed_remaining": unprocessed_count
-    }
+    item = db.query(AcademicItem).filter(
+        AcademicItem.id == item_id,
+        AcademicItem.uid == uid,
+    ).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    
+    item.dismissed = True
+    db.commit()
+    return {"status": "success", "item_id": item_id}

@@ -2,17 +2,46 @@ import requests
 import json
 import datetime
 import os
+from typing import Optional, Dict, Any
+
 from app.ai.preprocessing import preprocess_email_for_llm
 from app.models.gmail.gmail_message import GmailMessage
-from app.services.level1_classifier import Level1Classifier
+from app.services.domain_trust_scorer import DomainTrustScorer
 from app.services.academic_context_engine import AcademicContextEngine
 
 
-OLLAMA_URL = os.getenv("OLLAMA_URL", "http://192.168.31.2:11434/api/generate")
-MODEL_NAME = os.getenv("OLLAMA_MODEL", "phi3:mini")
-OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-OPENROUTER_API_KEY = os.getenv("openrouter_api_key", "")
-OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "qwen/qwen-2.5-vl-7b-instruct")
+# Platform domains to skip processing (easy to extend)
+PLATFORM_DOMAINS = {
+    "google_classroom": "classroom.google.com",
+}
+
+
+def _is_platform_sender(domain_profile, sender: str, platform_key: str) -> bool:
+    """Return True when the sender matches a configured platform domain.
+
+    Checks the normalized domain produced by DomainTrustScorer first,
+    then falls back to a simple substring check on the raw sender string.
+    """
+    platform_domain = PLATFORM_DOMAINS.get(platform_key)
+    if not platform_domain:
+        return False
+
+    dp_domain = (domain_profile.domain or "").lower()
+    sender_l = (sender or "").lower()
+
+    if dp_domain and (dp_domain == platform_domain or dp_domain.endswith('.' + platform_domain)):
+        return True
+
+    if platform_domain in sender_l:
+        return True
+
+    return False
+
+
+# Ollama configuration (kept unchanged)
+OLLAMA_URL = "http://127.0.0.1:11434/api/generate"
+MODEL_20B = os.getenv("OLLAMA_MODEL_20B", "gpt-oss:20b-cloud")
+MODEL_120B = os.getenv("OLLAMA_MODEL_120B", "gpt-oss:120b-cloud")
 
 LEVEL2_LABELS = [
     "Timetable / Schedule Update",
@@ -28,17 +57,16 @@ LEVEL2_LABELS = [
 
 URGENCY_LABELS = ["Critical", "High", "Medium", "Low", "None"]
 
-BATCH_SYSTEM_PROMPT = """You are an academic email classifier. 
-Output MUST be a strictly valid JSON ARRAY of objects. Each object corresponds to an email and must contain specific fields.
+SYSTEM_PROMPT = """You are an academic email classification engine.
+Output ONLY a compact JSON object with these keys: summary, label_topic, label_urgency, deadline_iso, deadline_confidence.
 
-REQUIRED JSON FORMAT PER ITEM:
+REQUIRED JSON FORMAT (20B pass):
 {{
-  "email_id": "the original ID provided",
-  "summary": "brief 1-sentence summary",
-  "label_topic": "one of the allowed topic labels",
-  "label_urgency": "one of the allowed urgency labels",
-  "deadline_iso": "ISO 8601 or null",
-  "deadline_confidence": "High | Medium | Low | None"
+    "summary": "brief 1-sentence summary",
+    "label_topic": "one of the allowed topic labels",
+    "label_urgency": "one of the allowed urgency labels",
+    "deadline_iso": "ISO 8601 string or null",
+    "deadline_confidence": "High | Medium | Low | None"
 }}
 
 ALLOWED TOPIC LABELS:
@@ -47,439 +75,267 @@ ALLOWED TOPIC LABELS:
 ALLOWED URGENCY LABELS:
 {urgencies}
 
-DEADLINE RULES:
-- Use EMAIL RECEIVED AT as reference.
-- If no deadline exists or uncertain, return null.
+CONTEXT:
+Source Trust: {source}
+Subject: {subject}
+Received At: {received_at}
 
-EMAILS TO PROCESS:
-{emails_block}
+EMAIL BODY:
+{content}
 """
 
 
 class AIService:
-    """Service class for AI-powered email inference and classification."""
+    """Simple, clear implementation of the email processing flow.
+
+    Public method:
+      - process_email(message)
+
+    Helper methods are small and do one job each.
+    """
 
     @staticmethod
-    def run_email_inference(message: GmailMessage, batch_mode: bool = False):
-        """
-        Run AI inference on a single GmailMessage.
-        Updates the message with AI results. The caller is responsible for committing to DB.
-        """
+    def call_small_model(prompt: str) -> str:
+        """Call the smaller model (20B) and return the raw text response."""
+        print("[AI] Calling small model")
+        return AIService._call_ollama(prompt, MODEL_20B)
 
-        # --- Level 1 classification ---
-        features = preprocess_email_for_llm(
-            subject=message.subject,
-            body=message.body_text,
-            sender=message.sender,
+    @staticmethod
+    def call_large_model(prompt: str) -> str:
+        """Call the larger model (120B) and return the raw text response."""
+        print("[AI] Calling large model for extra details")
+        return AIService._call_ollama(prompt, MODEL_120B)
+
+    @staticmethod
+    def parse_llm_response(llm_response: str) -> Dict[str, Any]:
+        """Parse and validate JSON returned by the LLM.
+
+        Raises ValueError if the response is not valid JSON or missing fields.
+        """
+        if not llm_response or not llm_response.strip():
+            raise ValueError("LLM returned empty response")
+
+        try:
+            result = json.loads(llm_response)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"LLM returned invalid JSON: {e}")
+
+        # Validate required keys
+        required = ["summary", "label_topic", "label_urgency"]
+        if not all(k in result for k in required):
+            raise ValueError(f"LLM response missing required fields: {required}")
+
+        # Normalize fields
+        if result.get("label_topic") not in LEVEL2_LABELS:
+            print("[AI] LLM returned unknown topic label, using fallback")
+            result["label_topic"] = "General Information / Misc"
+
+        if result.get("label_urgency") not in URGENCY_LABELS:
+            print("[AI] LLM returned unknown urgency label, using fallback")
+            result["label_urgency"] = "None"
+
+        # Normalize deadline field
+        deadline_iso = result.get("deadline_iso")
+        if deadline_iso in ["", "null", None]:
+            result["deadline_iso"] = None
+
+        # Provide a consistent deadline_confidence field
+        if "deadline_confidence" not in result:
+            result["deadline_confidence"] = "None"
+
+        return result
+
+    @staticmethod
+    def update_message_fields(message: GmailMessage, domain_profile, result: Dict[str, Any], extra_details: Optional[Dict[str, Any]] = None) -> None:
+        """Update `message` fields with parsed results and calculated score.
+
+        This mutates the message object; caller should commit the DB session.
+        """
+        message.ai_label_source = domain_profile.classification
+        message.ai_label_topic = result.get("label_topic")
+        message.ai_label_urgency = result.get("label_urgency")
+        message.ai_summary = result.get("summary")
+
+        # Normalize topic to academic ontology
+        message.normalized_topic = AcademicContextEngine.normalize_topic(result.get("label_topic", "General Information / Misc"))
+
+        # Parse deadline into datetime if present
+        if result.get("deadline_iso"):
+            try:
+                dt = datetime.datetime.fromisoformat(result["deadline_iso"].replace('Z', '+00:00'))
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=datetime.timezone.utc)
+                message.deadline_iso = dt
+            except Exception:
+                print("[AI] Invalid deadline format; clearing deadline")
+                message.deadline_iso = None
+        else:
+            message.deadline_iso = None
+
+        message.deadline_confidence = result.get("deadline_confidence", "None")
+
+        # Calculate academic score using the existing engine
+        normalized_deadline = AcademicContextEngine.normalize_deadline(message.deadline_iso)
+        deadline_urgency = AcademicContextEngine.calculate_deadline_urgency(normalized_deadline)
+
+        score = AcademicContextEngine.calculate_academic_score(
+            deadline_urgency=deadline_urgency,
+            ai_urgency=result.get("label_urgency", "None"),
+            topic=result.get("label_topic", "General Information / Misc"),
+            source_weight=domain_profile.source_weight,
         )
 
-        label_source = Level1Classifier.classify_source(features["sender_email"])
+        message.academic_score = int(score)
+        message.ai_processed = True
+        message.ai_status = "completed"
 
-        # Trust-Based Filtering (NEW): Skip if External / Misc
-        if label_source == "External / Misc":
-            print(f"[AI SERVICE] Skipping non-academic/misc email: {message.gmail_id}")
-            message.ai_label_source = label_source
-            message.ai_summary = "Non-academic or mixed source - skipped AI."
-            message.ai_label_topic = "General Information / Misc"
-            message.ai_label_urgency = "None"
-            message.normalized_topic = "INFORMATION"
-            message.academic_score = 0
+        # Attach extra details if available
+        if extra_details:
+            try:
+                # Store as JSON string in a field if you have one; otherwise keep in memory
+                message.ai_extra = json.dumps(extra_details)
+            except Exception:
+                # Best effort only
+                pass
+
+    @staticmethod
+    def process_email(message: GmailMessage, batch_mode: bool = False) -> Dict[str, Any]:
+        """Main entry: process a single message and update it with AI results.
+
+        Flow:
+          - clean email text
+          - detect platform senders and skip if needed
+          - call small model (20B)
+          - parse result
+          - call large model (120B) for extra details (optional)
+          - update message fields and compute score
+
+        If the LLM returns invalid JSON, this function will raise ValueError so
+        the caller can retry later.
+        """
+        # Clean text for model input
+        cleaned = preprocess_email_for_llm(subject=message.subject, body=message.body_text, sender=message.sender)
+        cleaned_text = cleaned.get("clean_text", "")
+
+        # Domain classification used for scoring and skip decisions
+        domain_profile = DomainTrustScorer.score_sender(sender=message.sender)
+
+        # Platform skip (Google Classroom etc.)
+        if _is_platform_sender(domain_profile, message.sender, "google_classroom"):
+            print(f"[AI] Skipping classroom email from {message.sender}")
             message.ai_processed = True
             message.ai_status = "completed"
-            # The caller is responsible for committing to DB, so db.commit() is omitted here.
+            message.academic_score = 0
+            return {
+                "skipped_platform": True,
+                "platform": "google_classroom",
+            }
+
+        # Build prompt for the small model
+        prompt = SYSTEM_PROMPT.format(
+            source=domain_profile.classification,
+            subject=message.subject,
+            content=cleaned_text,
+            received_at=message.internal_date.isoformat() if message.internal_date else "",
+            topics="\n- ".join(LEVEL2_LABELS),
+            urgencies="\n- ".join(URGENCY_LABELS),
+        )
+
+        # Single level error handling: let errors bubble up after marking message failed
+        try:
+            print(f"[AI] Processing email {message.gmail_id}")
+
+            message.ai_processed = False
+            message.ai_status = "processing"
+
+            # Small model call
+            llm_response = AIService.call_small_model(prompt)
+
+            # Parse the LLM JSON response (will raise on invalid JSON)
+            result = AIService.parse_llm_response(llm_response)
+
+            # Optionally call the large model to get extra details
+            extra_details = None
+            try:
+                extra_prompt = (
+                    "You are a deeper analysis engine. Given the email body and the short summary, "
+                    "extract ONLY these keys as JSON: action_items (array), calendar_events (array), follow_up_chain (array)."
+                    f"\n\nEMAIL BODY:\n{cleaned_text}\n\nSHORT_PARSE:\n{json.dumps({k: result.get(k) for k in ['summary','label_topic','label_urgency','deadline_iso']})}"
+                )
+                large_response = AIService.call_large_model(extra_prompt)
+                # Parse large model response; if invalid JSON, raise and let caller retry
+                extra_details = json.loads(large_response)
+            except Exception as e:
+                # If extra details fail, we do not stop processing — it's optional
+                print(f"[AI] Large model failed or returned invalid JSON: {e}")
+                extra_details = None
+
+            # Update DB fields and compute score
+            AIService.update_message_fields(message, domain_profile, result, extra_details)
+
+            # Return a simple payload for callers
             return {
                 "summary": message.ai_summary,
                 "topic": message.ai_label_topic,
                 "urgency": message.ai_label_urgency,
                 "source": message.ai_label_source,
-                "deadline_iso": None,
-                "deadline_confidence": "None",
-                "academic_score": 0
+                "deadline_iso": message.deadline_iso.isoformat() if message.deadline_iso else None,
+                "deadline_confidence": message.deadline_confidence,
+                "academic_score": message.academic_score,
+                "parsed_payload": result,
+                "extra_details": extra_details,
             }
 
-        try:
-            print(f"[AI SERVICE] Starting inference for gmail_id={message.gmail_id}")
-            message.ai_processed = False
-            message.ai_status = "processing"
-            full_prompt = SYSTEM_PROMPT.format(
-                source=label_source,
-                subject=message.subject,
-                content=features["clean_text"],
-                received_at=message.internal_date.isoformat() if message.internal_date else ""
-            )
-            
-            raw_output = AIService._hybrid_inference(full_prompt, batch_mode)
-
-            # Check if response is valid JSON
-            if not raw_output or not raw_output.strip():
-                print(f"[AI SERVICE] Empty response from Ollama")
-                parsed = {
-                    "summary": "AI service returned empty response",
-                    "label_topic": "General Information / Misc",
-                    "label_urgency": "None"
-                }
-            else:
-                try:
-                    parsed = json.loads(raw_output)
-                    print(f"[AI SERVICE] Successfully parsed AI response: {parsed}")
-                    
-                    # Validate required fields
-                    required_fields = ["summary", "label_topic", "label_urgency"]
-                    if not all(field in parsed for field in required_fields):
-                        raise ValueError(f"Missing required fields. Expected: {required_fields}, got: {list(parsed.keys())}")
-                    
-                    # Validate topic label
-                    if parsed["label_topic"] not in LEVEL2_LABELS:
-                        print(f"[AI SERVICE] Invalid topic label '{parsed['label_topic']}', using fallback")
-                        parsed["label_topic"] = "General Information / Misc"
-                    
-                    # Validate urgency label
-                    if parsed["label_urgency"] not in URGENCY_LABELS:
-                        print(f"[AI SERVICE] Invalid urgency label '{parsed['label_urgency']}', using fallback")
-                        parsed["label_urgency"] = "None"
-                    
-                    # Parse deadline fields
-                    deadline_iso = parsed.get("deadline_iso")
-                    deadline_confidence = parsed.get("deadline_confidence", "None")
-                    
-                    # Normalize null-like values
-                    if deadline_iso in ["null", "", None]:
-                        deadline_iso = None
-                    
-                    parsed["deadline_iso"] = deadline_iso
-                    parsed["deadline_confidence"] = deadline_confidence
-                        
-                except (json.JSONDecodeError, ValueError) as json_error:
-                    print(f"[AI SERVICE] JSON parsing/validation failed: {json_error}")
-                    print(f"[AI SERVICE] Raw response was: {repr(raw_output[:500])}")
-                    
-                    # Try to extract JSON from the response if it's wrapped in text
-                    import re
-                    json_match = re.search(r'\{[^{}]*("summary")[^{}]*\}', raw_output, re.DOTALL)
-                    if json_match:
-                        try:
-                            candidate = json_match.group()
-                            parsed = json.loads(candidate)
-                            print(f"[AI SERVICE] Successfully extracted JSON: {parsed}")
-                            
-                            # Validate extracted JSON
-                            if not all(field in parsed for field in ["summary", "label_topic", "label_urgency"]):
-                                raise ValueError("Extracted JSON missing required fields")
-                                
-                        except (json.JSONDecodeError, ValueError):
-                            parsed = {
-                                "summary": f"AI response parsing failed: {str(json_error)[:100]}",
-                                "label_topic": "General Information / Misc",
-                                "label_urgency": "None"
-                            }
-                    else:
-                        parsed = {
-                            "summary": f"AI response not valid JSON: {raw_output[:100]}...",
-                            "label_topic": "General Information / Misc",
-                            "label_urgency": "None"
-                        }
-
-        except requests.exceptions.ConnectionError as e:
-            print(f"[AI SERVICE] Connection error to Ollama: {e}")
-            print(f"[AI SERVICE] Make sure Ollama is running at {OLLAMA_URL}")
-            # Re-raise so email stays ai_processed=False and gets retried
-            raise
-
-        except requests.exceptions.Timeout as e:
-            print(f"[AI SERVICE] Timeout connecting to Ollama: {e}")
-            # Re-raise so email stays ai_processed=False and gets retried
-            raise
-
-        except Exception as e:
-            print(f"[AI SERVICE] Inference failed for message {message.gmail_id}: {e}")
-            print(f"[AI SERVICE] Full error details: {type(e).__name__}: {str(e)}")
-
+        except Exception as err:
+            # Mark the message so it can be retried or inspected later
+            print(f"[AI] Processing failed for {message.gmail_id}: {err}")
             message.ai_processed = False
             message.ai_status = "failed"
-
+            # Re-raise so caller knows there was a failure
             raise
 
-        # --- Store results ---
-        message.ai_label_source = label_source
-        message.ai_label_topic = parsed.get("label_topic")
-        message.ai_label_urgency = parsed.get("label_urgency")
-        message.ai_summary = parsed.get("summary")
-        
-        # Normalize topic to academic ontology
-        message.normalized_topic = AcademicContextEngine.normalize_topic(
-            parsed.get("label_topic", "General Information / Misc")
-        )
-        
-        # Store deadline information with robust validation
-        if parsed.get("deadline_iso"):
-            try:
-                dt = datetime.datetime.fromisoformat(parsed["deadline_iso"].replace('Z', '+00:00'))
-                # Assume UTC if timezone missing
-                if dt.tzinfo is None:
-                    dt = dt.replace(tzinfo=datetime.timezone.utc)
-                message.deadline_iso = dt
-            except ValueError:
-                print(f"[AI SERVICE] Invalid ISO format for deadline: {parsed['deadline_iso']}")
-                message.deadline_iso = None
-        else:
-            message.deadline_iso = None
-            
-        message.deadline_confidence = parsed.get("deadline_confidence", "None")
-        
-        # Calculate academic intelligence score
-        normalized_deadline = AcademicContextEngine.normalize_deadline(message.deadline_iso)
-        deadline_urgency = AcademicContextEngine.calculate_deadline_urgency(normalized_deadline)
-        
-        academic_score = AcademicContextEngine.calculate_academic_score(
-            deadline_urgency=deadline_urgency,
-            ai_urgency=parsed.get("label_urgency", "None"),
-            topic=parsed.get("label_topic", "General Information / Misc"),
-            source_trust=label_source
-        )
-        
-        
-        message.academic_score = int(academic_score)
-        message.ai_processed = True
-        message.ai_status = "completed"
-
-
-        return {
-            "summary": message.ai_summary,
-            "topic": message.ai_label_topic,
-            "urgency": message.ai_label_urgency,
-            "source": message.ai_label_source,
-            "deadline_iso": message.deadline_iso.isoformat() if message.deadline_iso else None,
-            "deadline_confidence": message.deadline_confidence,
-            "academic_score": message.academic_score
-        }
-
     @staticmethod
-    def _hybrid_inference(prompt: str, batch_mode: bool = False) -> str:
-        try:
-            return AIService._local_inference(prompt)
-    
-        except requests.exceptions.ConnectionError as e:
-            print(f"[AI SERVICE] Local GPU connection failed, fallback triggered: {e}")
-            return AIService._openrouter_inference(prompt)
-    
-        except requests.exceptions.Timeout as e:
-            print(f"[AI SERVICE] Local GPU timeout, fallback triggered: {e}")
-            return AIService._openrouter_inference(prompt)
-    @staticmethod
-    def _openrouter_inference(prompt: str) -> str:
-        if not OPENROUTER_API_KEY:
-            raise ValueError("OpenRouter API key is missing")
+    def _call_ollama(prompt: str, model: str) -> str:
+        """Call local Ollama and return the raw response string.
 
-        print(f"[AI SERVICE] Attempting OpenRouter Inference with model {OPENROUTER_MODEL}")
+        This is a thin wrapper over the HTTP call; it does not attempt to
+        recover malformed JSON. Caller must parse and validate.
+        """
+        print(f"[AI] Ollama -> {model}")
 
-        response = requests.post(
-            OPENROUTER_URL,
-            headers={
-                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                "HTTP-Referer": "https://uni-dash.local",
-                "X-Title": "Uni-Dash Reborn"
-            },
-            json={
-                "model": OPENROUTER_MODEL,
-                "messages": [{"role": "user", "content": prompt}]
-            },
-            timeout=(5, 30)
-        )
-
-        if response.status_code != 200:
-            print("[AI SERVICE] OpenRouter error:", response.status_code, response.text)
-            response.raise_for_status()
-
-        try:
-            resp_json = response.json()
-        except Exception as e:
-            print(f"[AI SERVICE] Failed to parse OpenRouter response as JSON: {e}")
-            print(f"[AI SERVICE] Raw response: {response.text}")
-            raise
-
-        if "choices" not in resp_json:
-            print(f"[AI SERVICE] OpenRouter response missing 'choices' key. Full response: {resp_json}")
-            raise KeyError(f"OpenRouter API response missing 'choices' key. Response: {resp_json}")
-
-        output = resp_json["choices"][0]["message"]["content"].strip()
-
-        # Strip markdown logic
-        if output.startswith("```json"):
-            output = output[7:]
-        if output.startswith("```"):
-            output = output[3:]
-        if output.endswith("```"):
-            output = output[:-3]
-        return output.strip()
-
-    @staticmethod
-    def _local_inference(prompt: str) -> str:
-        """Runs batched or fallback inference on local Ollama server."""
-        print(f"[AI SERVICE] Connecting to Ollama at: {OLLAMA_URL} with model: {MODEL_NAME}")
         response = requests.post(
             OLLAMA_URL,
             json={
-                "model": MODEL_NAME,
+                "model": model,
                 "prompt": prompt,
                 "stream": False,
                 "options": {
                     "temperature": 0.0,
                     "top_p": 0.1,
-                    "num_predict": 256
-                }
+                    "num_predict": 2000,
+                },
             },
-            timeout=(5, 60)
+            timeout=(5, 120),
         )
+
         response.raise_for_status()
-        raw_output = response.json().get("response", "").strip()
-        
-        # Strip markdown code blocks
-        if raw_output.startswith("```json"):
-            raw_output = raw_output[7:]
-        if raw_output.startswith("```"):
-            raw_output = raw_output[3:]
-        if raw_output.endswith("```"):
-            raw_output = raw_output[:-3]
-        return raw_output.strip()
+        raw = response.json().get("response", "") or ""
 
+        # Remove simple markdown fences only
+        if raw.startswith("```json"):
+            raw = raw[7:]
+        if raw.startswith("```"):
+            raw = raw[3:]
+        if raw.endswith("```"):
+            raw = raw[:-3]
+
+        return raw.strip()
+
+    # Backwards-compatible alias for older callers
     @staticmethod
-    def run_batch_email_inference(messages: list[GmailMessage], db):
+    def run_email_inference(message: GmailMessage, **kwargs) -> Dict[str, Any]:
+        """Compatibility wrapper used by older workers.
+
+        Calls the new `process_email` implementation.
         """
-        Processes a list of GmailMessages as a single batch to maximize throughput.
-        Uses Level 0 filtering to skip trivial emails and Level 1 for trust context.
-        """
-        if not messages:
-            return []
-
-        from app.ai.preprocessing import is_trivial_email
-
-        to_process = []
-        results = {}
-
-        # 1. First Pass: Fast Filtering
-        for msg in messages:
-            # Level 0 Check
-            if is_trivial_email(msg.subject, msg.body_text):
-                print(f"[AI BATCH] Skipping trivial email: {msg.gmail_id}")
-                msg.ai_summary = "Trivial/Automated notification - skipped AI."
-                msg.ai_label_topic = "General Information / Misc"
-                msg.ai_label_urgency = "None"
-                msg.normalized_topic = "INFORMATION"
-                msg.academic_score = 0
-                msg.ai_processed = True
-                msg.ai_status = "completed"
-                results[msg.gmail_id] = {"status": "skipped"}
-                continue
-
-            # Prepare for LLM
-            features = preprocess_email_for_llm(
-                subject=msg.subject,
-                body=msg.body_text,
-                sender=msg.sender,
-            )
-            label_source = Level1Classifier.classify_source(features["sender_email"])
-            
-            # Trust-Based Filtering (NEW): Skip if External / Misc
-            if label_source == "External / Misc":
-                print(f"[AI BATCH] Skipping non-academic/misc email: {msg.gmail_id}")
-                msg.ai_label_source = label_source
-                msg.ai_summary = "Non-academic or mixed source - skipped AI."
-                msg.ai_label_topic = "General Information / Misc"
-                msg.ai_label_urgency = "None"
-                msg.normalized_topic = "INFORMATION"
-                msg.academic_score = 0
-                msg.ai_processed = True
-                msg.ai_status = "completed"
-                results[msg.gmail_id] = {"status": "skipped_trust"}
-                continue
-            
-            to_process.append({
-                "id": msg.gmail_id,
-                "text": features["clean_text"],
-                "subject": msg.subject,
-                "source": label_source,
-                "received_at": msg.internal_date.isoformat() if msg.internal_date else "",
-                "msg_obj": msg  # Keep reference for post-processing
-            })
-
-        if not to_process:
-            db.commit()
-            return results
-
-        # 2. Level 2: Batch LLM Inference
-        emails_block = ""
-        for item in to_process:
-            emails_block += f"\n---\nID: {item['id']}\nRECEIVED: {item['received_at']}\nSOURCE: {item['source']}\nSUBJECT: {item['subject']}\nCONTENT: {item['text']}\n---\n"
-
-        prompt = BATCH_SYSTEM_PROMPT.format(
-            topics="\n- ".join(LEVEL2_LABELS),
-            urgencies="\n- ".join(URGENCY_LABELS),
-            emails_block=emails_block
-        )
-
-        try:
-            raw_output = AIService._hybrid_inference(prompt)
-            # Basic scrubbing of potential Markdown
-            if "```json" in raw_output:
-                raw_output = re.search(r'\[.*\]', raw_output, re.DOTALL).group()
-            
-            parsed_batch = json.loads(raw_output)
-            if not isinstance(parsed_batch, list):
-                if isinstance(parsed_batch, dict):
-                    parsed_batch = [parsed_batch]
-                else:
-                    raise ValueError("LLM did not return a list")
-
-            # Map results back to messages
-            parsed_map = {item.get("email_id"): item for item in parsed_batch}
-
-            for item in to_process:
-                msg = item["msg_obj"]
-                gid = item["id"]
-                data = parsed_map.get(gid)
-
-                if not data:
-                    print(f"[AI BATCH] Missing AI data for {gid}")
-                    msg.ai_status = "failed"
-                    continue
-
-                # Apply data (reusing similar logic to single mode)
-                msg.ai_label_source = item["source"]
-                msg.ai_label_topic = data.get("label_topic", "General Information / Misc")
-                msg.ai_label_urgency = data.get("label_urgency", "None")
-                msg.ai_summary = data.get("summary", "No summary provided")
-                
-                msg.normalized_topic = AcademicContextEngine.normalize_topic(msg.ai_label_topic)
-                
-                # Deadline logic
-                if data.get("deadline_iso"):
-                    try:
-                        msg.deadline_iso = datetime.datetime.fromisoformat(data["deadline_iso"].replace('Z', '+00:00'))
-                    except:
-                        msg.deadline_iso = None
-                
-                msg.deadline_confidence = data.get("deadline_confidence", "None")
-                
-                # Scoring
-                norm_deadline = AcademicContextEngine.normalize_deadline(msg.deadline_iso)
-                deadline_urgency = AcademicContextEngine.calculate_deadline_urgency(norm_deadline)
-                msg.academic_score = int(AcademicContextEngine.calculate_academic_score(
-                    deadline_urgency=deadline_urgency,
-                    ai_urgency=msg.ai_label_urgency,
-                    topic=msg.ai_label_topic,
-                    source_trust=item["source"]
-                ))
-                
-                msg.ai_processed = True
-                msg.ai_status = "completed"
-                results[gid] = {"status": "success"}
-
-        except Exception as e:
-            print(f"[AI BATCH] Batch inference catastrophic failure: {e}")
-            for item in to_process:
-                item["msg_obj"].ai_status = "failed"
-            db.rollback()
-            raise
-
-        db.commit()
-        return results
+        return AIService.process_email(message, **kwargs)

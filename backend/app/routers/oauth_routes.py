@@ -6,7 +6,7 @@ import secrets
 from cryptography.fernet import Fernet
 
 from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, JSONResponse
 from sqlalchemy.orm import Session
 
 from app.jobs.gmail_sync_job import initial_gmail_sync
@@ -176,9 +176,10 @@ def google_callback(
         background_tasks.add_task(sync_task, uid, 100)
         print(f"Oauth logs: Background task added for user {uid}")
 
-    # Redirect to app using deep link
-    # Why: Signals frontend that OAuth succeeded and user can proceed.
-
-
-    print(f"Oauth logs: Login succeeded, Redirecting to {redirect_to}")
-    return RedirectResponse(url=redirect_to)
+    # Redirect to app using deep link or JSON for web
+    platform = request.headers.get("x-platform", "mobile")  # expected values: "web" or "mobile"
+    print(f"Oauth logs: Login succeeded, platform={platform}, redirect_to={redirect_to}")
+    if platform == "web":
+        return JSONResponse(content={"status": "success", "redirect_url": redirect_to})
+    else:
+        return RedirectResponse(url=redirect_to)
