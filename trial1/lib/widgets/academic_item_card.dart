@@ -35,37 +35,34 @@ class AcademicItemCard extends StatelessWidget {
           }
         },
         child: Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _buildHeader(context),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               Text(
                 item.title,
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.w600,
-                  height: 1.3,
+                  height: 1.18,
                 ),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 8),
-              // Collapsed chips row: show topic and source for quick scanning
+              // Collapsed chips row: show only AI topic (if any)
               Wrap(
                 spacing: 8,
                 runSpacing: 6,
                 children: [
-                  if (item.aiLabelTopic != null)
-                    _chip(context, item.aiLabelTopic!),
-                  if (item.aiLabelSource != null)
-                    _chip(context, item.aiLabelSource!),
+                  if (item.aiLabelTopic != null) _chip(context, item.aiLabelTopic!),
                 ],
               ),
-              if (item.description.isNotEmpty) ...[
+              if ((item.aiSummary ?? item.description).isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Text(
-                  item.description,
+                  item.aiSummary ?? item.description,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: Theme.of(
                       context,
@@ -76,7 +73,7 @@ class AcademicItemCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ],
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
               _buildFooter(context),
             ],
           ),
@@ -137,12 +134,8 @@ class AcademicItemCard extends StatelessWidget {
                               spacing: 8,
                               runSpacing: 8,
                               children: [
-                                if (item.aiLabelTopic != null)
-                                  _chip(context, item.aiLabelTopic!),
-                                if (item.aiLabelSource != null)
-                                  _chip(context, item.aiLabelSource!),
-                                if (item.courseCode != null)
-                                  _chip(context, item.courseCode!),
+                                if (item.aiLabelTopic != null) _chip(context, item.aiLabelTopic!),
+                                if (item.courseCode != null) _chip(context, item.courseCode!),
                               ],
                             ),
                           ],
@@ -370,7 +363,7 @@ class AcademicItemCard extends StatelessWidget {
           ),
         ),
         const Spacer(),
-        if (item.courseCode != null)
+        if (item.dueDate != null)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
@@ -378,7 +371,7 @@ class AcademicItemCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(6),
             ),
             child: Text(
-              item.courseCode!,
+              _shortDateWithContext(item.dueDate!),
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
                 fontWeight: FontWeight.w600,
                 color: Theme.of(context).colorScheme.onSurface,
@@ -409,6 +402,22 @@ class AcademicItemCard extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                   ),
                 ),
+                const SizedBox(width: 8),
+                Text('•', style: Theme.of(context).textTheme.bodySmall),
+                const SizedBox(width: 8),
+                TextButton.icon(
+                  onPressed: () {},
+                  icon: Icon(Icons.add_alert_outlined, size: 16, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.8)),
+                  label: Text('Remind', style: Theme.of(context).textTheme.bodySmall),
+                  style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(40, 24)),
+                ),
+                const SizedBox(width: 8),
+                TextButton.icon(
+                  onPressed: () {},
+                  icon: Icon(Icons.calendar_month_outlined, size: 16, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.8)),
+                  label: Text('Add', style: Theme.of(context).textTheme.bodySmall),
+                  style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(40, 24)),
+                ),
               ] else if (item.location != null) ...[
                 Icon(
                   Icons.location_on_outlined,
@@ -433,38 +442,6 @@ class AcademicItemCard extends StatelessWidget {
               ],
             ],
           ),
-        ),
-        const SizedBox(width: 12),
-        // Action buttons (compact)
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
-              icon: Icon(
-                Icons.add_alert_outlined,
-                size: 18,
-                color: Theme.of(
-                  context,
-                ).colorScheme.onSurface.withValues(alpha: 0.7),
-              ),
-              onPressed: () {},
-            ),
-            const SizedBox(width: 8),
-            IconButton(
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
-              icon: Icon(
-                Icons.calendar_month_outlined,
-                size: 18,
-                color: Theme.of(
-                  context,
-                ).colorScheme.onSurface.withValues(alpha: 0.7),
-              ),
-              onPressed: () {},
-            ),
-          ],
         ),
       ],
     );

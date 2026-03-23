@@ -27,6 +27,8 @@ class GmailMessage(Base):
     ai_label_topic = Column(String, nullable=True)  # LLM topic classification
     ai_label_urgency = Column(String, nullable=True)  # LLM urgency level
     ai_label_source = Column(String, nullable=True)  # Extracted source/domain
+    # Broadcast tracking header (X-UniDash-Broadcast-ID)
+    unidash_broadcast_id = Column(String, nullable=True, index=True)
     
     # Extracted metadata fields
     deadline_iso = Column(DateTime, nullable=True)  # Detected deadline

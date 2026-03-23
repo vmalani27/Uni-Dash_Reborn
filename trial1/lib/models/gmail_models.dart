@@ -29,7 +29,9 @@ class StructuredInsights {
       instructorEmail: json['instructor_email'] as String?,
       courseCode: json['course_code'] as String?,
       courseName: json['course_name'] as String?,
-      actionItems: (json['action_items'] as List?)?.map((e) => e.toString()).toList() ?? [],
+      actionItems:
+          (json['action_items'] as List?)?.map((e) => e.toString()).toList() ??
+          [],
       submissionRequired: json['submission_required'] as bool? ?? false,
       submissionFormat: json['submission_format'] as String?,
       confidence: (json['confidence'] as num?)?.toDouble() ?? 0.6,
@@ -48,8 +50,11 @@ class GmailNotificationPreview {
   final DateTime? deadlineIso;
   final String? deadlineConfidence;
   final double academicScore;
-  final String normalizedTopic; // ASSIGNMENT, EXAM, ACADEMIC_ADMIN, OPPORTUNITY, INFORMATION, OTHER
-  final StructuredInsights? structuredInsights; // Optional enrichment from backend
+  final String
+  normalizedTopic; // ASSIGNMENT, EXAM, ACADEMIC_ADMIN, OPPORTUNITY, INFORMATION, OTHER
+  final String? aiLabelTopic;
+  final StructuredInsights?
+  structuredInsights; // Optional enrichment from backend
 
   GmailNotificationPreview({
     required this.id,
@@ -58,6 +63,7 @@ class GmailNotificationPreview {
     required this.subject,
     required this.snippet,
     this.internalDate,
+    this.aiLabelTopic,
     this.deadlineIso,
     this.deadlineConfidence,
     required this.academicScore,
@@ -81,8 +87,11 @@ class GmailNotificationPreview {
       deadlineConfidence: json['deadline_confidence'] as String?,
       academicScore: (json['academic_score'] as num?)?.toDouble() ?? 0.0,
       normalizedTopic: json['normalized_topic'] as String? ?? 'OTHER',
+      aiLabelTopic: json['ai_label_topic'] as String?,
       structuredInsights: json['structured_insights'] != null
-          ? StructuredInsights.fromJson(json['structured_insights'] as Map<String, dynamic>)
+          ? StructuredInsights.fromJson(
+              json['structured_insights'] as Map<String, dynamic>,
+            )
           : null,
     );
   }

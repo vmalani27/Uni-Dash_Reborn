@@ -41,16 +41,19 @@ const Color kUrgencyNone = Color(0xFF6B7280);
 
 // ─── Helpers ────────────────────────────────────────────────
 Color topicColor(String normalizedTopic) {
-  switch (normalizedTopic) {
+  final key = normalizedTopic.trim().toUpperCase();
+  switch (key) {
     case 'ASSIGNMENT':
       return kTopicAssignment;
     case 'EXAM':
       return kTopicExam;
     case 'ACADEMIC_ADMIN':
+    case 'ACADEMIC':
       return kTopicAcademic;
     case 'OPPORTUNITY':
       return kTopicOpportunity;
     case 'INFORMATION':
+    case 'INFO':
       return kTopicInformation;
     default:
       return kTopicOther;
@@ -58,35 +61,44 @@ Color topicColor(String normalizedTopic) {
 }
 
 String topicLabel(String normalizedTopic) {
-  switch (normalizedTopic) {
+  final key = normalizedTopic.trim().toUpperCase();
+  switch (key) {
     case 'ASSIGNMENT':
       return 'Assignment';
     case 'EXAM':
       return 'Exam';
     case 'ACADEMIC_ADMIN':
+    case 'ACADEMIC':
       return 'Academic';
     case 'OPPORTUNITY':
       return 'Opportunity';
     case 'INFORMATION':
+    case 'INFO':
       return 'Info';
     case 'UNCLASSIFIED':
       return 'Unclassified';
     default:
-      return 'Other';
+      // For freeform AI labels, return title-cased label
+      final s = normalizedTopic.trim();
+      if (s.isEmpty) return 'Other';
+      return s[0].toUpperCase() + s.substring(1).toLowerCase();
   }
 }
 
 IconData topicIcon(String normalizedTopic) {
-  switch (normalizedTopic) {
+  final key = normalizedTopic.trim().toUpperCase();
+  switch (key) {
     case 'ASSIGNMENT':
       return Icons.assignment_outlined;
     case 'EXAM':
       return Icons.quiz_outlined;
     case 'ACADEMIC_ADMIN':
+    case 'ACADEMIC':
       return Icons.school_outlined;
     case 'OPPORTUNITY':
       return Icons.rocket_launch_outlined;
     case 'INFORMATION':
+    case 'INFO':
       return Icons.info_outline;
     default:
       return Icons.mail_outline;

@@ -32,6 +32,7 @@ from app.routers import notifications
 from app.routers import gmail_sync_routes
 from app.routers import sync_events
 from app.routers import health
+from app.routers import admin_routes
 from app.core import firebase_config  # Initialize Firebase Admin SDK
 from app.services.background_scheduler import ingestion_loop, ai_processing_loop
 
@@ -62,7 +63,7 @@ app = FastAPI(lifespan=lifespan)
 # Note: Before production, this should be restricted to specific domains (e.g., your Firebase hosting URL)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Allows all origins
+    allow_origins=["*"],  # Allows all origins
     allow_credentials=True,
     allow_methods=["*"],  # Allows all methods
     allow_headers=["*"],  # Allows all headers
@@ -75,6 +76,7 @@ app.include_router(notifications.router)
 app.include_router(gmail_sync_routes.router)
 app.include_router(sync_events.router)
 app.include_router(health.router)
+app.include_router(admin_routes.router)
 
 
 @app.get("/")

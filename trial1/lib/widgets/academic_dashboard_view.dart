@@ -117,24 +117,32 @@ class _AcademicDashboardViewState extends State<AcademicDashboardView> {
       onRefresh: _onRefresh,
       child: _items.isEmpty
           ? _buildEmptyState()
-          : ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              itemCount: _items.length,
-              itemBuilder: (context, index) {
-                final item = _items[index];
-                return AcademicItemCard(
-                  item: item,
-                  onTap: () async {
-                    final res = await Navigator.of(
-                      context,
-                    ).pushNamed('/item', arguments: item);
-                    if (res == true) {
-                      // Action performed in details screen; refresh dashboard
-                      _fetchDashboard();
-                    }
+          : Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 800),
+                child: ListView.builder(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  itemCount: _items.length,
+                  itemBuilder: (context, index) {
+                    final item = _items[index];
+                    return AcademicItemCard(
+                      item: item,
+                      onTap: () async {
+                        final res = await Navigator.of(
+                          context,
+                        ).pushNamed('/item', arguments: item);
+                        if (res == true) {
+                          // Action performed in details screen; refresh dashboard
+                          _fetchDashboard();
+                        }
+                      },
+                    );
                   },
-                );
-              },
+                ),
+              ),
             ),
     );
   }

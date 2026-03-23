@@ -14,7 +14,8 @@ class NotificationTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color topic = topicColor(notification.normalizedTopic);
+    final String topicKey = notification.aiLabelTopic ?? notification.normalizedTopic;
+    final Color topic = topicColor(topicKey);
     final bool hasDeadline = notification.deadlineIso != null;
 
     return Padding(
@@ -51,7 +52,7 @@ class NotificationTile extends StatelessWidget {
                   // Row 1: Topic chip + time
                   Row(
                     children: [
-                      _TopicChip(topic: notification.normalizedTopic),
+                      _TopicChip(topic: topicKey),
                       if (hasDeadline) ...[
                         const SizedBox(width: 8),
                         _DeadlineBadge(deadline: notification.deadlineIso!),

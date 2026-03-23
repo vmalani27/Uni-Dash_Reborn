@@ -41,6 +41,14 @@ SCOPES = [
     "profile",
 ]
 
+ADMIN_SCOPES = [
+    "https://www.googleapis.com/auth/gmail.readonly",
+    "https://www.googleapis.com/auth/gmail.send",
+    "openid",
+    "email",
+    "profile",
+]
+
 # -------------------------------
 # STEP 1: Generate Google OAuth URL
 # -------------------------------
@@ -60,6 +68,27 @@ def get_google_auth_url(
         "access_type": "offline",
         "prompt": "consent",
         "state": state,  # secure random state
+    }
+    url = GOOGLE_AUTH_URL + "?" + urllib.parse.urlencode(params)
+    return {"auth_url": url}
+
+@router.get("/admin/url")
+def get_admin_google_auth_url(
+    redirect_to: str = "unidash://admin/success",
+    firebase_data=Depends(verify_firebase_token)
+):
+    uid = firebase_data["uid"]
+    state = secrets.token_urlsafe(32)
+    # Tagging the state map so we could handle it via custom logic if necessary in callback
+    state_store[state] = {"uid": uid, "redirect_to": redirect_to, "role": "admin"}
+    params = {
+        "client_id": CLIENT_ID,
+        "redirect_uri": REDIRECT_URL,
+        "response_type": "code",
+        "scope": " ".join(ADMIN_SCOPES),
+        "access_type": "offline",
+        "prompt": "consent",
+        "state": state,
     }
     url = GOOGLE_AUTH_URL + "?" + urllib.parse.urlencode(params)
     return {"auth_url": url}
