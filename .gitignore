@@ -33,3 +33,8 @@ secrets.tar.gz
 
 # Machine_Learning_Algo
 Machine_Learning_Algo/__pycache__/
+
+# Local env + dev tools
+/backend/.env.dev
+/backend/.env.prod
+/trial1/devtools_options.yaml
