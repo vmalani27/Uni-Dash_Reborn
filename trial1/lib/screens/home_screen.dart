@@ -1,264 +1,221 @@
 import 'package:flutter/material.dart';
-import 'package:trial1/screens/profile_screen.dart';
-import 'package:trial1/models/UserProfile.dart';
+import 'package:trial1/widgets/focus_card.dart';
+import 'package:trial1/widgets/dashboard/category_overview.dart';
+import 'package:trial1/models/academic_models.dart';
+import 'package:trial1/widgets/dashboard/vertical_sections.dart';
+import 'package:trial1/widgets/dashboard/timeline_section.dart';
 import 'package:trial1/services/api_services.dart';
-import 'package:trial1/widgets/gmail_notifications_list.dart';
-import 'package:trial1/widgets/skeleton_loader.dart';
-import '../theme.dart';
-import 'main_scaffold.dart';
+import 'package:trial1/models/dashboard_models.dart';
 
-class HomeScreen extends StatefulWidget {
+class HomeScreen extends StatelessWidget {
   final VoidCallback? themeToggle;
   final ThemeMode? themeMode;
+
   const HomeScreen({super.key, this.themeToggle, this.themeMode});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
-}
-
-class _HomeScreenState extends State<HomeScreen> {
-  UserProfile? _profile;
-  bool _loading = true;
-  String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    _fetchProfile();
-  }
-
-  Future<void> _fetchProfile() async {
-    if (_profile == null) {
-      setState(() {
-        _loading = true;
-        _error = null;
-      });
-    }
-    try {
-      final data = await BackendService.fetchUserProfile();
-      if (mounted) {
-        setState(() {
-          _profile = UserProfile.fromJson(data);
-          _loading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = 'Failed to load profile. Please try again.';
-          _loading = false;
-        });
-      }
-    }
-  }
-
-  int _selectedIndex = 0;
-
-  void _onSidebarNav(int index) {
-    setState(() => _selectedIndex = index);
-    switch (index) {
-      case 0:
-        // Dashboard (current)
-        break;
-      case 1:
-        // Deadlines (TODO: implement)
-        break;
-      case 2:
-        // Assignments (TODO: implement)
-        break;
-      case 3:
-        Navigator.of(context).pushNamed('/profile');
-        break;
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final firstName = _profile?.name.split(' ').first ?? 'Student';
-    return MainScaffold(
-      selectedIndex: _selectedIndex,
-      onDestinationSelected: _onSidebarNav,
-      themeToggle: widget.themeToggle,
-      themeMode: widget.themeMode,
-      child: Column(
-        children: [
-          Container(
-            color: Theme.of(context).colorScheme.background,
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-            child: Row(
-              children: [
-                GestureDetector(
-                  onTap: () => _navigateToProfile(),
-                  child: Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [Theme.of(context).colorScheme.primary, Theme.of(context).colorScheme.secondary],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Center(
-                      child: Text(
-                        firstName[0].toUpperCase(),
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.onPrimary,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 16,
+    final maxContentWidth = 1100.0;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('UniDash'),
+        centerTitle: false,
+        actions: [
+          IconButton(
+            icon: Icon(
+              themeMode == ThemeMode.dark ? Icons.light_mode : Icons.dark_mode,
+            ),
+            onPressed: themeToggle,
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12.0),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(20),
+              onTap: () => Navigator.of(context).pushNamed('/profile'),
+              child: CircleAvatar(
+                radius: 16,
+                backgroundColor: Theme.of(
+                  context,
+                ).colorScheme.surfaceContainerHighest,
+                child: const Icon(Icons.person, size: 18),
+              ),
+            ),
+          ),
+        ],
+      ),
+      body: SingleChildScrollView(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxContentWidth),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16.0),
+              child: FutureBuilder<Map<String, dynamic>>(
+                future: BackendService.fetchUnifiedDashboard(),
+                builder: (context, snapshot) {
+                  // Loading state
+                  if (snapshot.connectionState != ConnectionState.done) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // banner placeholder
+                        Container(
+                          width: double.infinity,
+                          margin: const EdgeInsets.symmetric(horizontal: 16.0),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12.0,
+                            vertical: 8.0,
+                          ),
+                          decoration: BoxDecoration(
+                            color:
+                                Theme.of(
+                                  context,
+                                ).snackBarTheme.backgroundColor ??
+                                Theme.of(context).colorScheme.surface,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: Theme.of(
+                                context,
+                              ).dividerColor.withOpacity(0.12),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  'Loading dashboard...',
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        const SizedBox(height: 20),
+
+                        // Focus placeholder
+                        const FocusCard(),
+
+                        const SizedBox(height: 20),
+
+                        // Sections placeholder (empty)
+                        VerticalSections(groups: {}),
+
+                        const SizedBox(height: 20),
+
+                        // Timeline placeholder
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                          child: TimelineSection(groups: [], onItemTap: (_) {}),
+                        ),
+                      ],
+                    );
+                  }
+
+                  if (snapshot.hasError) {
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24.0),
+                        child: Column(
+                          children: [
+                            Text(
+                              'Failed to load dashboard',
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(snapshot.error.toString()),
+                            const SizedBox(height: 12),
+                            ElevatedButton(
+                              onPressed: () =>
+                                  (context as Element).reassemble(),
+                              child: const Text('Retry'),
+                            ),
+                          ],
                         ),
                       ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
+                    );
+                  }
+
+                  // Data ready: use unified dashboard from backend
+                  final json = snapshot.data ?? {};
+                  final data = UnifiedDashboardData.fromJson(json);
+
+                  // Determine a single nextAction across all groups (highest academicScore)
+                  final allItems = <AcademicItem>[];
+                  data.grouped.forEach((k, v) => allItems.addAll(v));
+
+                  AcademicItem? nextActionItem;
+                  if (allItems.isNotEmpty) {
+                    allItems.sort(
+                      (a, b) => b.academicScore.compareTo(a.academicScore),
+                    );
+                    nextActionItem = allItems.first;
+                  }
+
+                  // Single Focus
+                  final focusWidget = FocusCard(item: nextActionItem);
+
+                  // Category overview counts
+                  final counts = {
+                    'Assignments': data.grouped['ASSIGNMENT']?.length ?? 0,
+                    'Exams': data.grouped['EXAM']?.length ?? 0,
+                    'Opportunities': data.grouped['OPPORTUNITY']?.length ?? 0,
+                    'Announcements':
+                        data.grouped['ACADEMIC_ADMIN']?.length ?? 0,
+                  };
+
+                  return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        'Hi, $firstName',
-                        style: Theme.of(context).textTheme.titleMedium,
+                      focusWidget,
+                      const SizedBox(height: 20),
+
+                      // Category overview (collapsed)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                        child: CategoryOverview(
+                          counts: counts,
+                          onSelect: (label) {
+                            Navigator.of(context).pushNamed(
+                              '/dashboard/list',
+                              arguments: {'filter': label},
+                            );
+                          },
+                        ),
                       ),
-                      Text(
-                        'Your academic inbox',
-                        style: Theme.of(context).textTheme.bodySmall,
+
+                      const SizedBox(height: 20),
+
+                      // Timeline / Secondary info (row-only list)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                        child: TimelineSection(
+                          groups: data.timelineGroups,
+                          onItemTap: (raw) {
+                            final title = (raw['title'] != null)
+                                ? raw['title'].toString()
+                                : 'Event';
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Tapped: $title')),
+                            );
+                          },
+                        ),
                       ),
                     ],
-                  ),
-                ),
-                IconButton(
-                  icon: Icon(
-                    Icons.settings_outlined,
-                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.75),
-                    size: 22,
-                  ),
-                  onPressed: _navigateToProfile,
-                ),
-              ],
-            ),
-          ),
-          Expanded(child: _buildBody()),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBody() {
-    if (_loading && _profile == null) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(horizontal: 0),
-        child: SkeletonNotificationList(),
-      );
-    }
-
-    if (_error != null) {
-      return _buildErrorState();
-    }
-
-    if (_profile != null && _profile!.oauthConnected) {
-      return const GmailNotificationsList();
-    }
-
-    return SingleChildScrollView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: _buildOAuthPrompt(),
-    );
-  }
-
-  void _navigateToProfile() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const ProfileScreen()),
-    ).then((_) => _fetchProfile());
-  }
-
-  Widget _buildErrorState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: kUrgencyCritical.withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Icons.error_outline,
-              color: kUrgencyCritical.withOpacity(0.7),
-              size: 48,
-            ),
-          ),
-          const SizedBox(height: 20),
-          Text(
-            _error!,
-            style: Theme.of(context).textTheme.bodyMedium,
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 24),
-          ElevatedButton.icon(
-            onPressed: _fetchProfile,
-            icon: const Icon(Icons.refresh, size: 18),
-            label: const Text('Retry'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildOAuthPrompt() {
-    return Padding(
-      padding: const EdgeInsets.only(top: 40),
-      child: Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Theme.of(context).colorScheme.primary.withOpacity(0.1)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Theme.of(context).colorScheme.primary.withOpacity(0.15),
-                    Theme.of(context).colorScheme.secondary.withOpacity(0.08),
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Icon(
-                Icons.mail_outline,
-                color: Theme.of(context).colorScheme.primary,
-                size: 28,
+                  );
+                },
               ),
             ),
-            const SizedBox(height: 20),
-            Text(
-              'Connect Gmail',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Link your university email to get AI-powered notifications, deadline tracking, and smart organization.',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _navigateToProfile,
-                child: const Text('Connect Now'),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );

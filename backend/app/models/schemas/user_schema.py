@@ -16,7 +16,8 @@ class UserOut(BaseModel):
     branch: Optional[str] = None
     sid: Optional[str] = None
     profile_completed: bool
-    oauth_connected: bool  # <-- Add this line
+    oauth_connected: bool
+    admin_connected: bool  # indicates whether the user connected an admin (send) capable Gmail account
 
     class Config:
         orm_mode = True

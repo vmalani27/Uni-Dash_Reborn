@@ -61,6 +61,29 @@ graph LR
    ```bash
    alembic upgrade head
    ```
+   
+### Alembic: Auto-generate & Run Migrations
+
+If you've changed SQLAlchemy models and need to create a migration, use Alembic's autogenerate feature:
+
+1. Create an auto-generated revision (run from the `backend` directory):
+```bash
+PYTHONPATH=$(pwd) alembic revision --autogenerate -m "Describe your change"
+```
+
+2. Inspect the generated file under `alembic/versions/` and edit if necessary.
+
+3. Apply the migration to your database:
+```bash
+PYTHONPATH=$(pwd) alembic upgrade head
+```
+
+Notes:
+- Ensure your `alembic.ini` is configured to use the correct `sqlalchemy.url` (or read from env). The project's `alembic/env.py` is configured to import `app` models when `PYTHONPATH` includes the `backend` folder.
+- If Alembic reports multiple heads, inspect `alembic/versions/` and set correct `down_revision` values or merge heads with:
+```bash
+alembic merge -m "merge heads" <head1> <head2>
+```
 
 ### 3. Running Locally
 ```bash

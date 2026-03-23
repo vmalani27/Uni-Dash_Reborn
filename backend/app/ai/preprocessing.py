@@ -5,10 +5,10 @@ import unicodedata
 TRUNCATE_LIMIT = 800
 
 # Keywords for "Level 0" cheap filtering (bypass LLM)
+# NOTE: Disabled aggressive filtering - letting LLM classify all emails
+# The scoring system will naturally deprioritize low-value emails
 TRIVIAL_KEYWORDS = [
-    "thank you", "thanks for", "welcome to", "newsletter", "unsubscribed",
-    "subscription", "verify your email", "password reset", "one-time password",
-    "otp", "sign-in attempt", "no-reply", "don't reply", "automated message"
+    # Disabled - too many false positives with legitimate academic emails
 ]
 
 

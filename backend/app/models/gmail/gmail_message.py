@@ -1,5 +1,5 @@
 import datetime
-from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean
+from sqlalchemy import Column, Integer, String, Text, DateTime, Float, Boolean
 from app.core.database import Base
 
 
@@ -19,24 +19,22 @@ class GmailMessage(Base):
     body_text = Column(Text)
     internal_date = Column(DateTime)                # Gmail timestamp
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
-
-    # AI inference fields
-    ai_summary = Column(Text, nullable=True)
-    ai_label_topic = Column(String, nullable=True)
-    ai_label_urgency = Column(String, nullable=True)
-    ai_label_source = Column(String, nullable=True)
-    ai_processed = Column(Boolean, default=False)
-    ai_status = Column(String, default="pending") # pending, processing, completed, failed
     
-    # Normalized academic category (ASSIGNMENT, EXAM, ACADEMIC_ADMIN, OPPORTUNITY, INFORMATION, OTHER)
-    normalized_topic = Column(String, default="OTHER")
+    # AI Processing fields
+    ai_status = Column(String, nullable=True)       # None, pending, processing, failed, completed
+    ai_processed = Column(Boolean, default=False)   # True when AI inference completed
+    ai_summary = Column(Text, nullable=True)        # LLM-generated summary
+    ai_label_topic = Column(String, nullable=True)  # LLM topic classification
+    ai_label_urgency = Column(String, nullable=True)  # LLM urgency level
+    ai_label_source = Column(String, nullable=True)  # Extracted source/domain
+    # Broadcast tracking header (X-UniDash-Broadcast-ID)
+    unidash_broadcast_id = Column(String, nullable=True, index=True)
     
-    # Deadline extraction fields
-    deadline_iso = Column(DateTime, nullable=True)
-    deadline_confidence = Column(String, default="None")
-    
-    # Academic intelligence score
-    academic_score = Column(Integer, default=0)
+    # Extracted metadata fields
+    deadline_iso = Column(DateTime, nullable=True)  # Detected deadline
+    deadline_confidence = Column(String, nullable=True)  # Confidence level for deadline
+    academic_score = Column(Float, default=0.0)     # Academic relevance score (0.0-1.0)
+    normalized_topic = Column(String, nullable=True)  # Academic ontology topic
 
 
 
@@ -55,4 +53,3 @@ class GmailSyncStatus(Base):
     next_page_token = Column(String, default=None)      # Gmail API pagination
     sync_type = Column(String, default='full')          # 'full' or 'incremental'
     last_history_id = Column(String, default=None)      # Gmail History API cursor
-    new_messages_count = Column(Integer, default=0)     # New messages in current sync session

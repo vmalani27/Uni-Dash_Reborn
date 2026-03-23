@@ -4,7 +4,6 @@ import 'package:trial1/screens/entry/intro_screen.dart';
 import 'package:trial1/screens/home_screen.dart';
 import 'package:trial1/screens/profile_setup_screen.dart';
 import 'package:trial1/services/api_services.dart';
-import 'package:trial1/theme.dart';
 
 class AuthGate extends StatelessWidget {
   final VoidCallback? themeToggle;
@@ -19,7 +18,7 @@ class AuthGate extends StatelessWidget {
         final colorScheme = Theme.of(context).colorScheme;
         if (authSnapshot.connectionState == ConnectionState.waiting) {
           return Scaffold(
-            backgroundColor: colorScheme.background,
+            backgroundColor: colorScheme.surface,
             body: Center(
               child: CircularProgressIndicator(color: colorScheme.primary),
             ),
@@ -34,7 +33,7 @@ class AuthGate extends StatelessWidget {
           builder: (context, profileSnapshot) {
             if (profileSnapshot.connectionState == ConnectionState.waiting) {
               return Scaffold(
-                backgroundColor: colorScheme.background,
+                backgroundColor: colorScheme.surface,
                 body: Center(
                   child: CircularProgressIndicator(color: colorScheme.primary),
                 ),
@@ -42,7 +41,7 @@ class AuthGate extends StatelessWidget {
             }
             if (profileSnapshot.hasError) {
               return Scaffold(
-                backgroundColor: colorScheme.background,
+                backgroundColor: colorScheme.surface,
                 body: Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -64,11 +63,11 @@ class AuthGate extends StatelessWidget {
             }
             if (!profileSnapshot.hasData) {
               return Scaffold(
-                backgroundColor: colorScheme.background,
+                backgroundColor: colorScheme.surface,
                 body: Center(
                   child: Text(
                     'No profile found',
-                    style: TextStyle(color: colorScheme.onBackground.withOpacity(0.7)),
+                    style: TextStyle(color: colorScheme.onSurface.withOpacity(0.7)),
                   ),
                 ),
               );

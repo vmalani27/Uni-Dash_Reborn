@@ -25,7 +25,7 @@ class GmailNotificationsList extends StatefulWidget {
 class _GmailNotificationsListState extends State<GmailNotificationsList>
     with WidgetsBindingObserver {
   bool _loading = true;
-  bool _loadingMore = false;
+  final bool _loadingMore = false;
   String? _error;
   List<GmailNotificationPreview> _allNotifications = [];
 
@@ -155,16 +155,18 @@ class _GmailNotificationsListState extends State<GmailNotificationsList>
         }
       }
 
-      setState(() {
-        _allNotifications = result.notifications;
-        _currentOffset = result.notifications.length;
-        _hasMoreData = result.notifications.length >= _pageSize;
-        _unprocessedCount = unprocessed;
-        _isFirstSync = firstSync;
-        _isOrganizedView =
-            unprocessed < result.notifications.length &&
-            result.notifications.isNotEmpty;
-      });
+      if (mounted) {
+        setState(() {
+          _allNotifications = result.notifications;
+          _currentOffset = result.notifications.length;
+          _hasMoreData = result.notifications.length >= _pageSize;
+          _unprocessedCount = unprocessed;
+          _isFirstSync = firstSync;
+          _isOrganizedView =
+              unprocessed < result.notifications.length &&
+              result.notifications.isNotEmpty;
+        });
+      }
 
       // If first sync, refresh faster to pick up incoming emails
       if (firstSync) {
@@ -175,37 +177,19 @@ class _GmailNotificationsListState extends State<GmailNotificationsList>
         );
       }
     } catch (e) {
-      setState(() => _error = e.toString());
+      if (mounted) {
+        setState(() => _error = e.toString());
+      }
     } finally {
-      setState(() => _loading = false);
+      if (mounted) {
+        setState(() => _loading = false);
+      }
     }
   }
 
   Future<void> _loadMoreNotifications() async {
-    if (_loadingMore || !_hasMoreData) return;
-    setState(() => _loadingMore = true);
-
-    try {
-      final response = await BackendService.fetchGmailNotifications(
-        offset: _currentOffset,
-        limit: _pageSize,
-      );
-      final newNotifications = response
-          .map(
-            (n) => GmailNotificationPreview.fromJson(n as Map<String, dynamic>),
-          )
-          .toList();
-
-      setState(() {
-        _allNotifications.addAll(newNotifications);
-        _currentOffset += newNotifications.length;
-        _hasMoreData = newNotifications.length >= _pageSize;
-      });
-    } catch (e) {
-      print('[Pagination] Error: $e');
-    } finally {
-      setState(() => _loadingMore = false);
-    }
+    // Pagination is not currently needed - all notifications are loaded upfront
+    // This method is retained for future use when backend endpoints support streaming/pagination
   }
 
   // ─── Build ──────────────────────────────────────────────────
@@ -219,12 +203,12 @@ class _GmailNotificationsListState extends State<GmailNotificationsList>
 
     // Error state
     if (_error != null && _allNotifications.isEmpty) {
-      return _buildErrorState();
+      return _buildErrorState(context);
     }
 
     // Empty state
     if (_allNotifications.isEmpty) {
-      return _buildEmptyState();
+      return _buildEmptyState(context);
     }
 
     return RefreshIndicator(
@@ -275,7 +259,9 @@ class _GmailNotificationsListState extends State<GmailNotificationsList>
                     height: 24,
                     child: CircularProgressIndicator(
                       strokeWidth: 2.5,
-                      valueColor: AlwaysStoppedAnimation(Theme.of(context).colorScheme.primary),
+                      valueColor: AlwaysStoppedAnimation(
+                        Theme.of(context).colorScheme.primary,
+                      ),
                     ),
                   ),
                 ),
@@ -304,7 +290,7 @@ class _GmailNotificationsListState extends State<GmailNotificationsList>
 
   // ─── State Widgets ──────────────────────────────────────────
 
-  Widget _buildErrorState() {
+  Widget _buildErrorState(BuildContext context) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -314,13 +300,13 @@ class _GmailNotificationsListState extends State<GmailNotificationsList>
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: kUrgencyCritical.withOpacity(0.1), // keep as is, theme constant
+                color: kUrgencyCritical.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 Icons.wifi_off_rounded,
                 size: 40,
-                color: kUrgencyCritical.withOpacity(0.7), // keep as is, theme constant
+                color: kUrgencyCritical.withValues(alpha: 0.7),
               ),
             ),
             const SizedBox(height: 20),
@@ -346,7 +332,7 @@ class _GmailNotificationsListState extends State<GmailNotificationsList>
     );
   }
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState(BuildContext context) {
     // ─ First-time sync in progress ─
     if (_isFirstSync) {
       return Center(
@@ -358,7 +344,9 @@ class _GmailNotificationsListState extends State<GmailNotificationsList>
               Container(
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primary.withOpacity(0.08),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.primary.withValues(alpha: 0.08),
                   shape: BoxShape.circle,
                 ),
                 child: SizedBox(
@@ -366,7 +354,9 @@ class _GmailNotificationsListState extends State<GmailNotificationsList>
                   height: 48,
                   child: CircularProgressIndicator(
                     strokeWidth: 3,
-                    valueColor: AlwaysStoppedAnimation(Theme.of(context).colorScheme.primary),
+                    valueColor: AlwaysStoppedAnimation(
+                      Theme.of(context).colorScheme.primary,
+                    ),
                   ),
                 ),
               ),
@@ -378,9 +368,11 @@ class _GmailNotificationsListState extends State<GmailNotificationsList>
               const SizedBox(height: 8),
               Text(
                 'Syncing your emails for the first time.\nThis may take a minute.',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7)),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.7),
+                ),
                 textAlign: TextAlign.center,
               ),
             ],
@@ -405,7 +397,9 @@ class _GmailNotificationsListState extends State<GmailNotificationsList>
               child: Icon(
                 Icons.inbox_outlined,
                 size: 48,
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.4),
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: 0.4),
               ),
             ),
             const SizedBox(height: 24),

@@ -81,6 +81,32 @@ def extract_body(msg):
 def extract_timestamp(msg):
     return msg.get("internalDate", "")
 
+
+def extract_headers_map(msg_or_payload):
+    """
+    Safely extract headers from a Gmail message or payload and return a dict mapping
+    header name -> value. Header names are returned with their original case but
+    lookups should generally be case-insensitive.
+    """
+    headers = []
+    # msg_or_payload may be a full message dict or a payload dict
+    if isinstance(msg_or_payload, dict):
+        # Try payload.headers first
+        payload = msg_or_payload.get("payload") if "payload" in msg_or_payload else msg_or_payload
+        headers = payload.get("headers", []) if payload else []
+
+    result = {}
+    for h in headers:
+        try:
+            name = h.get("name")
+            value = h.get("value")
+            if name:
+                result[name] = value
+        except Exception:
+            continue
+
+    return result
+
 def normalize_gmail(msg):
     return {
         "source": "gmail",

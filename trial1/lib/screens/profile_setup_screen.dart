@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:trial1/screens/home_screen.dart';
 import 'package:trial1/services/api_services.dart';
-import '../theme.dart';
 
 class ProfileSetupScreen extends StatefulWidget {
   final VoidCallback? themeToggle;
@@ -36,9 +35,9 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     return Scaffold(
-      backgroundColor: colorScheme.background,
+      backgroundColor: colorScheme.surface,
       appBar: AppBar(
-        backgroundColor: colorScheme.background,
+        backgroundColor: colorScheme.surface,
         elevation: 0,
         title: Text(
           'Complete Your Profile',
@@ -204,7 +203,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
         labelText: label,
         labelStyle: textTheme.bodyMedium?.copyWith(color: colorScheme.onSurface.withOpacity(0.7)),
         filled: true,
-        fillColor: colorScheme.surfaceVariant,
+        fillColor: colorScheme.surfaceContainerHighest,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide.none,

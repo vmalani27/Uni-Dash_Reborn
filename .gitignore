@@ -17,6 +17,8 @@ Machine_Learning_Algo/venv
 
 # Secrets
 backend/.env
+backend/.env.dev
+backend/.env.prod
 backend/WEB_CLIENT_OAUTH_SECRET.json
 backend/app/core/credentials.json
 trial1/.env

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../theme.dart';
 import 'widgets/branding_section.dart';
 import 'widgets/auth_card.dart';
 
@@ -9,7 +8,7 @@ class IntroScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Theme.of(context).colorScheme.background,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       body: LayoutBuilder(builder: (context, constraints) {
         final isWide = constraints.maxWidth >= 900;
 
@@ -80,7 +79,7 @@ class IntroScreen extends StatelessWidget {
 }
 
 class _IntroFooter extends StatelessWidget {
-  const _IntroFooter({Key? key}) : super(key: key);
+  const _IntroFooter();
 
   @override
   Widget build(BuildContext context) {

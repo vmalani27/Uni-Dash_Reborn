@@ -10,13 +10,13 @@ class MainScaffold extends StatelessWidget {
   final VoidCallback? themeToggle;
   final ThemeMode? themeMode;
   const MainScaffold({
-    Key? key,
+    super.key,
     required this.child,
     required this.selectedIndex,
     required this.onDestinationSelected,
     this.themeToggle,
     this.themeMode,
-  }) : super(key: key);
+  });
 
   static const List<_NavItem> _navItems = [
     _NavItem('Dashboard', Icons.dashboard_outlined),
@@ -67,12 +67,11 @@ class _SidebarContent extends StatelessWidget {
   final ThemeMode? themeMode;
 
   const _SidebarContent({
-    Key? key,
     required this.selectedIndex,
     required this.onDestinationSelected,
     this.themeToggle,
     this.themeMode,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

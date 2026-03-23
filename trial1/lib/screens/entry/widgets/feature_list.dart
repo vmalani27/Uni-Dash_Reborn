@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../../../theme.dart';
 
 class FeatureList extends StatelessWidget {
   const FeatureList({super.key});
