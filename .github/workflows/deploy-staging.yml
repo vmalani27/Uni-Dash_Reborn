@@ -20,10 +20,9 @@ jobs:
       - name: Create environment variables file
         # Using a staging specific secret if available, otherwise fallback to standard
         run: |
-          if [ -n "${{ secrets.STAGING_ENVIRONMENT_VARIABLES }}" ]; then
-            echo '${{ secrets.STAGING_ENVIRONMENT_VARIABLES }}' > backend/.env
-          else
-            echo '${{ secrets.ENVIRONMENT_VARIABLES }}' > backend/.env
+          if [ -n "${{ secrets.STAGING_ENVIRONMENT }}" ]; then
+            echo '${{ secrets.STAGING_ENVIRONMENT }}' > backend/.env.staging
+         
           fi
 
       - name: Build Docker image
@@ -46,7 +45,7 @@ jobs:
           --health-interval 30s \
           --health-timeout 10s \
           --health-retries 3 \
-          -v ${{ github.workspace }}/backend/.env:/backend/.env \
+          -v ${{ github.workspace }}/backend/.env.staging:/backend/.env \
           -v ${{ github.workspace }}/backend/credentials.json:/backend/app/core/credentials.json \
           unidash-backend-staging
     
