@@ -1,6 +1,8 @@
 # trial1
 
 A new Flutter project.
+## Secrets
+The trial1 project uses secret configuration files located in `assets/env_config`. Ensure these files are not committed to version control.
 
 ## Getting Started
 

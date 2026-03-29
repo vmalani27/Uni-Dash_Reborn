@@ -12,9 +12,7 @@ class FocusCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final AcademicItem? _item = item;
-    final AcademicEvent? _event = event;
-    if (_item == null && _event == null) {
+    if (item == null && event == null) {
       return Container(
         margin: const EdgeInsets.symmetric(horizontal: 16.0),
         padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 12.0),
@@ -29,16 +27,16 @@ class FocusCard extends StatelessWidget {
       );
     }
 
-    // Normalize fields from either AcademicItem or AcademicEvent
-    final title = _event?.title ?? _item!.title;
-    final summary = _event?.summary ?? _item!.aiSummary;
-    final labelTopic = _event != null
-        ? _event.type.toString().split('.').last.toUpperCase()
-        : (_item?.aiLabelTopic ?? _item?.entityType);
-    final due = _event?.deadline ?? _item!.dueDate;
-    final entityForColor = labelTopic;
-
-    final color = topicColor(entityForColor!);
+    // Normalize fields from either AcademicItem or AcademicEvent, handling nulls safely.
+    final title = event?.title ?? item?.title ?? '';
+    final summary = event?.summary ?? item?.aiSummary ?? '';
+    final labelTopic = event != null
+      ? event!.type.toString().split('.').last.toUpperCase()
+      : (item?.aiLabelTopic ?? item?.entityType ?? 'UNKNOWN');
+    final due = event?.deadline ?? item?.dueDate;
+    // Ensure we always pass a non‑null string to topicColor.
+    final entityForColor = labelTopic ?? 'UNKNOWN';
+    final color = topicColor(entityForColor);
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -125,7 +123,8 @@ class FocusCard extends StatelessWidget {
           const SizedBox(height: 16),
           Row(
             children: [
-              if (due != null) ...[
+              // Show deadline only for active or upcoming events
+              if (due != null && (event?.isActive ?? true)) ...[
                 Icon(
                   Icons.event_available_outlined,
                   size: 16,

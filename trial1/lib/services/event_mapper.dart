@@ -78,24 +78,35 @@ AcademicEvent mapNotificationToEvent(GmailNotificationPreview notification) {
 List<AcademicEvent> mapNotificationsToEvents(List<GmailNotificationPreview> notifications) {
   final events = notifications.map(mapNotificationToEvent).toList();
 
-  // Sort: highest sortKey first, break ties by deadline (nearest), then by date
+  // Helper to order lifecycle buckets: ACTIVE < UPCOMING < EXPIRED (lower value = higher priority)
+  int _lifecycleOrder(AcademicEvent e) {
+    if (e.isActive) return 0;
+    if (e.isUpcoming) return 1;
+    return 2; // expired
+  }
+
+  // Sort: first by lifecycle bucket, then by sortKey (urgency+score), then deadline, then recency
   events.sort((a, b) {
+    final lifecycleA = _lifecycleOrder(a);
+    final lifecycleB = _lifecycleOrder(b);
+    if (lifecycleA != lifecycleB) return lifecycleA.compareTo(lifecycleB);
+
+    // Within same lifecycle, keep existing priority ordering
     if (a.sortKey != b.sortKey) {
-      return b.sortKey.compareTo(a.sortKey); // Descending: higher priority first
+      return b.sortKey.compareTo(a.sortKey); // higher sortKey first
     }
 
-    // If urgency is same, prioritize by deadline (soonest first)
+    // Then deadline (nearest first)
     if (a.deadline != null && b.deadline != null) {
       return a.deadline!.compareTo(b.deadline!);
     }
-    if (a.deadline != null) return -1; // a has deadline, b doesn't — a comes first
-    if (b.deadline != null) return 1; // b has deadline, a doesn't — b comes first
+    if (a.deadline != null) return -1;
+    if (b.deadline != null) return 1;
 
-    // Fall back to recency (newest first)
+    // Finally recency (newest first)
     if (a.receivedAt != null && b.receivedAt != null) {
-      return b.receivedAt!.compareTo(a.receivedAt!); // Descending: newest first
+      return b.receivedAt!.compareTo(a.receivedAt!);
     }
-
     return 0;
   });
 

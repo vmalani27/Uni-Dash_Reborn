@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:trial1/models/UserProfile.dart';
+import 'package:trial1/models/user_profile.dart';
 import 'package:trial1/services/api_services.dart';
 import 'package:trial1/services/authentication_service.dart';
 
@@ -345,16 +345,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     final ok =
                                         snap.hasData &&
                                         snap.data!['ok'] == true;
-                                    final ai = snap.hasData
-                                        ? (snap.data!['details']
-                                                          as Map<
-                                                            String,
-                                                            dynamic
-                                                          >? ??
-                                                      {})['ai_worker']
-                                                  as String? ??
-                                              'unknown'
-                                        : 'loading';
+
                                     return Row(
                                       children: [
                                         _statusRow(
@@ -566,31 +557,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildInfoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 14,
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.75),
-            ),
-          ),
-          Text(
-            value.isNotEmpty ? value : '-',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: Theme.of(context).colorScheme.onSurface,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+
 
   Widget _buildSmallInfoCard(
     IconData icon,
@@ -674,12 +641,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildDivider() {
-    return Divider(
-      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2),
-      height: 1,
-    );
-  }
+
 
   Future<void> _handleOAuthConnect() async {
     setState(() {
