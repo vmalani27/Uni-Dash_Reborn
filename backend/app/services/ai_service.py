@@ -39,7 +39,7 @@ def _is_platform_sender(domain_profile, sender: str, platform_key: str) -> bool:
 
 
 # Ollama configuration (kept unchanged)
-OLLAMA_URL = "http://127.0.0.1:11434/api/generate"
+OLLAMA_URL = os.getenv("OLLAMA_URL","127.0.0.1:11434/api/generate")
 MODEL_20B = os.getenv("OLLAMA_MODEL_20B", "gpt-oss:20b-cloud")
 MODEL_120B = os.getenv("OLLAMA_MODEL_120B", "gpt-oss:120b-cloud")
 

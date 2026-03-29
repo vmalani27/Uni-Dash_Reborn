@@ -29,7 +29,7 @@ GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 
 CLIENT_ID = os.getenv("CLIENT_ID")
 CLIENT_SECRET = os.getenv("CLIENT_SECRET")
-REDIRECT_URL = os.getenv("BACKEND_REDIRECT_URI")
+REDIRECT_URL = os.getenv("LOCAL_REDIRECT_URI")
 
 SCOPES = [
     "https://www.googleapis.com/auth/gmail.readonly",
