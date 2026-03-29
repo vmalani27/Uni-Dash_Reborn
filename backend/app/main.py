@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 
 
 # Load dotenv file by name if provided, otherwise fall back to ../.env
-dotenv_file = os.path.join(os.path.dirname(__file__), '..', '.env')
+dotenv_file = os.path.join(os.path.dirname(__file__), '..', '.env.dev')
 
 # replace dev with prod based on branch, for feature branch stay on env.dev, 
 from pathlib import Path

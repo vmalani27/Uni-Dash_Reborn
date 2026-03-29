@@ -1,7 +1,7 @@
-import requests
 import json
 import datetime
 import os
+from ollama import Client
 from typing import Optional, Dict, Any
 
 from app.ai.preprocessing import preprocess_email_for_llm
@@ -303,23 +303,24 @@ class AIService:
         """
         print(f"[AI] Ollama -> {model}")
 
-        response = requests.post(
-            OLLAMA_URL,
-            json={
-                "model": model,
-                "prompt": prompt,
-                "stream": False,
-                "options": {
-                    "temperature": 0.0,
-                    "top_p": 0.1,
-                    "num_predict": 2000,
-                },
-            },
-            timeout=(5, 120),
+        # Use the Ollama Python client for remote inference
+        client = Client(
+            host="https://ollama.com",
+            headers={"Authorization": "Bearer " + os.getenv("OLLAMA_API_KEY", "")},
         )
 
-        response.raise_for_status()
-        raw = response.json().get("response", "") or ""
+        # The client.generate method returns a dict with a 'response' field containing the generated text.
+        result = client.generate(
+            model=model,
+            prompt=prompt,
+            options={
+                "temperature": 0.0,
+                "top_p": 0.1,
+                "num_predict": 2000,
+            },
+        )
+
+        raw = result.get("response", "") or ""
 
         # Remove simple markdown fences only
         if raw.startswith("```json"):
