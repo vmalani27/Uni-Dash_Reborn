@@ -1,0 +1,222 @@
+2026-03-28 19:52:19,227 | INFO     | ================================================================================
+2026-03-28 19:52:19,227 | INFO     | Starting Phase 1: Auto Pre-Label All Emails
+2026-03-28 19:52:19,227 | INFO     | ================================================================================
+2026-03-28 19:52:19,273 | INFO     | Loaded input file: source_labeled_dataset.csv (1522 emails)
+2026-03-28 19:52:19,275 | INFO     | Starting new pre-labeling session
+2026-03-28 19:52:19,275 | INFO     | Progress - Total: 1522 | Done: 0 | Remaining: 1522
+2026-03-28 19:52:37,741 | WARNING  | Failed to extract JSON from: {
+  "decision": "OPPORTUNITY",
+  "confidence": 100,
+  "reasoning": "The email content describes a ca
+2026-03-28 19:52:46,987 | WARNING  | Failed to extract JSON from: {
+  "decision": "OPPORTUNITY",
+  "confidence": 100,
+  "reasoning": "The email content describes a ca
+2026-03-28 19:54:31,373 | INFO     | Progress: 50/1522
+2026-03-28 19:57:03,375 | INFO     | Progress: 100/1522
+2026-03-28 19:57:56,056 | WARNING  | Failed to extract JSON from: {
+"decision": "IGNORE",
+"confidence": 100,
+"reasoning": "The email is a meeting report and does not 
+2026-03-28 19:59:34,679 | INFO     | Progress: 150/1522
+2026-03-28 20:01:37,476 | WARNING  | Failed to extract JSON from: {
+"decision": "IGNORE",
+"confidence": 100,
+"reasoning": "The email content does not require any acad
+2026-03-28 20:02:11,867 | INFO     | Progress: 200/1522
+2026-03-28 20:04:48,099 | INFO     | Progress: 250/1522
+2026-03-28 20:07:05,786 | INFO     | Progress: 300/1522
+2026-03-28 20:09:34,161 | INFO     | Progress: 350/1522
+2026-03-28 20:11:56,820 | INFO     | Progress: 400/1522
+2026-03-28 20:12:45,368 | WARNING  | Failed to extract JSON from: Based on the provided email content, I classify this email as:
+
+**ADMIN**
+
+Reasoning: The email appe
+2026-03-28 20:14:29,110 | INFO     | Progress: 450/1522
+2026-03-28 20:16:58,111 | INFO     | Progress: 500/1522
+2026-03-28 20:18:01,589 | WARNING  | Failed to extract JSON from: {
+  "decision": "ADMIN",
+  "confidence": 100,
+  "reasoning": "The email is about a mandatory institu
+2026-03-28 20:19:10,084 | WARNING  | Failed to extract JSON from: {
+  "decision": "ADMIN",
+  "confidence": 100,
+  "reasoning": "The email is about a mandatory institu
+2026-03-28 20:19:10,085 | INFO     | Progress: 550/1522
+2026-03-28 20:20:38,810 | WARNING  | Failed to extract JSON from: {
+  "decision": "ADMIN",
+  "confidence": 100,
+  "reasoning": "The email is about a mandatory institu
+2026-03-28 20:20:58,894 | WARNING  | Failed to extract JSON from: Based on the email content and the definitions provided, I would classify this email as:
+
+**IGNORE**
+2026-03-28 20:21:49,388 | INFO     | Progress: 600/1522
+2026-03-28 20:24:12,119 | INFO     | Progress: 650/1522
+2026-03-28 20:26:32,064 | INFO     | Progress: 700/1522
+2026-03-28 20:27:49,585 | WARNING  | Failed to extract JSON from: {
+  "decision": "EXAM",
+  "confidence": 100,
+  "reasoning": "The email mentions an upcoming universi
+2026-03-28 20:29:08,933 | INFO     | Progress: 750/1522
+2026-03-28 20:29:24,349 | WARNING  | Failed to extract JSON from: {
+  "decision": "IGNORE",
+  "confidence": 100,
+  "reasoning": "No meaningful academic action require
+2026-03-28 20:30:30,225 | WARNING  | Failed to extract JSON from: {
+  "decision": "IGNORE",
+  "confidence": 100,
+  "reasoning": "No meaningful academic action require
+2026-03-28 20:30:39,916 | WARNING  | Failed to extract JSON from: {
+  "decision": "IGNORE",
+  "confidence": 100,
+  "reasoning": "No meaningful academic action require
+2026-03-28 20:31:22,144 | INFO     | Progress: 800/1522
+2026-03-28 20:32:06,823 | WARNING  | Failed to extract JSON from: {
+  "decision": "IGNORE",
+  "confidence": 100,
+  "reasoning": "No meaningful academic action require
+2026-03-28 20:33:45,029 | INFO     | Progress: 850/1522
+2026-03-28 20:35:11,822 | WARNING  | Failed to extract JSON from: {
+  "decision": "IGNORE",
+  "confidence": 100,
+  "reasoning": "No meaningful academic action require
+2026-03-28 20:36:03,592 | WARNING  | Failed to extract JSON from: {
+  "decision": "OPPORTUNITY",
+  "confidence": 100,
+  "reasoning": "The email is about a student eve
+2026-03-28 20:36:09,764 | INFO     | Progress: 900/1522
+2026-03-28 20:38:00,651 | WARNING  | Failed to extract JSON from: {
+  "decision": "IGNORE",
+  "confidence": 100,
+  "reasoning": "No meaningful academic action require
+2026-03-28 20:38:41,890 | INFO     | Progress: 950/1522
+2026-03-28 20:41:15,090 | INFO     | Progress: 1000/1522
+2026-03-28 20:43:39,239 | INFO     | Progress: 1050/1522
+2026-03-28 20:46:11,055 | INFO     | Progress: 1100/1522
+2026-03-28 20:46:44,816 | WARNING  | Failed to extract JSON from: {
+  "decision": "ADMIN",
+  "confidence": 100,
+  "reasoning": "The email is from an institutional sen
+2026-03-28 20:47:14,710 | WARNING  | Failed to extract JSON from: {
+  "decision": "ADMIN",
+  "confidence": 100,
+  "reasoning": "The email is from an institutional sen
+2026-03-28 20:47:17,160 | WARNING  | Failed to extract JSON from: {
+  "decision": "ADMIN",
+  "confidence": 100,
+  "reasoning": "The email is from an institutional sen
+2026-03-28 20:48:34,354 | INFO     | Progress: 1150/1522
+2026-03-28 20:50:59,610 | INFO     | Progress: 1200/1522
+2026-03-28 20:53:39,674 | INFO     | Progress: 1250/1522
+2026-03-28 20:56:03,858 | INFO     | Progress: 1300/1522
+2026-03-28 20:58:29,375 | INFO     | Progress: 1350/1522
+2026-03-28 21:00:56,810 | INFO     | Progress: 1400/1522
+2026-03-28 21:01:57,436 | WARNING  | Failed to extract JSON from: Based on the email content, I would classify this email as **ADMIN**.
+
+Reasoning: The email appears 
+2026-03-28 21:02:08,487 | WARNING  | Failed to extract JSON from: {
+  "decision": "OPPORTUNITY",
+  "confidence": 100,
+  "reasoning": "The email is about a program app
+2026-03-28 21:03:10,772 | WARNING  | Failed to extract JSON from: I would classify this email into the category: "Hackathon Invitation and Update".
+2026-03-28 21:03:51,066 | INFO     | Progress: 1450/1522
+2026-03-28 21:06:19,573 | INFO     | Progress: 1500/1522
+2026-03-28 21:07:24,572 | INFO     | Final output saved: auto_labeled_full.csv
+2026-03-28 21:07:24,576 | INFO     | 
+================================================================================
+2026-03-28 21:07:24,576 | INFO     | Pre-labeling Complete - Summary Statistics
+2026-03-28 21:07:24,576 | INFO     | ================================================================================
+2026-03-28 21:07:24,577 | INFO     | 
+Decision Distribution:
+pred_decision
+OPPORTUNITY    534
+IGNORE         474
+ADMIN          293
+EXAM           169
+SUBMIT          52
+2026-03-28 21:07:24,578 | INFO     | 
+Source Distribution:
+label_source
+Institutional Sender          918
+External / Misc               430
+External Academic Platform    140
+Student / Peer                 34
+2026-03-28 21:07:24,578 | INFO     | 
+JSON Valid: 1499/1522 (98.5%)
+2026-03-28 21:07:24,578 | INFO     | Average Latency: 2955ms
+2026-03-28 21:07:24,578 | INFO     | Output saved: auto_labeled_full.csv
+2026-03-28 21:07:24,579 | INFO     | Phase 1 complete! [5-Class Schema: SUBMIT, EXAM, OPPORTUNITY, ADMIN, IGNORE]
+2026-03-31 22:05:30,388 | INFO     | ================================================================================
+2026-03-31 22:05:30,389 | INFO     | Starting Phase 1: Auto Pre-Label All Emails
+2026-03-31 22:05:30,389 | INFO     | ================================================================================
+2026-03-31 22:05:30,432 | INFO     | Loaded input file: source_labeled_dataset.csv (1522 emails)
+2026-03-31 22:05:30,434 | INFO     | Starting new pre-labeling session
+2026-03-31 22:05:30,447 | INFO     | Progress - Total: 1522 | Done: 0 | Remaining: 1522
+2026-03-31 22:12:39,448 | INFO     | Progress: 50/1522
+2026-03-31 22:19:34,569 | INFO     | Progress: 100/1522
+2026-03-31 22:26:21,014 | INFO     | Progress: 150/1522
+2026-03-31 22:33:17,310 | INFO     | Progress: 200/1522
+2026-03-31 22:40:52,558 | INFO     | Progress: 250/1522
+2026-03-31 22:47:43,237 | INFO     | Progress: 300/1522
+2026-03-31 22:55:00,068 | INFO     | Progress: 350/1522
+2026-03-31 23:01:47,259 | INFO     | Progress: 400/1522
+2026-03-31 23:08:47,237 | INFO     | Progress: 450/1522
+2026-03-31 23:15:54,201 | INFO     | Progress: 500/1522
+2026-03-31 23:22:56,053 | INFO     | Progress: 550/1522
+2026-03-31 23:29:56,846 | INFO     | Progress: 600/1522
+2026-03-31 23:37:01,574 | INFO     | Progress: 650/1522
+2026-03-31 23:41:13,848 | WARNING  | Failed to extract JSON from: Here is the classification:
+
+{
+"decision": "EXAM",
+"confidence": 100,
+"reasoning": "The email contai
+2026-03-31 23:44:16,885 | INFO     | Progress: 700/1522
+2026-03-31 23:51:11,809 | INFO     | Progress: 750/1522
+2026-03-31 23:58:06,696 | INFO     | Progress: 800/1522
+2026-04-01 00:05:20,677 | INFO     | Progress: 850/1522
+2026-04-01 00:12:24,676 | INFO     | Progress: 900/1522
+2026-04-01 00:19:27,011 | INFO     | Progress: 950/1522
+2026-04-01 00:26:41,019 | INFO     | Progress: 1000/1522
+2026-04-01 00:33:55,468 | INFO     | Progress: 1050/1522
+2026-04-01 00:41:13,646 | INFO     | Progress: 1100/1522
+2026-04-01 00:48:11,074 | INFO     | Progress: 1150/1522
+2026-04-01 00:53:55,123 | WARNING  | Failed to extract JSON from: Here is the classification:
+
+{
+"decision": "OPPORTUNITY",
+"confidence": 100,
+"reasoning": "The email
+2026-04-01 00:55:36,522 | INFO     | Progress: 1200/1522
+2026-04-01 01:02:35,159 | INFO     | Progress: 1250/1522
+2026-04-01 01:09:51,533 | INFO     | Progress: 1300/1522
+2026-04-01 01:17:12,242 | INFO     | Progress: 1350/1522
+2026-04-01 01:24:17,662 | INFO     | Progress: 1400/1522
+2026-04-01 01:31:37,807 | INFO     | Progress: 1450/1522
+2026-04-01 01:38:49,746 | INFO     | Progress: 1500/1522
+2026-04-01 01:42:05,272 | INFO     | Final output saved: auto_labeled_full.csv
+2026-04-01 01:42:05,417 | INFO     | 
+================================================================================
+2026-04-01 01:42:05,417 | INFO     | Pre-labeling Complete - Summary Statistics
+2026-04-01 01:42:05,417 | INFO     | ================================================================================
+2026-04-01 01:42:05,418 | INFO     | 
+Decision Distribution:
+pred_decision
+OPPORTUNITY    605
+ADMIN          322
+SUBMIT         265
+EXAM           191
+IGNORE         139
+2026-04-01 01:42:05,419 | INFO     | 
+Source Distribution:
+label_source
+Institutional Sender          918
+External / Misc               430
+External Academic Platform    140
+Student / Peer                 34
+2026-04-01 01:42:05,419 | INFO     | 
+JSON Valid: 1520/1522 (99.9%)
+2026-04-01 01:42:05,420 | INFO     | Average Latency: 8532ms
+2026-04-01 01:42:05,420 | INFO     | Output saved: auto_labeled_full.csv
+2026-04-01 01:42:05,420 | INFO     | Phase 1 complete! [5-Class Schema: SUBMIT, EXAM, OPPORTUNITY, ADMIN, IGNORE]
