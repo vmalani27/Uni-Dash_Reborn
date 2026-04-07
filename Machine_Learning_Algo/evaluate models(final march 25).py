@@ -74,62 +74,66 @@ LEVEL2_LABELS = [
 ]
 
 SHORT_CLASSIFICATION_PROMPT = """
-Classify the email into ONE category:
+INPUT_FACTS: <paste Stage1 JSON>
+INTENT_VIEW: <subject and first ~20 lines de-identified>
 
-SUBMIT: student must create and submit academic work
-EXAM: test, quiz, evaluation
-OPPORTUNITY: optional career or learning activity
-ADMIN: mandatory institutional process
-IGNORE: no meaningful academic action
+Choose exactly one label from [SUBMIT, EXAM, OPPORTUNITY, ADMIN, IGNORE].
+Return ONLY JSON:
+{"decision":"<LABEL>","confidence":<0-100>,"rationale":"<one short sentence with label keywords only>"}
 
 Rules:
-- Only ONE label
-- SUBMIT only if actual academic work submission
-- EXAM only if evaluation
-- ADMIN = mandatory process
-- OPPORTUNITY = optional
+- Do not hallucinate dates, names, or attachments.
+- Rationale must contain 1–3 keywords that justify the label (e.g., "due date; upload; assignment").
+- If ambiguous, set confidence <= 60.
 
-Return ONLY JSON:
-{
-  "decision": "<SUBMIT|EXAM|OPPORTUNITY|ADMIN|IGNORE>",
-  "confidence": <0-100>,
-  "reasoning": "<one sentence>"
-}
+Examples (one line each):
+  SUBMIT -> "Assignment due; upload link"
+  EXAM -> "Exam schedule; practical/viva"
+  ADMIN -> "Registration; mandatory; fee"
+  OPPORTUNITY -> "Internship; workshop; optional"
+  IGNORE -> "newsletter; advertisement"
+
+Disambiguation:
+- SUBMIT vs ADMIN: label SUBMIT only if is_submission==True AND text contains submit|upload|assignment|report|project OR has deadline. Otherwise ADMIN if mandatory|registration|fee|policy present.
+- OPPORTUNITY vs IGNORE: OPPORTUNITY requires actionable optional offer (apply/register/attend). Pure newsletters/ads -> IGNORE.
+- EXAM: any mention of exam/quiz/practical/viva/supplementary -> EXAM.
+
+Return valid JSON only.
 """
 
 LONG_CLASSIFICATION_PROMPT = f"""
-You are an AI system that classifies academic emails into exactly one category.
-Choose ONLY ONE from: SUBMIT, EXAM, OPPORTUNITY, ADMIN, IGNORE.
+INPUT: Full email text
+
+Choose exactly one label from [SUBMIT, EXAM, OPPORTUNITY, ADMIN, IGNORE].
+Return ONLY JSON:
+{{"decision":"<LABEL>","confidence":<0-100>,"rationale":"<one short sentence with label keywords only>"}}
 
 Definitions:
-- SUBMIT: complete and submit academic work.
-- EXAM: quizzes/tests/evaluations.
-- OPPORTUNITY: optional growth opportunities.
-- ADMIN: mandatory institutional process.
-- IGNORE: no meaningful academic action.
+- SUBMIT: student must create and submit academic work (assignment, project, report, practical)
+- EXAM: test, quiz, evaluation, exam, practical, viva
+- OPPORTUNITY: optional career or learning activity (internship, workshop, hackathon)
+- ADMIN: mandatory institutional process (registration, fees, attendance, enrollment)
+- IGNORE: no meaningful academic action (newsletter, advertisement, spam)
+
+Disambiguation Rules:
+- SUBMIT vs ADMIN: label SUBMIT only if actual work submission (assignment/project/report/upload/due date). Otherwise ADMIN if mandatory|registration|fee|policy.
+- OPPORTUNITY vs IGNORE: OPPORTUNITY requires actionable optional offer. Pure newsletters/ads -> IGNORE.
+- EXAM: any mention of exam/quiz/practical/viva/supplementary -> EXAM.
+
+Rules:
+- Do not hallucinate dates, names, or attachments.
+- Rationale: 1-3 keywords justifying the label (e.g., "Assignment; due date; upload").
+- If ambiguous, set confidence <= 60.
 
 Allowed labels: {LEVEL2_LABELS}
 
-Return ONLY JSON:
-{{
-  "decision": "<SUBMIT|EXAM|OPPORTUNITY|ADMIN|IGNORE>",
-  "confidence": <0-100>,
-  "reasoning": "<one sentence>"
-}}
+Return valid JSON only.
 """
 
 EXTRACTION_PROMPT = """
-Extract key facts from this email intent view.
-
-Return ONLY JSON:
-{
-  "action_required": true/false,
-  "has_deadline": true/false,
-  "is_exam": true/false,
-  "is_submission": true/false,
-  "is_mandatory": true/false,
-  "is_opportunity": true/false
-}
+Return ONLY this JSON about the email intent view:
+{"action_required": true/false, "has_deadline": true/false, "deadline_text": "<YYYY-MM-DD or empty>", "is_exam": true/false, "is_submission": true/false, "is_mandatory": true/false, "is_opportunity": true/false}
+Return valid JSON only. Do not explain, do not include any other text.
 """
 
 

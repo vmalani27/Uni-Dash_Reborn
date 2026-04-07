@@ -3,6 +3,7 @@
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import ProgrammingError
 from app.models.oauthToken import OAuthToken
+from app.models.user import User
 from app.services.gmail_sync import sync_gmail_for_user
 from app.core.database import SupabaseSessionLocal
 
@@ -16,7 +17,13 @@ def initial_gmail_sync(uid, supabase_db, limit=100):
 # Sync all users' Gmail
 def sync_all_gmail(supabase_db: Session):
     try:
-        tokens = supabase_db.query(OAuthToken).filter(OAuthToken.refresh_token != None).all()
+        tokens = (
+            supabase_db.query(OAuthToken)
+            .join(User, User.uid == OAuthToken.uid)
+            .filter(OAuthToken.refresh_token != None)
+            .filter(User.oauth_connected.is_(True))
+            .all()
+        )
     except ProgrammingError:
         print("[GMAIL SYNC JOB] Skipping: oauth_tokens table does not exist.")
         return

@@ -1,5 +1,7 @@
 
-from sqlalchemy import Column, String, Boolean, Integer
+import datetime
+
+from sqlalchemy import Column, String, Boolean, Integer, DateTime, Text
 from app.core.database import Base
 
 class User(Base):
@@ -13,4 +15,8 @@ class User(Base):
     sid = Column(String, nullable=True)
     profile_completed = Column(Boolean, default=False)
     oauth_connected = Column(Boolean, default=False)
+    admin_connected = Column(Boolean, default=False)
+    reauth_required = Column(Boolean, default=False)
+    reauth_required_at = Column(DateTime, nullable=True)
+    reauth_reason = Column(Text, nullable=True)
 

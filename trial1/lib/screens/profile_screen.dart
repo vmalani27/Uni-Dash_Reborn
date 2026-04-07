@@ -15,6 +15,7 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   late Future<UserProfile> _profileFuture;
   bool _connectingOAuth = false;
+  bool _disconnectingOAuth = false;
   bool _loggingOut = false;
 
   @override
@@ -233,6 +234,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                             ),
                                           )
                                         : const Text('Connect'),
+                                  )
+                                else
+                                  OutlinedButton(
+                                    onPressed: _disconnectingOAuth
+                                        ? null
+                                        : _handleOAuthDisconnect,
+                                    child: _disconnectingOAuth
+                                        ? const SizedBox(
+                                            height: 16,
+                                            width: 16,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
+                                          )
+                                        : const Text('Disconnect'),
                                   ),
                                 const SizedBox(height: 8),
                                 IconButton(
@@ -340,26 +356,52 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 ),
                                 const SizedBox(width: 24),
                                 FutureBuilder<Map<String, dynamic>>(
-                                  future: BackendService.fetchHealth(),
+                                  future: BackendService.fetchUserOAuthStatus(),
                                   builder: (context, snap) {
-                                    final ok =
-                                        snap.hasData &&
-                                        snap.data!['ok'] == true;
+                                    final syncStatus =
+                                        snap.hasData
+                                        ? (snap.data!['sync_status'] as String?)
+                                        : null;
+
+                                    final aiStatus =
+                                        syncStatus == null || syncStatus.isEmpty
+                                        ? 'Waiting'
+                                        : syncStatus;
+
+                                    final aiColor =
+                                        syncStatus == 'completed'
+                                        ? Colors.green
+                                        : (syncStatus == 'failed'
+                                              ? Colors.red
+                                              : Colors.orange);
+
+                                    final lastSyncAt =
+                                        snap.hasData
+                                        ? (snap.data!['last_sync_at'] as String?)
+                                        : null;
+
+                                    final lastSyncText =
+                                        (lastSyncAt != null &&
+                                            lastSyncAt.isNotEmpty)
+                                        ? 'Updated'
+                                        : 'Never';
 
                                     return Row(
                                       children: [
                                         _statusRow(
                                           Theme.of(context),
                                           'AI Processing',
-                                          ok ? 'Running' : 'Stopped',
-                                          ok ? Colors.green : Colors.orange,
+                                          aiStatus,
+                                          aiColor,
                                         ),
                                         const SizedBox(width: 24),
                                         _statusRow(
                                           Theme.of(context),
                                           'Last Sync',
-                                          'a few minutes ago',
-                                          Colors.green,
+                                          lastSyncText,
+                                          lastSyncText == 'Updated'
+                                              ? Colors.green
+                                              : Colors.grey,
                                         ),
                                       ],
                                     );
@@ -438,18 +480,40 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                                     ),
                                               ),
                                               const SizedBox(height: 6),
-                                              Text(
-                                                'Emails are syncing',
-                                                style: Theme.of(context)
-                                                    .textTheme
-                                                    .bodySmall
-                                                    ?.copyWith(
-                                                      color: Theme.of(context)
-                                                          .colorScheme
-                                                          .onSurface
-                                                          .withOpacity(0.6),
-                                                    ),
-                                              ),
+                                              if (profile.oauthConnected)
+                                                Text(
+                                                  profile.reauthRequired
+                                                      ? 'Action Required: Reconnect'
+                                                      : 'Emails syncing',
+                                                  style: Theme.of(context)
+                                                      .textTheme
+                                                      .bodySmall
+                                                      ?.copyWith(
+                                                        color: profile
+                                                                .reauthRequired
+                                                            ? Colors.orange
+                                                            : Theme.of(
+                                                                context,
+                                                              ).colorScheme
+                                                                .onSurface
+                                                                .withOpacity(
+                                                                  0.6,
+                                                                ),
+                                                      ),
+                                                )
+                                              else
+                                                Text(
+                                                  'Connect Gmail to sync emails',
+                                                  style: Theme.of(context)
+                                                      .textTheme
+                                                      .bodySmall
+                                                      ?.copyWith(
+                                                        color: Theme.of(context)
+                                                            .colorScheme
+                                                            .onSurface
+                                                            .withOpacity(0.5),
+                                                      ),
+                                                ),
                                             ],
                                           ),
                                         ),
@@ -733,6 +797,75 @@ class _ProfileScreenState extends State<ProfileScreen> {
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
+      }
+    }
+  }
+
+  Future<void> _handleOAuthDisconnect() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        title: Text(
+          'Disconnect Google?',
+          style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
+        ),
+        content: Text(
+          'This will revoke Google access and stop email sync for your account.',
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.8),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(
+              'Disconnect',
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() {
+      _disconnectingOAuth = true;
+    });
+
+    try {
+      await BackendService.disconnectGoogleOAuth();
+
+      if (mounted) {
+        setState(() {
+          _profileFuture = _fetchProfile();
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Google account disconnected.'),
+            backgroundColor: Theme.of(context).colorScheme.primary,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Disconnect failed: $e'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _disconnectingOAuth = false;
+        });
       }
     }
   }

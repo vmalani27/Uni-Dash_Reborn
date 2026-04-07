@@ -2,10 +2,28 @@ import datetime
 import requests
 
 from app.models.oauthToken import OAuthToken
+from app.models.user import User
 from app.models.gmail.gmail_message import GmailMessage, GmailSyncStatus
-from app.utils.google_oauth import get_access_token
+from app.utils.google_oauth import get_access_token, OAuthReauthRequiredError
 from app.utils.gmail_fetch import extract_body
 from app.utils.encryption import decrypt_token
+
+
+def _mark_oauth_reauth_required(uid: str, db, status: GmailSyncStatus | None, reason: str):
+    user = db.query(User).filter_by(uid=uid).first()
+    if user:
+        user.oauth_connected = False
+        user.reauth_required = True
+        user.reauth_required_at = datetime.datetime.utcnow()
+        user.reauth_reason = reason
+
+    if status:
+        status.status = "auth_required"
+        status.finished_at = datetime.datetime.utcnow()
+        status.error_message = reason
+
+    db.commit()
+    print(f"[GMAIL SYNC] OAuth re-auth required for user {uid[:8]}…: {reason}")
 
 
 def sync_gmail_for_user(uid: str, db, limit: int = 200):
@@ -27,7 +45,11 @@ def sync_gmail_for_user(uid: str, db, limit: int = 200):
         if not token:
             raise Exception("OAuth token not found")
 
-        access_token = get_access_token(decrypt_token(token.refresh_token))
+        try:
+            access_token = get_access_token(decrypt_token(token.refresh_token))
+        except OAuthReauthRequiredError as e:
+            _mark_oauth_reauth_required(uid, db, status, str(e))
+            return
         headers = {"Authorization": f"Bearer {access_token}"}
 
         resp = requests.get(
@@ -117,7 +139,11 @@ def capture_and_store_history_id(uid: str, db):
     if not status or not token:
         return
 
-    access_token = get_access_token(decrypt_token(token.refresh_token))
+    try:
+        access_token = get_access_token(decrypt_token(token.refresh_token))
+    except OAuthReauthRequiredError as e:
+        _mark_oauth_reauth_required(uid, db, status, str(e))
+        return
     headers = {"Authorization": f"Bearer {access_token}"}
 
     resp = requests.get(

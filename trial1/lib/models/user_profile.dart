@@ -7,6 +7,9 @@ class UserProfile {
   final String sid;
   final bool profileCompleted;
   final bool oauthConnected;
+  final bool adminConnected;
+  final bool reauthRequired;
+  final String? reauthReason;
 
   UserProfile({
     required this.uid,
@@ -17,6 +20,9 @@ class UserProfile {
     required this.sid,
     required this.profileCompleted,
     required this.oauthConnected,
+    required this.adminConnected,
+    required this.reauthRequired,
+    this.reauthReason,
   });
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
@@ -34,6 +40,9 @@ class UserProfile {
       sid: json['sid'] as String? ?? '',
       profileCompleted: json['profile_completed'] == true || json['profile_completed'] == 1,
       oauthConnected: json['oauth_connected'] == true || json['oauth_connected'] == 1,
+      adminConnected: json['admin_connected'] == true || json['admin_connected'] == 1,
+      reauthRequired: json['reauth_required'] == true || json['reauth_required'] == 1,
+      reauthReason: json['reauth_reason'] as String?,
     );
   }
 
@@ -47,6 +56,9 @@ class UserProfile {
       'sid': sid,
       'profile_completed': profileCompleted,
       'oauth_connected': oauthConnected,
+      'admin_connected': adminConnected,
+      'reauth_required': reauthRequired,
+      'reauth_reason': reauthReason,
     };
   }
 }

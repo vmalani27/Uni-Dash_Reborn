@@ -1,158 +1,161 @@
 import 'package:flutter/material.dart';
-import 'package:trial1/models/academic_models.dart';
 import 'package:trial1/models/academic_event.dart';
-import 'package:intl/intl.dart';
+import 'package:trial1/models/academic_models.dart';
 import 'package:trial1/theme.dart';
+import 'package:trial1/widgets/common/semantic_badge.dart';
 
 class FocusCard extends StatelessWidget {
   final AcademicItem? item;
   final AcademicEvent? event;
 
-  const FocusCard({super.key, this.item, this.event});
+  const FocusCard({
+    super.key,
+    this.item,
+    this.event,
+  });
 
   @override
   Widget build(BuildContext context) {
-    if (item == null && event == null) {
-      return Container(
-        margin: const EdgeInsets.symmetric(horizontal: 16.0),
-        padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 12.0),
-        decoration: BoxDecoration(
-          color: Theme.of(context).cardColor,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: Theme.of(context).dividerColor.withOpacity(0.08),
-          ),
-        ),
-        child: const Text('No focus item'),
-      );
+    final hasContent = item != null || event != null;
+    if (!hasContent) {
+      return _buildEmptyState(context);
     }
 
-    // Normalize fields from either AcademicItem or AcademicEvent, handling nulls safely.
+    final topic = event != null
+        ? event!.type.toString().split('.').last
+        : (item?.aiLabelTopic ?? item?.entityType ?? 'OTHER');
+    final meta = academicCategoryMeta(topic);
     final title = event?.title ?? item?.title ?? '';
-    final summary = event?.summary ?? item?.aiSummary ?? '';
-    final labelTopic = event != null
-      ? event!.type.toString().split('.').last.toUpperCase()
-      : (item?.aiLabelTopic ?? item?.entityType ?? 'UNKNOWN');
     final due = event?.deadline ?? item?.dueDate;
-    // Ensure we always pass a non‑null string to topicColor.
-    final entityForColor = labelTopic ?? 'UNKNOWN';
-    final color = topicColor(entityForColor);
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16.0),
-      padding: const EdgeInsets.all(16.0),
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
       decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.3), width: 1.5),
+        color: Theme.of(context).colorScheme.surface.withAlpha(
+          (255 * 0.96).toInt(),
+        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: meta.color.withOpacity(0.24)),
         boxShadow: [
           BoxShadow(
-            color: color.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: meta.color.withOpacity(0.12),
+            blurRadius: 20,
+            offset: const Offset(0, 6),
+          ),
+          BoxShadow(
+            color: meta.color.withOpacity(0.04),
+            blurRadius: 40,
+            offset: const Offset(0, 12),
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.local_fire_department, size: 14, color: color),
-                    const SizedBox(width: 6),
-                    Text(
-                      'TOP PRIORITY',
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: color,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const Spacer(),
-              if (labelTopic != null)
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    labelTopic,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-            ],
+          CategoryBadge(
+            topic: meta.key,
+            label: meta.label,
+            icon: meta.icon,
+            compact: true,
           ),
-          const SizedBox(height: 12),
-          Text(
-            title,
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w700,
-              height: 1.2,
-            ),
-          ),
-          if (summary != null && summary.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text(
-              summary,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.8),
-                height: 1.4,
-              ),
-            ),
-          ],
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              // Show deadline only for active or upcoming events
-              if (due != null && (event?.isActive ?? true)) ...[
-                Icon(
-                  Icons.event_available_outlined,
-                  size: 16,
-                  color: Theme.of(context).colorScheme.error,
-                ),
-                const SizedBox(width: 6),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
                 Text(
-                  DateFormat.yMMMd().add_jm().format(due),
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.error,
-                    fontWeight: FontWeight.w600,
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    height: 1.1,
                   ),
+                ),
+                const SizedBox(height: 3),
+                DeadlineRow(
+                  deadline: due,
+                  color: meta.color,
+                  showTime: false,
+                  fallbackLabel: item?.location,
+                  prefix: due != null ? 'Due' : null,
                 ),
               ],
-              const Spacer(),
-              ElevatedButton(
-                onPressed: () {},
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: color,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                ),
-                child: const Text('Action'),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            'Focus',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: Theme.of(context)
+                  .colorScheme
+                  .onSurface
+                  .withOpacity(0.56),
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.3,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(BuildContext context) {
+    final neutral = Theme.of(context).colorScheme.onSurface.withOpacity(0.62);
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16.0),
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface.withAlpha(
+          (255 * 0.96).toInt(),
+        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.14)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 20,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: neutral.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(Icons.radio_button_checked_outlined, 
+              color: neutral, 
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'No focus item',
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                fontWeight: FontWeight.w600,
               ),
-            ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            'Focus',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: Theme.of(context)
+                  .colorScheme
+                  .onSurface
+                  .withOpacity(0.56),
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ],
       ),

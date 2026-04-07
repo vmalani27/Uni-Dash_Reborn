@@ -3,8 +3,9 @@ import requests
 from sqlalchemy.orm import Session
 
 from app.models.oauthToken import OAuthToken
+from app.models.user import User
 from app.models.gmail.gmail_message import GmailMessage, GmailSyncStatus
-from app.utils.google_oauth import get_access_token
+from app.utils.google_oauth import get_access_token, OAuthReauthRequiredError
 from app.utils.gmail_fetch import parse_gmail_payload, extract_headers_map
 from app.models.broadcast import Broadcast
 from app.utils.encryption import decrypt_token
@@ -15,6 +16,24 @@ class GmailService:
     Centralized Gmail sync service.
     Handles all Gmail synchronization operations.
     """
+
+    @staticmethod
+    def _mark_oauth_reauth_required(uid: str, db, status: GmailSyncStatus | None, reason: str):
+        """Disable ingestion for users with revoked/expired refresh tokens until they reconnect OAuth."""
+        user = db.query(User).filter_by(uid=uid).first()
+        if user:
+            user.oauth_connected = False
+            user.reauth_required = True
+            user.reauth_required_at = datetime.datetime.utcnow()
+            user.reauth_reason = reason
+
+        if status:
+            status.status = "auth_required"
+            status.finished_at = datetime.datetime.utcnow()
+            status.error_message = reason
+
+        db.commit()
+        print(f"[GMAIL SYNC] OAuth re-auth required for user {uid[:8]}…: {reason}")
 
     @staticmethod
     def full_sync(uid: str, db, limit: int = 200):
@@ -44,7 +63,11 @@ class GmailService:
                 raise Exception("OAuth token not found")
 
             # Get access token
-            access_token = get_access_token(decrypt_token(token.refresh_token))
+            try:
+                access_token = get_access_token(decrypt_token(token.refresh_token))
+            except OAuthReauthRequiredError as e:
+                GmailService._mark_oauth_reauth_required(uid, db, status, str(e))
+                return
             headers = {"Authorization": f"Bearer {access_token}"}
 
             # Fetch message list
@@ -260,7 +283,11 @@ class GmailService:
                 raise Exception("OAuth token not found")
 
             # Get access token
-            access_token = get_access_token(decrypt_token(token.refresh_token))
+            try:
+                access_token = get_access_token(decrypt_token(token.refresh_token))
+            except OAuthReauthRequiredError as e:
+                GmailService._mark_oauth_reauth_required(uid, db, status, str(e))
+                return
             headers = {"Authorization": f"Bearer {access_token}"}
 
             # Use Gmail History API for incremental sync
@@ -483,7 +510,11 @@ class GmailService:
             print(f"[CAPTURE HISTORY ID] Missing status or token for user {uid}")
             return
 
-        access_token = get_access_token(decrypt_token(token.refresh_token))
+        try:
+            access_token = get_access_token(decrypt_token(token.refresh_token))
+        except OAuthReauthRequiredError as e:
+            GmailService._mark_oauth_reauth_required(uid, db, status, str(e))
+            return
         headers = {"Authorization": f"Bearer {access_token}"}
 
         print(f"[CAPTURE HISTORY ID] Fetching profile for user {uid}")

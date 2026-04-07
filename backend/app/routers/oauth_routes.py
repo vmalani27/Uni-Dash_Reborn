@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.jobs.gmail_sync_job import initial_gmail_sync
 from app.core.database import get_supabase_db, SupabaseSessionLocal
 from app.models.oauthToken import OAuthToken
+from app.models.user import User
 from app.utils.firebase_util import verify_firebase_token
 from app.utils.encryption import encrypt_token, decrypt_token
 
@@ -26,6 +27,7 @@ state_store = {}
 
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
+GOOGLE_REVOKE_URL = "https://oauth2.googleapis.com/revoke"
 
 CLIENT_ID = os.getenv("CLIENT_ID")
 CLIENT_SECRET = os.getenv("CLIENT_SECRET")
@@ -48,6 +50,17 @@ ADMIN_SCOPES = [
     "email",
     "profile",
 ]
+
+
+def _revoke_google_token(refresh_token: str) -> bool:
+    """Revoke a Google token. Google may return 200 for already-invalid tokens."""
+    response = requests.post(
+        GOOGLE_REVOKE_URL,
+        params={"token": refresh_token},
+        headers={"content-type": "application/x-www-form-urlencoded"},
+        timeout=10,
+    )
+    return response.status_code == 200
 
 # -------------------------------
 # STEP 1: Generate Google OAuth URL
@@ -139,8 +152,13 @@ def google_callback(
     token_response = resp.json()
     refresh_token = token_response.get("refresh_token")
     access_token = token_response.get("access_token")
-    if not refresh_token:
-        raise HTTPException(status_code=400, detail="No refresh token returned")
+
+    existing_token = db.query(OAuthToken).filter(OAuthToken.uid == uid).first()
+    if not refresh_token and not existing_token:
+        raise HTTPException(
+            status_code=400,
+            detail="No refresh token returned and no existing token found. Please reconnect Google with consent.",
+        )
 
     # Fetch user email from Google
     userinfo_resp = requests.get(
@@ -165,10 +183,11 @@ def google_callback(
     # Store or update user's OAuth token
 
 
-    token = db.query(OAuthToken).filter(OAuthToken.uid == uid).first()
+    token = existing_token
     if token:
         token.email = email
-        token.refresh_token = encrypt_token(refresh_token)
+        if refresh_token:
+            token.refresh_token = encrypt_token(refresh_token)
         token.expires_at = expires_at
         token.scopes = token_response.get("scope")
     else:
@@ -180,6 +199,14 @@ def google_callback(
             expires_at=expires_at,
         )
         db.add(token)
+
+    user = db.query(User).filter(User.uid == uid).first()
+    if user:
+        user.oauth_connected = True
+        user.reauth_required = False
+        user.reauth_required_at = None
+        user.reauth_reason = None
+
     db.commit()
 
 
@@ -212,3 +239,40 @@ def google_callback(
         return JSONResponse(content={"status": "success", "redirect_url": redirect_to})
     else:
         return RedirectResponse(url=redirect_to)
+
+
+@router.post("/disconnect")
+def disconnect_google_account(
+    firebase_data=Depends(verify_firebase_token),
+    db: Session = Depends(get_supabase_db),
+):
+    """Hard disconnect: revoke Google token, remove local OAuth token, and reset OAuth flags."""
+    uid = firebase_data["uid"]
+
+    token = db.query(OAuthToken).filter(OAuthToken.uid == uid).first()
+    user = db.query(User).filter(User.uid == uid).first()
+
+    revoked = False
+    if token and token.refresh_token:
+        try:
+            plain_refresh_token = decrypt_token(token.refresh_token)
+            revoked = _revoke_google_token(plain_refresh_token)
+        except Exception as e:
+            # Do not block disconnect flow if Google revoke call fails.
+            print(f"[OAUTH] Token revoke failed for uid={uid[:8]}: {e}")
+
+    if token:
+        db.delete(token)
+
+    if user:
+        user.oauth_connected = False
+        user.reauth_required = False
+        user.reauth_required_at = None
+        user.reauth_reason = None
+
+    db.commit()
+
+    return {
+        "status": "disconnected",
+        "google_revoked": revoked,
+    }

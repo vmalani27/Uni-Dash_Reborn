@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:trial1/models/gmail_models.dart';
 import 'package:trial1/services/api_services.dart';
 import 'package:trial1/widgets/email_detail_screen.dart';
+import 'package:trial1/widgets/common/semantic_badge.dart';
 import '../theme.dart';
 
 /// A single notification tile with topic chip, urgency border, and deadline badge.
@@ -16,7 +17,7 @@ class NotificationTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final String topicKey = notification.aiLabelTopic ?? notification.normalizedTopic;
     final Color topic = topicColor(topicKey);
-    final bool hasDeadline = notification.deadlineIso != null;
+    final DateTime? deadline = notification.deadlineIso;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -52,10 +53,10 @@ class NotificationTile extends StatelessWidget {
                   // Row 1: Topic chip + time
                   Row(
                     children: [
-                      _TopicChip(topic: topicKey),
-                      if (hasDeadline) ...[
+                      CategoryBadge(topic: topicKey),
+                      if (deadline != null) ...[
                         const SizedBox(width: 8),
-                        _DeadlineBadge(deadline: notification.deadlineIso!),
+                        DeadlineRow(deadline: deadline, color: kUrgencyHigh),
                       ],
                       const Spacer(),
                       Text(
@@ -120,92 +121,6 @@ class NotificationTile extends StatelessWidget {
     if (diff.inHours < 24) return '${diff.inHours}h';
     if (diff.inDays < 7) return '${diff.inDays}d';
     return '${dateTime.day}/${dateTime.month}';
-  }
-}
-
-// ─── Topic Chip ─────────────────────────────────────────────
-class _TopicChip extends StatelessWidget {
-  final String topic;
-  const _TopicChip({required this.topic});
-
-  @override
-  Widget build(BuildContext context) {
-    final color = topicColor(topic);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(topicIcon(topic), size: 12, color: color),
-          const SizedBox(width: 4),
-          Text(
-            topicLabel(topic),
-            style: TextStyle(
-              color: color,
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.2,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Deadline Badge ─────────────────────────────────────────
-class _DeadlineBadge extends StatelessWidget {
-  final DateTime deadline;
-  const _DeadlineBadge({required this.deadline});
-
-  @override
-  Widget build(BuildContext context) {
-    final now = DateTime.now();
-    final diff = deadline.difference(now);
-    final isOverdue = diff.isNegative;
-    final color = isOverdue
-        ? kUrgencyCritical
-        : (diff.inDays <= 2 ? kUrgencyHigh : kUrgencyMedium);
-
-    String label;
-    if (isOverdue) {
-      label = 'Overdue';
-    } else if (diff.inHours < 24) {
-      label = 'Due today';
-    } else if (diff.inDays == 1) {
-      label = 'Due tomorrow';
-    } else if (diff.inDays <= 7) {
-      label = 'Due in ${diff.inDays}d';
-    } else {
-      label = 'Due ${deadline.day}/${deadline.month}';
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.schedule, size: 11, color: color),
-          const SizedBox(width: 3),
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }
 

@@ -25,12 +25,12 @@ const Color kAccentSecondary = Color(0xFFF4C76B);
 
 // ─── Topic Semantic Colors ──────────────────────────────────
 // Entity / topic semantic colors (updated per design requirements)
-const Color kTopicAssignment = Color(0xFFF97316); // orange
+const Color kTopicAssignment = Color(0xFF3B82F6); // blue
 const Color kTopicExam = Color(0xFFEF4444); // red
-const Color kTopicAcademic = Color(0xFF60A5FA); // blue (admin/academic)
-const Color kTopicOpportunity = Color(0xFFA78BFA); // purple
-const Color kTopicInformation = Color(0xFFFBBF24); // amber
-const Color kTopicOther = Color(0xFF9CA3AF); // gray
+const Color kTopicAcademic = Color(0xFF64748B); // neutral slate for announcements/admin
+const Color kTopicOpportunity = Color(0xFFA855F7); // purple
+const Color kTopicInformation = Color(0xFF64748B); // neutral slate
+const Color kTopicOther = Color(0xFF94A3B8); // gray
 
 // ─── Urgency Colors ─────────────────────────────────────────
 const Color kUrgencyCritical = Color(0xFFEF4444);
@@ -40,69 +40,106 @@ const Color kUrgencyLow = Color(0xFF22C55E);
 const Color kUrgencyNone = Color(0xFF6B7280);
 
 // ─── Helpers ────────────────────────────────────────────────
-Color topicColor(String normalizedTopic) {
+class AcademicCategoryMeta {
+  final String key;
+  final String label;
+  final IconData icon;
+  final Color color;
+
+  const AcademicCategoryMeta({
+    required this.key,
+    required this.label,
+    required this.icon,
+    required this.color,
+  });
+
+  Color tint([double alpha = 0.12]) => color.withOpacity(alpha);
+}
+
+AcademicCategoryMeta academicCategoryMeta(String normalizedTopic) {
   final key = normalizedTopic.trim().toUpperCase();
   switch (key) {
     case 'ASSIGNMENT':
-      return kTopicAssignment;
+      return const AcademicCategoryMeta(
+        key: 'ASSIGNMENT',
+        label: 'Assignment',
+        icon: Icons.assignment_outlined,
+        color: kTopicAssignment,
+      );
     case 'EXAM':
-      return kTopicExam;
+      return const AcademicCategoryMeta(
+        key: 'EXAM',
+        label: 'Exam',
+        icon: Icons.school_outlined,
+        color: kTopicExam,
+      );
     case 'ACADEMIC_ADMIN':
     case 'ACADEMIC':
-      return kTopicAcademic;
+      return const AcademicCategoryMeta(
+        key: 'ACADEMIC_ADMIN',
+        label: 'Announcement',
+        icon: Icons.campaign_outlined,
+        color: kTopicAcademic,
+      );
     case 'OPPORTUNITY':
-      return kTopicOpportunity;
+      return const AcademicCategoryMeta(
+        key: 'OPPORTUNITY',
+        label: 'Opportunity',
+        icon: Icons.rocket_launch_outlined,
+        color: kTopicOpportunity,
+      );
     case 'INFORMATION':
     case 'INFO':
-      return kTopicInformation;
+      return const AcademicCategoryMeta(
+        key: 'INFORMATION',
+        label: 'Info',
+        icon: Icons.info_outline,
+        color: kTopicInformation,
+      );
     default:
-      return kTopicOther;
+      return AcademicCategoryMeta(
+        key: key.isEmpty ? 'OTHER' : key,
+        label: _fallbackTopicLabel(key),
+        icon: _fallbackTopicIcon(key),
+        color: kTopicOther,
+      );
   }
+}
+
+Color topicColor(String normalizedTopic) {
+  return academicCategoryMeta(normalizedTopic).color;
 }
 
 String topicLabel(String normalizedTopic) {
-  final key = normalizedTopic.trim().toUpperCase();
-  switch (key) {
-    case 'ASSIGNMENT':
-      return 'Assignment';
-    case 'EXAM':
-      return 'Exam';
-    case 'ACADEMIC_ADMIN':
-    case 'ACADEMIC':
-      return 'Academic';
-    case 'OPPORTUNITY':
-      return 'Opportunity';
-    case 'INFORMATION':
-    case 'INFO':
-      return 'Info';
-    case 'UNCLASSIFIED':
-      return 'Unclassified';
-    default:
-      // For freeform AI labels, return title-cased label
-      final s = normalizedTopic.trim();
-      if (s.isEmpty) return 'Other';
-      return s[0].toUpperCase() + s.substring(1).toLowerCase();
+  final meta = academicCategoryMeta(normalizedTopic);
+  if (meta.key == 'OTHER') {
+    final s = normalizedTopic.trim();
+    if (s.isEmpty) return 'Other';
+    return s[0].toUpperCase() + s.substring(1).toLowerCase();
   }
+  if (meta.key == 'UNCLASSIFIED') return 'Unclassified';
+  return meta.label;
 }
 
 IconData topicIcon(String normalizedTopic) {
-  final key = normalizedTopic.trim().toUpperCase();
-  switch (key) {
-    case 'ASSIGNMENT':
-      return Icons.assignment_outlined;
-    case 'EXAM':
-      return Icons.quiz_outlined;
-    case 'ACADEMIC_ADMIN':
-    case 'ACADEMIC':
-      return Icons.school_outlined;
-    case 'OPPORTUNITY':
-      return Icons.rocket_launch_outlined;
-    case 'INFORMATION':
-    case 'INFO':
-      return Icons.info_outline;
-    default:
-      return Icons.mail_outline;
-  }
+  return academicCategoryMeta(normalizedTopic).icon;
+}
+
+String _fallbackTopicLabel(String key) {
+  if (key.isEmpty) return 'Other';
+  if (key == 'UNCLASSIFIED') return 'Unclassified';
+
+  final words = key.replaceAll('_', ' ').split(RegExp(r'\s+'));
+  final titleCased = words
+      .where((word) => word.isNotEmpty)
+      .map((word) => word[0].toUpperCase() + word.substring(1).toLowerCase())
+      .join(' ');
+  return titleCased.isEmpty ? 'Other' : titleCased;
+}
+
+IconData _fallbackTopicIcon(String key) {
+  if (key.isEmpty) return Icons.mail_outline;
+  return Icons.mail_outline;
 }
 
 Color urgencyColor(String? urgency) {

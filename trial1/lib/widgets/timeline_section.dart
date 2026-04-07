@@ -6,11 +6,17 @@ import 'package:trial1/widgets/expandable_tile.dart';
 class TimelineSection extends StatelessWidget {
   final List<Map<String, dynamic>> groups;
   final void Function(Map<String, dynamic>) onItemTap;
+  final Future<void> Function(Map<String, dynamic>)? onMarkCompleted;
+  final Future<void> Function(Map<String, dynamic>)? onAddToCalendar;
+  final Future<void> Function(Map<String, dynamic>)? onDismiss;
 
   const TimelineSection({
     super.key,
     required this.groups,
     required this.onItemTap,
+    this.onMarkCompleted,
+    this.onAddToCalendar,
+    this.onDismiss,
   });
 
   @override
@@ -27,23 +33,18 @@ class TimelineSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-          child: Text(
-            'Timeline',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-          ),
+        Text(
+          'Timeline',
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 8),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
+          padding: const EdgeInsets.symmetric(vertical: 6.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
-              Text('No upcoming items'),
-            ],
+            children: const [Text('No upcoming items')],
           ),
         ),
       ],
@@ -56,22 +57,40 @@ class TimelineSection extends StatelessWidget {
         .cast<Map<String, dynamic>>();
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
+      padding: const EdgeInsets.symmetric(vertical: 6.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             dateLabel,
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: Theme.of(context).colorScheme.primary,
-                  fontWeight: FontWeight.w700,
-                ),
+              color: Theme.of(context).colorScheme.primary,
+              fontWeight: FontWeight.w700,
+            ),
           ),
           const SizedBox(height: 6),
           ...items.map(
             (it) => Padding(
               padding: const EdgeInsets.symmetric(vertical: 6.0),
-              child: ExpandableTile(event: it, onTap: () => onItemTap(it)),
+              child: ExpandableTile(
+                event: it,
+                onTap: () => onItemTap(it),
+                onMarkCompleted: onMarkCompleted == null
+                    ? null
+                    : () {
+                        onMarkCompleted!(it);
+                      },
+                onAddToCalendar: onAddToCalendar == null
+                    ? null
+                    : () {
+                        onAddToCalendar!(it);
+                      },
+                onDismiss: onDismiss == null
+                    ? null
+                    : () {
+                        onDismiss!(it);
+                      },
+              ),
             ),
           ),
         ],
@@ -124,20 +143,19 @@ class _TimelineEventTile extends StatelessWidget {
                   Text(
                     title,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
+                      fontWeight: FontWeight.w600,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                   Text(
                     subtitle,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .onSurface
-                              .withOpacity(0.6),
-                          fontSize: 12,
-                        ),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withOpacity(0.6),
+                      fontSize: 12,
+                    ),
                   ),
                 ],
               ),

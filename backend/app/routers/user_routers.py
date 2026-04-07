@@ -3,9 +3,10 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_supabase_db
 from app.models.user import User
-from app.models.schemas.user_schema import UserOut, UserProfileSetup
+from app.models.schemas.user_schema import UserOut, UserProfileSetup, UserOAuthStatusOut
 from app.utils.firebase_util import verify_firebase_token
 from app.models.oauthToken import OAuthToken
+from app.models.gmail.gmail_message import GmailSyncStatus
 
 """
 User-related routes.
@@ -72,17 +73,19 @@ def get_or_create_user(
 
     # Check whether the user has completed Gmail OAuth
     # This is used by the frontend to decide whether to prompt for Gmail connection
-    oauth_connected = (
-        db.query(OAuthToken)
-        .filter(OAuthToken.uid == uid)
-        .first()
-        is not None
-    )
+    token = db.query(OAuthToken).filter(OAuthToken.uid == uid).first()
+    has_token = token is not None
+
+    if has_token and not user.oauth_connected and not getattr(user, "reauth_required", False):
+        user.oauth_connected = True
+        db.commit()
+        db.refresh(user)
+
+    oauth_connected = bool(user.oauth_connected)
 
     # Determine whether the user connected an admin-capable Gmail account
     # (i.e. token scopes include gmail.send)
     admin_connected = False
-    token = db.query(OAuthToken).filter(OAuthToken.uid == uid).first()
     if token and token.scopes:
         try:
             if "gmail.send" in token.scopes:
@@ -102,6 +105,33 @@ def get_or_create_user(
         profile_completed=user.profile_completed,
         oauth_connected=oauth_connected,
         admin_connected=admin_connected,
+        reauth_required=bool(getattr(user, "reauth_required", False)),
+        reauth_reason=getattr(user, "reauth_reason", None),
+    )
+
+
+@router.get("/oauth/status", response_model=UserOAuthStatusOut)
+def get_oauth_status(
+    firebase_data=Depends(verify_firebase_token),
+    db: Session = Depends(get_supabase_db),
+):
+    uid = firebase_data["uid"]
+    user = db.query(User).filter(User.uid == uid).first()
+    token = db.query(OAuthToken).filter(OAuthToken.uid == uid).first()
+    sync = db.query(GmailSyncStatus).filter(GmailSyncStatus.uid == uid).first()
+
+    admin_connected = False
+    if token and token.scopes:
+        admin_connected = "gmail.send" in token.scopes
+
+    return UserOAuthStatusOut(
+        oauth_connected=bool(user.oauth_connected) if user else False,
+        admin_connected=admin_connected,
+        reauth_required=bool(getattr(user, "reauth_required", False)) if user else False,
+        reauth_reason=getattr(user, "reauth_reason", None) if user else None,
+        sync_status=getattr(sync, "status", None),
+        sync_error_message=getattr(sync, "error_message", None),
+        last_sync_at=sync.last_sync_date.isoformat() if (sync and sync.last_sync_date) else None,
     )
 
 

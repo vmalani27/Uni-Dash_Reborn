@@ -130,6 +130,7 @@ class _AcademicDashboardViewState extends State<AcademicDashboardView> {
                     final item = _items[index];
                     return AcademicItemCard(
                       item: item,
+                      onActionCompleted: _fetchDashboard,
                       onTap: () async {
                         final res = await Navigator.of(
                           context,

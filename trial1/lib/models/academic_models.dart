@@ -10,6 +10,13 @@ class AcademicItem {
   final String? professor;
   final double academicScore;
   final bool completed;
+  final bool dismissed;
+  final String? status;
+  final double? rawAcademicScore;
+  final double? effectiveScore;
+  final double? decayFactor;
+  final DateTime? lastUpdatedAt;
+  final DateTime? snoozedUntil;
   // Optional AI/enrichment fields
   final String? aiSummary;
   final String? aiLabelTopic;
@@ -28,6 +35,13 @@ class AcademicItem {
     this.professor,
     required this.academicScore,
     required this.completed,
+    this.dismissed = false,
+    this.status,
+    this.rawAcademicScore,
+    this.effectiveScore,
+    this.decayFactor,
+    this.lastUpdatedAt,
+    this.snoozedUntil,
     this.aiSummary,
     this.aiLabelTopic,
     this.aiLabelSource,
@@ -47,8 +61,19 @@ class AcademicItem {
       location: json['location'] as String?,
       courseCode: json['course_code'] as String?,
       professor: json['professor'] as String?,
-      academicScore: (json['academic_score'] as num?)?.toDouble() ?? 0.0,
+        academicScore: (json['effective_score'] as num?)?.toDouble() ?? (json['academic_score'] as num?)?.toDouble() ?? 0.0,
       completed: json['completed'] as bool? ?? false,
+        dismissed: json['dismissed'] as bool? ?? false,
+        status: json['status'] as String?,
+        rawAcademicScore: (json['raw_academic_score'] as num?)?.toDouble(),
+        effectiveScore: (json['effective_score'] as num?)?.toDouble(),
+        decayFactor: (json['decay_factor'] as num?)?.toDouble(),
+        lastUpdatedAt: json['last_updated_at'] != null
+          ? DateTime.parse(json['last_updated_at'] as String).toLocal()
+          : null,
+        snoozedUntil: json['snoozed_until'] != null
+          ? DateTime.parse(json['snoozed_until'] as String).toLocal()
+          : null,
       aiSummary: json['ai_summary'] as String?,
       aiLabelTopic: json['ai_label_topic'] as String?,
       aiLabelSource: json['ai_label_source'] as String?,

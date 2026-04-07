@@ -12,6 +12,7 @@ Key insight:
 
 import pandas as pd
 import numpy as np
+import json
 
 # ----------------------------------------------------------
 # Config
@@ -20,8 +21,45 @@ import numpy as np
 INPUT_FILE = "auto_labeled_full.csv"
 OUTPUT_BALANCED = "balanced_dataset.csv"
 OUTPUT_GROUND_TRUTH = "ground_truth_final.csv"
+OUTPUT_GROUND_TRUTH_JSON = "ground_truth_final.json"
+OUTPUT_GROUND_TRUTH_JSONL = "ground_truth_final.jsonl"
 
 SAMPLES_PER_CLASS = 28  # Adjust based on capacity (28 * 8 topics ≈ 224 samples)
+
+
+def build_annotation_record(row, sample_index):
+    """Build a compact annotation-friendly JSON object per sample."""
+    return {
+        "sample_id": f"sample_{sample_index}",
+        "source": row.get("label_source", ""),
+        "topic": row.get("gt_decision", ""),
+        "subject": row.get("subject", ""),
+        "body": row.get("clean_text", ""),
+        "sender_email": row.get("sender_email", ""),
+        "sender_domain": row.get("sender_domain", ""),
+        "pred_decision": row.get("pred_decision", ""),
+        "pred_reasoning": row.get("pred_reasoning", ""),
+        "pred_confidence": row.get("pred_confidence", ""),
+        "pred_json_valid": row.get("pred_json_valid", ""),
+        "pred_latency_ms": row.get("pred_latency_ms", ""),
+    }
+
+
+def save_annotation_json(gt_df):
+    """Save ground truth in both JSON array and JSONL format for annotation workflows."""
+    records = [
+        build_annotation_record(row, idx + 1)
+        for idx, row in enumerate(gt_df.to_dict(orient="records"))
+    ]
+
+    with open(OUTPUT_GROUND_TRUTH_JSON, "w", encoding="utf-8") as f:
+        json.dump(records, f, indent=2, ensure_ascii=True)
+
+    with open(OUTPUT_GROUND_TRUTH_JSONL, "w", encoding="utf-8") as f:
+        for record in records:
+            f.write(json.dumps(record, ensure_ascii=True) + "\n")
+
+    return records
 
 # ----------------------------------------------------------
 # Main
@@ -100,6 +138,23 @@ def main():
     # Save ground truth
     gt_df.to_csv(OUTPUT_GROUND_TRUTH, index=False)
     print(f"[OK] Saved ground truth: {OUTPUT_GROUND_TRUTH}")
+
+    # Save JSON versions for easier annotation
+    records = save_annotation_json(gt_df)
+    print(f"[OK] Saved ground truth JSON: {OUTPUT_GROUND_TRUTH_JSON}")
+    print(f"[OK] Saved ground truth JSONL: {OUTPUT_GROUND_TRUTH_JSONL}")
+
+    # Preview one sample in annotation-style format
+    if records:
+        sample = records[2] if len(records) >= 3 else records[0]
+        body_preview = sample.get("body", "")[:220]
+        print("\n" + "-" * 92)
+        print(f"[Sample Preview] {sample.get('sample_id', 'sample_1')}")
+        print(f"  Source:  {sample.get('source', '')}")
+        print(f"  Topic:   {sample.get('topic', '')}")
+        print(f"  Subject: {sample.get('subject', '')}")
+        print(f"  Body:    {body_preview}...")
+        print("-" * 92)
     
     # Statistics for your methodology section
     print("\n" + "="*80)
