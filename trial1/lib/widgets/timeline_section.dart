@@ -56,6 +56,9 @@ class TimelineSection extends StatelessWidget {
     final items = (group['items'] as List<dynamic>? ?? [])
         .cast<Map<String, dynamic>>();
 
+    // Skip empty groups
+    if (items.isEmpty) return const SizedBox.shrink();
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6.0),
       child: Column(

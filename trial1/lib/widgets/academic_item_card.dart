@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:trial1/models/academic_models.dart';
 import 'package:trial1/services/api_services.dart';
 import 'package:trial1/theme.dart';
+import 'package:trial1/utils/status_formatter.dart';
 
 class AcademicItemCard extends StatelessWidget {
   final AcademicItem item;
@@ -10,6 +11,8 @@ class AcademicItemCard extends StatelessWidget {
   final Future<void> Function()? onActionCompleted;
   // When true, tapping opens preview dialog instead of immediately calling onTap
   final bool previewOnTap;
+  // When true, hides the category label (entity type badge)
+  final bool hideLabel;
 
   const AcademicItemCard({
     super.key,
@@ -17,37 +20,42 @@ class AcademicItemCard extends StatelessWidget {
     required this.onTap,
     this.onActionCompleted,
     this.previewOnTap = true,
+    this.hideLabel = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      clipBehavior: Clip.antiAlias,
       elevation: 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: Theme.of(context).dividerColor),
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(
+          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.08),
+          width: 1,
+        ),
       ),
       child: InkWell(
-        onTap: () {
-          if (previewOnTap) {
-            _showPreview(context);
-          } else {
-            onTap();
-          }
-        },
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildHeader(context),
-              const SizedBox(height: 8),
-              Text(
-                item.title,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
+          onTap: () {
+            if (previewOnTap) {
+              _showPreview(context);
+            } else {
+              onTap();
+            }
+          },
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (!hideLabel) ...[
+                  _buildHeader(context),
+                  const SizedBox(height: 8),
+                ],
+                Text(
+                  item.title,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
                   height: 1.18,
                 ),
                 maxLines: 2,

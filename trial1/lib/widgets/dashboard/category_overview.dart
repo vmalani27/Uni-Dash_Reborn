@@ -35,9 +35,25 @@ class CategoryOverview extends StatelessWidget {
               child: Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: meta.tint(0.05),
+                  color: Theme.of(context).brightness == Brightness.light
+                      ? meta.tint(0.08)  // Slightly stronger background in light mode
+                      : meta.tint(0.05),
                   borderRadius: BorderRadius.circular(11),
-                  border: Border.all(color: meta.color.withOpacity(0.10)),
+                  border: Border.all(
+                    color: meta.color.withOpacity(
+                      Theme.of(context).brightness == Brightness.light ? 0.25 : 0.10,
+                    ),
+                    width: Theme.of(context).brightness == Brightness.light ? 1.5 : 1,
+                  ),
+                  boxShadow: Theme.of(context).brightness == Brightness.light
+                      ? [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.04),
+                            blurRadius: 4,
+                            offset: const Offset(0, 1),
+                          ),
+                        ]
+                      : null,
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,

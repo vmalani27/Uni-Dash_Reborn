@@ -1,213 +1,92 @@
-Yes — and your instinct here is correct. The next step is **UI structure first, AI sophistication second**. If the interface cannot express the information properly, improving the AI will not improve the user experience. Right now your backend already produces useful signals (topic, urgency, deadline, score), but the UI treats them like **tags on a message**, not like **structured academic context**.
+Design and implement an "Exam Mode" system in a FastAPI + Flutter academic dashboard application.
 
-The better sequence is:
-
-First build the **information architecture of the UI** so it can express richer context.
-Then improve the AI so it can populate those fields more accurately.
-
-If you reverse this order, you will keep adding smarter models but the user will still see the same flat feed.
+Goal:
+Create a context-aware system that detects semester exam schedules and activates a focused academic mode for the user.
 
 ---
 
-### Why UI should come first
+1. DETECTION
 
-Right now your UI has a **message-centric layout**. It assumes the main object is the email. But the product you described is actually **context-centric**.
+* Identify academic items that represent semester-level exam schedules
+* Use:
 
-The main objects should be things like:
-
-* Upcoming deadlines
-* Assignments
-* Exams
-* Announcements
-* Opportunities
-
-Emails should just be **the source of those objects**.
-
-Your backend already calculates:
-
-* `deadline_iso`
-* `normalized_topic`
-* `academic_score`
-* `ai_summary`
-* `ai_label_urgency`
-
-That is already enough to build a much stronger interface.
-
-For example:
-
-Instead of showing:
-
-Assignment → email summary
-
-You could show:
-
-Assignment
-Course: Deep Learning
-Instructor: Ritika Jani
-Due in: 2 days
-Source: Classroom announcement
-
-Then the email appears as **supporting evidence**, not the main item.
-
-Once the UI is capable of showing structured context like this, improving the AI becomes meaningful.
+  * keyword matching (exam schedule, timetable, semester exam)
+  * basic structure detection (multiple dates, subjects)
+* Optionally use LLM for classification with a confidence score
 
 ---
 
-### About multi-model orchestration
+2. CONFIRMATION FLOW
 
-Yes — and this is actually the direction systems like this naturally evolve toward.
+* Do NOT auto-activate
 
-Right now your AI pipeline is essentially:
+* When detected, expose a flag:
+  exam_mode_candidate = True
 
-```
-Email → LLM → Labels + Summary
-```
-
-Later it can become something like:
-
-```
-Email
-   ↓
-Preprocessing
-   ↓
-Classification model
-   ↓
-Extraction model
-   ↓
-Reasoning model
-   ↓
-Academic context engine
-```
-
-Different models can do different jobs:
-
-Classification model
-Determines topic and urgency.
-
-Extraction model
-Pulls structured data like course name, instructor, dates.
-
-Reasoning model
-Decides what action the student needs to take.
-
-Summarization model
-Generates the UI summary.
-
-This is called **pipeline orchestration**, and it scales better than asking one LLM to do everything.
+* Frontend should prompt:
+  "Exam schedule detected. Activate Exam Mode?"
 
 ---
 
-### The Ollama concurrency problem
+3. EXAM MODE STATE
 
-You are correct here as well. Ollama is excellent for **development and batch inference**, but it is not designed for high concurrency.
+* Add global state:
+  exam_mode_active = True/False
 
-The issues you will face are:
+* Store:
 
-* single model lock during generation
-* high VRAM contention
-* blocking inference requests
-* slow queue buildup
-
-For a prototype this is fine. For real usage you would eventually want something like:
-
-Local inference server with request queue
-OR
-Hosted inference provider
-
-However you do not need to solve this right now.
-
-The architecture you already implemented is actually very good for this stage:
-
-```
-try local inference
-fallback to OpenRouter
-```
-
-This is exactly how production systems behave.
+  * subjects
+  * exam dates
+  * exam order
 
 ---
 
-### The real scalability question
+4. DATA EXTRACTION
 
-The more important scaling problem is **how often you run AI**.
+* Parse exam schedule into structured format:
+  {
+  subject: date,
+  ...
+  }
 
-Right now the system is designed well because:
-
-AI runs **during ingestion**, not during UI requests.
-
-That means the UI is always reading **precomputed intelligence**, which is scalable.
-
-If you ever run AI **on demand when the user opens the dashboard**, the system will break immediately.
-
-You avoided that mistake.
+* Keep extraction simple and robust
 
 ---
 
-### What you should do next
+5. UI BEHAVIOR
+   When exam_mode_active == True:
 
-Focus on **three UI changes first**.
+* Modify dashboard:
 
-1. Add a **dashboard overview section**
-   Show upcoming deadlines, important items, and urgent notifications.
+  * Show "Exam Mode Active"
+  * Highlight next upcoming exam
+  * Show days remaining
+  * Display ordered exam timeline
 
-2. Replace vertical category stacking with **tabs or sidebar filters**
-   Users should switch between categories, not scroll through them.
-
-3. Enrich message cards with **structured fields**
-   Course, instructor, due date, urgency indicator.
-
-These changes will make the interface feel like an **academic assistant** instead of a categorized email list.
-
-Only after that should you improve the AI outputs.
+* Focus card should prioritize exam context
 
 ---
 
-### About your academic context engine idea
+6. EXTENSIBILITY
 
-That idea is actually the most interesting part of your system.
+* Design system so future features can plug in:
 
-Right now you are extracting signals from emails.
-
-The next step is building a **persistent academic model of the student**.
-
-For example:
-
-* known courses
-* instructors
-* recurring events
-* submission patterns
-* academic priorities
-
-When the system knows those things, it can start answering questions like:
-
-* which emails actually matter to this student
-* which announcements are irrelevant
-* which deadlines are critical
-
-At that point the system stops being an email classifier and becomes a **personal academic intelligence layer**.
+  * syllabus parsing
+  * study planning
+  * Google Classroom integration
 
 ---
 
-### One reassuring point
+7. CONSTRAINTS
 
-The architecture you already built is actually well positioned for growth.
-
-You already have:
-
-* ingestion pipeline
-* classification layer
-* scoring engine
-* hybrid inference routing
-* asynchronous processing
-
-That is already most of the infrastructure required for a contextual AI system.
-
-Right now you are simply at the stage where **the UI is not yet expressing the intelligence the backend already has**.
-
-Fix that first.
+* Do NOT implement full syllabus intelligence yet
+* Do NOT rely fully on LLM
+* Keep logic deterministic where possible
 
 ---
 
-If you want, I can also show you something extremely useful next:
+Output:
 
-How a **proper academic dashboard layout** would look using the data your backend already produces, without writing any new AI code.
+* clean backend structure for exam mode
+* frontend state handling
+* minimal but functional UI integration

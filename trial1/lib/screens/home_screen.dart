@@ -3,13 +3,19 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:trial1/models/academic_models.dart';
 import 'package:trial1/widgets/focus_card.dart';
+import 'package:trial1/widgets/rotating_focus_card.dart';
+import 'package:trial1/utils/priority_scorer.dart';
 import 'package:trial1/widgets/dashboard/category_overview.dart';
+import 'package:trial1/widgets/dashboard/bucket_tabs_with_panel.dart';
 import 'package:trial1/models/academic_event.dart';
 import 'package:trial1/widgets/dashboard/vertical_sections.dart';
 import 'package:trial1/widgets/timeline_section.dart';
-import 'package:trial1/widgets/timeline_compact.dart';
+import 'package:trial1/widgets/timeline_desktop.dart';
 import 'package:trial1/services/api_services.dart';
 import 'package:trial1/models/dashboard_models.dart';
+import 'package:trial1/widgets/global_search_bar.dart';
+import 'package:trial1/widgets/search_results_view.dart';
+import 'package:trial1/widgets/context_feed_container.dart';
 
 class HomeScreen extends StatefulWidget {
   final VoidCallback? themeToggle;
@@ -39,6 +45,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _dashboardLoading = true;
   bool _refreshInFlight = false;
   String? _dashboardError;
+  String _searchQuery = '';  // NEW: track search query
 
   @override
   void initState() {
@@ -170,6 +177,64 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     return buffer.toString();
+  }
+
+  List<AcademicItem> _extractAllItems(_DashboardSnapshot snapshot) {
+    final allItems = <AcademicItem>[];
+    final seenIds = <int>{};
+    
+    // Try to extract from raw data
+    final data = snapshot.raw;
+    
+    // From focus items
+    final focus = data['focus'];
+    if (focus is List) {
+      for (final item in focus.whereType<Map<String, dynamic>>()) {
+        try {
+          final academicItem = AcademicItem.fromJson(item);
+          if (!seenIds.contains(academicItem.id)) {
+            allItems.add(academicItem);
+            seenIds.add(academicItem.id);
+          }
+        } catch (_) {}
+      }
+    }
+
+    // From grouped items
+    final grouped = data['groups'];
+    if (grouped is Map<String, dynamic>) {
+      for (final key in ['ASSIGNMENT', 'EXAM', 'ACADEMIC_ADMIN', 'OPPORTUNITY', 'INFORMATION']) {
+        final groupItems = grouped[key];
+        if (groupItems is List) {
+          for (final item in groupItems.whereType<Map<String, dynamic>>()) {
+            try {
+              final academicItem = AcademicItem.fromJson(item);
+              if (!seenIds.contains(academicItem.id)) {
+                allItems.add(academicItem);
+                seenIds.add(academicItem.id);
+              }
+            } catch (_) {}
+          }
+        }
+      }
+    }
+
+    // From academic items
+    final academicItems = data['academic_items'];
+    if (academicItems is List) {
+      for (final item in academicItems.whereType<Map<String, dynamic>>()) {
+        try {
+          final academicItem = AcademicItem.fromJson(item);
+          if (!seenIds.contains(academicItem.id)) {
+            allItems.add(academicItem);
+            seenIds.add(academicItem.id);
+          }
+        } catch (_) {}
+      }
+    }
+
+    print('[ExtractAllItems] Total unique items: ${allItems.length}');
+    return allItems;
   }
 
   Widget _buildLoadingState(BuildContext context) {
@@ -321,6 +386,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildSecondaryPanel(
     BuildContext context, {
     List<Map<String, dynamic>>? timelineGroups,
+    List<AcademicItem>? informationItems,
   }) {
     return Padding(
       padding: const EdgeInsets.only(left: 16.0),
@@ -334,30 +400,53 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
         padding: const EdgeInsets.all(12),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 8.0),
-              child: Text(
-                'Timeline',
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Timeline section
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 8.0),
+                child: Text(
+                  'Timeline',
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 4),
-            SingleChildScrollView(
-              child: Padding(
+              const SizedBox(height: 4),
+              Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4.0),
-                child: TimelineCompact(
+                child: TimelineDesktop(
                   groups: timelineGroups ?? [],
+                  onItemTap: (item) {
+                    // Handle timeline item tap
+                  },
                 ),
               ),
-            ),
-          ],
+
+              // Separator between Timeline and Context Feed
+              if (informationItems != null && informationItems.isNotEmpty)
+                const SizedBox(height: 12),
+
+              // Context Feed section
+              if (informationItems != null && informationItems.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                  child: ContextFeedContainer(
+                    informationItems: informationItems,
+                    onItemDismissed: () {
+                      // Trigger refresh if needed
+                    },
+                    onItemTapped: (item) {
+                      // Handle item tap (e.g., show preview dialog)
+                    },
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -367,19 +456,16 @@ class _HomeScreenState extends State<HomeScreen> {
     required BuildContext context,
     required Widget focusWidget,
     required Map<String, int> counts,
+    required Map<String, List<AcademicItem>> groupedItems,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         focusWidget,
         const SizedBox(height: 16),
-        CategoryOverview(
+        BucketTabsWithPanel(
           counts: counts,
-          onSelect: (label) {
-            Navigator.of(
-              context,
-            ).pushNamed('/dashboard/list', arguments: {'filter': label});
-          },
+          groupedItems: groupedItems,
         ),
       ],
     );
@@ -389,6 +475,55 @@ class _HomeScreenState extends State<HomeScreen> {
     BuildContext context,
     UnifiedDashboardData data,
   ) {
+    // NEW: Check if user is searching
+    if (_searchQuery.isNotEmpty && _dashboardSnapshot.value != null) {
+      final allItems = _extractAllItems(_dashboardSnapshot.value!);
+      
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          final isMobile = constraints.maxWidth < 600;
+          
+          if (isMobile) {
+            return SearchResultsView(
+              query: _searchQuery,
+              allItems: allItems,
+              onResultTap: (item) {
+                setState(() => _searchQuery = '');
+                unawaited(_refreshDashboard(force: true));
+              },
+            );
+          }
+          
+          // Tablet & Desktop: show results on left, timeline on right
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                flex: 70,
+                child: SearchResultsView(
+                  query: _searchQuery,
+                  allItems: allItems,
+                  onResultTap: (item) {
+                    setState(() => _searchQuery = '');
+                    unawaited(_refreshDashboard(force: true));
+                  },
+                ),
+              ),
+              Expanded(
+                flex: 30,
+                child: _buildSecondaryPanel(
+                  context,
+                  timelineGroups: data.timelineGroups,
+                  informationItems: data.grouped['INFORMATION'] ?? [],
+                ),
+              ),
+            ],
+          );
+        },
+      );
+    }
+
+    // EXISTING: Normal dashboard mode (non-search)
     final allItems = data.grouped.values.expand((items) => items).toList();
 
     AcademicItem? topPriorityItem;
@@ -509,10 +644,17 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     }
 
-    final focusWidget = FocusCard(
-      item: topPriorityItem,
-      event: topPriorityItem == null ? topPriorityEvent : null,
-    );
+    // Collect top priority items for focus card rotation
+    final focusItemsRaw = data.grouped.values.expand((items) => items).toList();
+    final focusItems = PriorityScorer.selectFocusItems(focusItemsRaw, limit: 5);
+
+    final focusWidget = focusItems.isNotEmpty
+        ? RotatingFocusCard(
+            focusItems: focusItems,
+            onActionCompleted: () => unawaited(_refreshDashboard(force: true)),
+            onActionDismissed: () => unawaited(_refreshDashboard(force: true)),
+          )
+        : const FocusCard();
 
     final counts = {
       'Assignments': data.grouped['ASSIGNMENT']?.length ?? 0,
@@ -587,6 +729,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   context: context,
                   focusWidget: focusWidget,
                   counts: counts,
+                  groupedItems: data.grouped,
                 ),
               ),
               // Right column (30% flex) - timeline sidebar
@@ -595,6 +738,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: _buildSecondaryPanel(
                   context,
                   timelineGroups: data.timelineGroups,
+                  informationItems: data.grouped['INFORMATION'] ?? [],
                 ),
               ),
             ],
@@ -608,32 +752,73 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('UniDash'),
-        centerTitle: false,
-        actions: [
-          IconButton(
-            icon: Icon(
-              widget.themeMode == ThemeMode.dark
-                  ? Icons.light_mode
-                  : Icons.dark_mode,
-            ),
-            onPressed: widget.themeToggle,
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12.0),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(20),
-              onTap: () => Navigator.of(context).pushNamed('/profile'),
-              child: CircleAvatar(
-                radius: 16,
-                backgroundColor: Theme.of(
-                  context,
-                ).colorScheme.surfaceContainerHighest,
-                child: const Icon(Icons.person, size: 18),
+        toolbarHeight: 64,
+        titleSpacing: 0,
+        title: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          child: Row(
+            children: [
+              // Left: App title
+              const Text(
+                'UniDash',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-            ),
+              const SizedBox(width: 24),
+      // Center: Search bar
+              Expanded(
+                child: ValueListenableBuilder<_DashboardSnapshot?>(
+                  valueListenable: _dashboardSnapshot,
+                  builder: (context, snapshot, _) {
+                    // Extract all academic items from the dashboard
+                    final allItems = snapshot != null
+                        ? _extractAllItems(snapshot)
+                        : <AcademicItem>[];
+                    
+                    return GlobalSearchBar(
+                      academicItems: allItems,
+                      onResultSelected: () {
+                        // Trigger dashboard refresh when a search result is selected
+                        unawaited(_refreshDashboard(force: true));
+                      },
+                      onSearchQueryChanged: (query) {
+                        setState(() {
+                          _searchQuery = query;
+                        });
+                      },
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(width: 16),
+              // Right: Action icons
+              IconButton(
+                icon: Icon(
+                  widget.themeMode == ThemeMode.dark
+                      ? Icons.light_mode
+                      : Icons.dark_mode,
+                ),
+                onPressed: widget.themeToggle,
+              ),
+              Padding(
+                padding: const EdgeInsets.only(right: 12.0),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(20),
+                  onTap: () => Navigator.of(context).pushNamed('/profile'),
+                  child: CircleAvatar(
+                    radius: 16,
+                    backgroundColor: Theme.of(
+                      context,
+                    ).colorScheme.surfaceContainerHighest,
+                    child: const Icon(Icons.person, size: 18),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
       body: LayoutBuilder(
         builder: (context, constraints) {

@@ -2,35 +2,51 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 // ─── Core Palette ───────────────────────────────────────────
-// Dark tokens
-const Color kBgPrimaryDark = Color(0xFF0F1115);
-const Color kBgSurfaceDark = Color(0xFF171A21);
-const Color kBgElevatedDark = Color(0xFF1E222B);
-const Color kSidebarDark = Color(0xFF181B22);
+// DARK MODE TOKENS
+const Color kBgPrimaryDark = Color(0xFF0F1115);       // page bg
+const Color kBgSecondaryDark = Color(0xFF171A21);     // nested bg
+const Color kBgSurfaceDark = Color(0xFF1E222B);       // cards
+const Color kBgElevatedDark = Color(0xFF272D38);      // raised surfaces
+const Color kSidebarDark = Color(0xFF181B22);         // sidebar
 const Color kTextPrimaryDark = Color(0xFFE6E6E6);
 const Color kTextSecondaryDark = Color(0xFF9CA3AF);
-const Color kTextDisabledDark = Color(0xFF6B7280);
+const Color kTextTertiaryDark = Color(0xFF6B7280);
+const Color kBorderSubtleDark = Color(0xFF404854);    // light dividers
+const Color kBorderMediumDark = Color(0xFF505866);    // active states
+const Color kBorderStrongDark = Color(0xFF646F85);    // focus states
 
-// Light tokens
-const Color kBgPrimaryLight = Color(0xFFF6F7F9); // page background
-const Color kBgSurfaceLight = Color(0xFFFFFFFF); // card background
-const Color kBgElevatedLight = Color(0xFFF2F3F7); // raised surface
-const Color kSidebarLight = Color(0xFFE9EAEC); // sidebar background
-const Color kTextPrimaryLight = Color(0xFF23272F);
-const Color kTextSecondaryLight = Color(0xFF5A5F6B);
-const Color kTextDisabledLight = Color(0xFFB0B4BE);
+// LIGHT MODE TOKENS
+const Color kBgPrimaryLight = Color(0xFFFFFFFF);      // page bg (pure white)
+const Color kBgSecondaryLight = Color(0xFFF9FAFB);    // nested bg
+const Color kBgSurfaceLight = Color(0xFFF3F4F6);      // cards (light gray)
+const Color kBgElevatedLight = Color(0xFFE5E7EB);     // raised surfaces
+const Color kSidebarLight = Color(0xFFF3F4F6);        // sidebar
+const Color kTextPrimaryLight = Color(0xFF1F2937);    // darker text
+const Color kTextSecondaryLight = Color(0xFF4B5563);  // secondary
+const Color kTextTertiaryLight = Color(0xFF9CA3AF);   // disabled
+const Color kBorderSubtleLight = Color(0xFFD1D5DB);   // visible borders
+const Color kBorderMediumLight = Color(0xFF9CA3AF);   // active borders
+const Color kBorderStrongLight = Color(0xFF6B7280);   // focus borders
 
-const Color kAccentPrimary = Color(0xFFE59A23);
-const Color kAccentSecondary = Color(0xFFF4C76B);
+// ACCENT COLORS
+const Color kAccentPrimary = Color(0xFF4F46E5);       // indigo
+const Color kAccentPrimaryDark = Color(0xFF4F46E5);   // indigo
+const Color kAccentPrimaryLight = Color(0xFF4F46E5);  // indigo
+const Color kAccentSecondary = Color(0xFF6366F1);     // indigo lighter
+const Color kAccentSecondaryLight = Color(0xFF4338CA); // indigo darker
+const Color kAccentHover = Color(0xFF4338CA);         // indigo interaction
+const Color kAccentHoverLight = Color(0xFF3730A3);    // indigo interaction
+const Color kAccentFocus = Color(0xFF3730A3);         // indigo focus
+const Color kAccentFocusLight = Color(0xFF312E81);    // indigo focus
 
 // ─── Topic Semantic Colors ──────────────────────────────────
-// Entity / topic semantic colors (updated per design requirements)
-const Color kTopicAssignment = Color(0xFF3B82F6); // blue
-const Color kTopicExam = Color(0xFFEF4444); // red
-const Color kTopicAcademic = Color(0xFF64748B); // neutral slate for announcements/admin
-const Color kTopicOpportunity = Color(0xFFA855F7); // purple
-const Color kTopicInformation = Color(0xFF64748B); // neutral slate
-const Color kTopicOther = Color(0xFF94A3B8); // gray
+// Entity / topic semantic colors (same in both modes for consistency)
+const Color kTopicAssignment = Color(0xFF64748B);    // slate
+const Color kTopicExam = Color(0xFF64748B);          // slate
+const Color kTopicAcademic = Color(0xFF64748B);      // slate
+const Color kTopicOpportunity = Color(0xFF64748B);   // slate
+const Color kTopicInformation = Color(0xFF64748B);   // slate
+const Color kTopicOther = Color(0xFF64748B);         // slate
 
 // ─── Urgency Colors ─────────────────────────────────────────
 const Color kUrgencyCritical = Color(0xFFEF4444);
@@ -173,12 +189,17 @@ final ThemeData uniDashDarkTheme = ThemeData(
     displayColor: kTextPrimaryDark,
   ),
   colorScheme: const ColorScheme.dark(
-    primary: kAccentPrimary,
+    primary: kAccentPrimaryDark,
     secondary: kAccentSecondary,
+    tertiary: kAccentHover,
     surface: kBgSurfaceDark,
+    surfaceContainer: kBgElevatedDark,
     surfaceContainerHighest: kSidebarDark,
     onPrimary: Colors.black,
     onSurface: kTextPrimaryDark,
+    onSurfaceVariant: kTextSecondaryDark,
+    outline: kBorderSubtleDark,
+    outlineVariant: kBorderMediumDark,
   ),
   appBarTheme: AppBarTheme(
     backgroundColor: kBgPrimaryDark,
@@ -200,7 +221,7 @@ final ThemeData uniDashDarkTheme = ThemeData(
   drawerTheme: const DrawerThemeData(backgroundColor: kSidebarDark),
   elevatedButtonTheme: ElevatedButtonThemeData(
     style: ElevatedButton.styleFrom(
-      backgroundColor: kAccentPrimary,
+      backgroundColor: kAccentPrimaryDark,
       foregroundColor: Colors.black,
       elevation: 0,
       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
@@ -218,18 +239,18 @@ final ThemeData uniDashDarkTheme = ThemeData(
     style: ButtonStyle(
       backgroundColor: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) {
-          return kAccentPrimary.withOpacity(0.15);
+          return kAccentPrimaryDark.withOpacity(0.15);
         }
         return kBgSurfaceDark;
       }),
       foregroundColor: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) {
-          return kAccentPrimary;
+          return kAccentPrimaryDark;
         }
         return kTextSecondaryDark;
       }),
       side: WidgetStateProperty.all(
-        BorderSide(color: kTextDisabledDark.withOpacity(0.2)),
+        BorderSide(color: kBorderSubtleDark.withOpacity(0.5)),
       ),
       shape: WidgetStateProperty.all(
         RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -242,8 +263,8 @@ final ThemeData uniDashDarkTheme = ThemeData(
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     behavior: SnackBarBehavior.floating,
   ),
-  dividerColor: kTextDisabledDark.withOpacity(0.22),
-  disabledColor: kTextDisabledDark,
+  dividerColor: kBorderSubtleDark.withOpacity(0.4),
+  disabledColor: kTextTertiaryDark,
 );
 
 // ─── Light Theme ───────────────────────────────────────────
@@ -255,12 +276,17 @@ final ThemeData uniDashLightTheme = ThemeData(
     displayColor: kTextPrimaryLight,
   ),
   colorScheme: const ColorScheme.light(
-    primary: kAccentPrimary,
-    secondary: kAccentSecondary,
+    primary: kAccentPrimaryLight,
+    secondary: kAccentSecondaryLight,
+    tertiary: kAccentHoverLight,
     surface: kBgSurfaceLight,
+    surfaceContainer: kBgElevatedLight,
     surfaceContainerHighest: kSidebarLight,
-    onPrimary: Colors.black,
+    onPrimary: Colors.white,
     onSurface: kTextPrimaryLight,
+    onSurfaceVariant: kTextSecondaryLight,
+    outline: kBorderSubtleLight,
+    outlineVariant: kBorderMediumLight,
   ),
   appBarTheme: AppBarTheme(
     backgroundColor: kBgPrimaryLight,
@@ -276,14 +302,17 @@ final ThemeData uniDashLightTheme = ThemeData(
   cardTheme: CardThemeData(
     color: kBgSurfaceLight,
     elevation: 0,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(16),
+      side: const BorderSide(color: kBorderSubtleLight, width: 1),
+    ),
     margin: EdgeInsets.zero,
   ),
   drawerTheme: const DrawerThemeData(backgroundColor: kSidebarLight),
   elevatedButtonTheme: ElevatedButtonThemeData(
     style: ElevatedButton.styleFrom(
-      backgroundColor: kAccentPrimary,
-      foregroundColor: Colors.black,
+      backgroundColor: kAccentPrimaryLight,
+      foregroundColor: Colors.white,
       elevation: 0,
       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -300,19 +329,22 @@ final ThemeData uniDashLightTheme = ThemeData(
     style: ButtonStyle(
       backgroundColor: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) {
-          return kAccentPrimary.withOpacity(0.10);
+          return kAccentPrimaryLight.withOpacity(0.12);
         }
         return kBgSurfaceLight;
       }),
       foregroundColor: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) {
-          return kAccentPrimary;
+          return kAccentPrimaryLight;
         }
         return kTextSecondaryLight;
       }),
-      side: WidgetStateProperty.all(
-        BorderSide(color: kTextDisabledLight.withOpacity(0.18)),
-      ),
+      side: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) {
+          return const BorderSide(color: kAccentPrimaryLight, width: 2);
+        }
+        return const BorderSide(color: kBorderSubtleLight, width: 1);
+      }),
       shape: WidgetStateProperty.all(
         RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
@@ -324,6 +356,6 @@ final ThemeData uniDashLightTheme = ThemeData(
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     behavior: SnackBarBehavior.floating,
   ),
-  dividerColor: kTextDisabledLight.withOpacity(0.13),
-  disabledColor: kTextDisabledLight,
+  dividerColor: kBorderSubtleLight.withOpacity(0.6),
+  disabledColor: kTextTertiaryLight,
 );

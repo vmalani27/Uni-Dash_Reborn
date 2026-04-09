@@ -297,6 +297,52 @@ class BackendService {
   }
 
   /* =======================
+     SEARCH
+     ======================= */
+
+  static Future<SearchResults> searchAcademicItems(String query) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) throw Exception("No Firebase user");
+    final idToken = await user.getIdToken();
+    
+    final response = await http.get(
+      Uri.parse("$baseUrl/search/academic?q=${Uri.encodeComponent(query)}"),
+      headers: {
+        "Authorization": "Bearer $idToken",
+        "ngrok-skip-browser-warning": "true",
+      },
+    );
+    
+    if (response.statusCode == 200) {
+      final json = jsonDecode(response.body);
+      return SearchResults.fromJson(json);
+    } else {
+      throw Exception("Search failed: ${response.body}");
+    }
+  }
+
+  static Future<List<String>> getSearchSuggestions(String query) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) throw Exception("No Firebase user");
+    final idToken = await user.getIdToken();
+    
+    final response = await http.get(
+      Uri.parse("$baseUrl/search/academic/suggestions?q=${Uri.encodeComponent(query)}"),
+      headers: {
+        "Authorization": "Bearer $idToken",
+        "ngrok-skip-browser-warning": "true",
+      },
+    );
+    
+    if (response.statusCode == 200) {
+      final json = jsonDecode(response.body);
+      return List<String>.from(json['suggestions'] ?? []);
+    } else {
+      throw Exception("Suggestions failed: ${response.body}");
+    }
+  }
+
+  /* =======================
      USER PROFILE
      ======================= */
 
@@ -510,5 +556,68 @@ class BackendService {
       debugPrint("Backend logout error: $e");
       // Continue with client-side logout even if backend fails
     }
+  }
+}
+
+/// Search results model
+class SearchResults {
+  final String query;
+  final int total;
+  final Map<String, List<SearchResultItem>> groups;
+
+  SearchResults({
+    required this.query,
+    required this.total,
+    required this.groups,
+  });
+
+  factory SearchResults.fromJson(Map<String, dynamic> json) {
+    return SearchResults(
+      query: json['query'] ?? '',
+      total: json['total'] ?? 0,
+      groups: {
+        'today': _parseGroup(json['groups']?['today']),
+        'tomorrow': _parseGroup(json['groups']?['tomorrow']),
+        'thisWeek': _parseGroup(json['groups']?['thisWeek']),
+        'others': _parseGroup(json['groups']?['others']),
+      },
+    );
+  }
+
+  static List<SearchResultItem> _parseGroup(dynamic data) {
+    if (data == null) return [];
+    return (data as List)
+        .map((item) => SearchResultItem.fromJson(item))
+        .toList();
+  }
+}
+
+/// Individual search result item
+class SearchResultItem {
+  final int id;
+  final String gmailId;
+  final String subject;
+  final String? summary;
+  final String? category;
+  final double score;
+
+  SearchResultItem({
+    required this.id,
+    required this.gmailId,
+    required this.subject,
+    this.summary,
+    this.category,
+    required this.score,
+  });
+
+  factory SearchResultItem.fromJson(Map<String, dynamic> json) {
+    return SearchResultItem(
+      id: json['id'] ?? 0,
+      gmailId: json['gmail_id'] ?? '',
+      subject: json['subject'] ?? '',
+      summary: json['summary'],
+      category: json['category'],
+      score: (json['score'] as num?)?.toDouble() ?? 0.0,
+    );
   }
 }
