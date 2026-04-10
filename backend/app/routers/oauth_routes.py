@@ -31,7 +31,20 @@ GOOGLE_REVOKE_URL = "https://oauth2.googleapis.com/revoke"
 
 CLIENT_ID = os.getenv("CLIENT_ID")
 CLIENT_SECRET = os.getenv("CLIENT_SECRET")
-REDIRECT_URL = os.getenv("LOCAL_REDIRECT_URI")
+
+
+def _get_redirect_url() -> str:
+    local_redirect_url = (os.getenv("LOCAL_REDIRECT_URI") or "").strip()
+    backend_redirect_url = (os.getenv("BACKEND_REDIRECT_URI") or "").strip()
+
+    redirect_url = local_redirect_url or backend_redirect_url
+    if not redirect_url:
+        raise RuntimeError("Missing LOCAL_REDIRECT_URI and BACKEND_REDIRECT_URI")
+
+    return redirect_url
+
+
+REDIRECT_URL = _get_redirect_url()
 
 SCOPES = [
     "https://www.googleapis.com/auth/gmail.readonly",
