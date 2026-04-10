@@ -44,7 +44,14 @@ class OAuthCallbackHandler {
     print('[OAUTH] Deep link received: $uri');
 
     // Handle OAuth success callback
-    if (uri.path == '/oauth/success' || uri.path == '/oauth-success') {
+    final isOAuthSuccess =
+        // Preferred mobile callback: unidash://oauth/success
+        (uri.scheme == 'unidash' && uri.host == 'oauth' && uri.path == '/success') ||
+        // Legacy/alternate callback forms
+        uri.path == '/oauth/success' ||
+        uri.path == '/oauth-success';
+
+    if (isOAuthSuccess) {
       _handleOAuthSuccess();
     }
   }

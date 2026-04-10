@@ -7,6 +7,8 @@ from app.core.database import get_supabase_db
 from app.models.academic_objects import AcademicItem
 from app.models.gmail.gmail_message import GmailMessage
 from app.models.gmail.follow_up import FollowUp
+from app.models.user import User
+from app.services.academic_context_engine import AcademicContextEngine
 from app.utils.firebase_util import verify_firebase_token
 
 router = APIRouter(prefix="/api/dashboard", tags=["Dashboard"])
@@ -139,31 +141,33 @@ async def get_dashboard(
 ):
     uid = firebase_data["uid"]
 
-    # Fetch academic items for this user
-    raw_items: List[AcademicItem] = (
-        db.query(AcademicItem)
-        .filter(AcademicItem.uid == uid, AcademicItem.completed == False, AcademicItem.dismissed == False)
-        .all()
-    )
+    user = db.query(User).filter(User.uid == uid).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
 
-    # Filter out very low priority items
-    filtered = [i for i in raw_items if (i.academic_score or 0) >= 20]
+    # Do not expose dashboard content until OAuth setup is complete.
+    if not user.oauth_connected:
+        return {
+            "focus": None,
+            "groups": {
+                "ASSIGNMENT": [],
+                "EXAM": [],
+                "ACADEMIC_ADMIN": [],
+                "OPPORTUNITY": [],
+                "INFORMATION": [],
+            },
+            "timeline": [
+                {"date": "Today", "items": []},
+                {"date": "Tomorrow", "items": []},
+                {"date": "This Week", "items": []},
+            ],
+            "banner": None,
+            "blocked_reason": "oauth_not_connected",
+        }
 
-    # Sort: due_date ASC (None -> end), then academic_score DESC
-    def _sort_key(it: AcademicItem):
-        due = it.due_date if it.due_date is not None else datetime.max
-        return (due, -it.academic_score)
+    raw_items: List[AcademicItem] = db.query(AcademicItem).filter(AcademicItem.uid == uid).all()
 
-    filtered.sort(key=_sort_key)
-
-    # Focus
-    focus_item = get_focus_item(filtered)
-
-    # Fetch linked GmailMessage rows for any academic items that reference
-    # a source email. This lets the frontend render AI-derived fields like
-    # `ai_summary`, `ai_label_topic`, and `ai_label_source` without re-running
-    # inference on the client.
-    source_ids = [i.source_email_id for i in filtered if i.source_email_id]
+    source_ids = [i.source_email_id for i in raw_items if i.source_email_id]
     gmail_map: Dict[str, GmailMessage] = {}
     if source_ids:
         msgs = (
@@ -173,70 +177,56 @@ async def get_dashboard(
         )
         gmail_map = {m.gmail_id: m for m in msgs}
 
+    ranked_items = AcademicContextEngine.rank_academic_items(raw_items)
+    filtered = [(item, metrics) for item, metrics in ranked_items if metrics["effective_score"] >= 20]
+
+    focus_item = None
+    focus_candidates = [
+        (item, metrics)
+        for item, metrics in filtered
+        if item.due_date is not None and 0 <= (AcademicContextEngine._ensure_aware(item.due_date) - AcademicContextEngine._utc_now()).total_seconds() <= 24 * 3600
+    ]
+    if focus_candidates:
+        focus_candidates.sort(key=lambda pair: (pair[0].due_date or datetime.max, -pair[1]["effective_score"]))
+        focus_item = focus_candidates[0][0]
+    elif filtered:
+        focus_item = filtered[0][0]
+
     # Groups — serialize each AcademicItem and include linked GmailMessage metadata
     keys = ["ASSIGNMENT", "EXAM", "ACADEMIC_ADMIN", "OPPORTUNITY", "INFORMATION"]
     groups: Dict[str, List[Dict[str, Any]]] = {k: [] for k in keys}
-    for it in filtered:
+    academic_items: List[Dict[str, Any]] = []
+    for it, metrics in filtered:
         et = (it.entity_type or "INFORMATION").upper()
         if et not in groups:
             et = "INFORMATION"
 
-        serialized = {
-            "id": it.id,
-            "title": it.title,
-            "entity_type": it.entity_type,
-            "due_date": it.due_date.isoformat() if it.due_date else None,
-            "course_code": it.course_code,
-            "location": it.location,
-            "source_email_id": it.source_email_id,
-            "description": it.description,
-            "academic_score": it.academic_score,
-            "completed": it.completed,
-        }
-
-        # Attach AI/enrichment fields from the linked GmailMessage when available
-        if it.source_email_id and it.source_email_id in gmail_map:
-            gm = gmail_map[it.source_email_id]
-            serialized.update({
-                "ai_summary": gm.ai_summary,
-                "ai_label_topic": gm.ai_label_topic,
-                "ai_label_source": gm.ai_label_source,
-            })
-
+        serialized = AcademicContextEngine.serialize_academic_item(
+            it,
+            gmail_map.get(it.source_email_id) if it.source_email_id else None,
+            metrics,
+        )
         groups[et].append(serialized)
+        academic_items.append(serialized)
 
     # Timeline
-    timeline = build_timeline(db, uid, filtered)
+    timeline = build_timeline(db, uid, [item for item, _metrics in filtered])
 
     # Banner
-    banner = build_banner(filtered)
+    banner = build_banner([item for item, _metrics in filtered])
 
     # Enrich focus item with GmailMessage fields if available
     focus_serialized = None
     if focus_item:
-        focus_serialized = {
-            "id": focus_item.id,
-            "title": focus_item.title,
-            "entity_type": focus_item.entity_type,
-            "due_date": focus_item.due_date.isoformat() if focus_item.due_date else None,
-            "course_code": focus_item.course_code,
-            "location": focus_item.location,
-            "source_email_id": focus_item.source_email_id,
-            "description": focus_item.description,
-            "academic_score": focus_item.academic_score,
-            "completed": focus_item.completed,
-        }
-        if focus_item.source_email_id and focus_item.source_email_id in gmail_map:
-            gm = gmail_map[focus_item.source_email_id]
-            focus_serialized.update({
-                "ai_summary": gm.ai_summary,
-                "ai_label_topic": gm.ai_label_topic,
-                "ai_label_source": gm.ai_label_source,
-            })
+        focus_serialized = AcademicContextEngine.serialize_academic_item(
+            focus_item,
+            gmail_map.get(focus_item.source_email_id) if focus_item.source_email_id else None,
+        )
 
     return {
         "focus": focus_serialized,
         "groups": groups,
+        "academic_items": academic_items,
         "timeline": timeline,
         "banner": banner,
     }

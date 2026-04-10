@@ -60,6 +60,22 @@ class AcademicEvent {
     return overdue <= 1;
   }
 
+  /// An event is considered **expired** when its deadline is more than one hour in the past.
+  bool get isExpired {
+    if (deadline == null) return false;
+    final overdue = DateTime.now().difference(deadline!).inHours;
+    return overdue > 1;
+  }
+
+  /// An event is **upcoming** when it has a deadline that is at least
+  /// 24 hours in the future. Items without a deadline are treated as upcoming
+  /// (they have low priority but are not expired).
+  bool get isUpcoming {
+    if (deadline == null) return true;
+    final hoursAhead = deadline!.difference(DateTime.now()).inHours;
+    return hoursAhead >= 24;
+  }
+
   @override
   String toString() => 'AcademicEvent(id: $id, type: $type, title: $title, urgency: $urgency, score: $academicScore)';
 }

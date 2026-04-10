@@ -1,0 +1,84 @@
+00:00 +0: loading /home/edith/Documents/Uni-Dash_Reborn/trial1/test/widget_test.dart                                                                                                                   lib/widgets/timeline_section.dart:30:16: Error: Can't find ')' to match '('.
+        Padding(
+               ^
+lib/widgets/timeline_section.dart:150:1: Error: Expected a declaration, but got '}'.
+}
+^
+00:01 +0: loading /home/edith/Documents/Uni-Dash_Reborn/trial1/test/widget_test.dart                                                                                                                   00:02 +0: loading /home/edith/Documents/Uni-Dash_Reborn/trial1/test/widget_test.dart                                                                                                                   00:03 +0: loading /home/edith/Documents/Uni-Dash_Reborn/trial1/test/widget_test.dart                                                                                                                   00:04 +0: loading /home/edith/Documents/Uni-Dash_Reborn/trial1/test/widget_test.dart                                                                                                                   00:05 +0: loading /home/edith/Documents/Uni-Dash_Reborn/trial1/test/widget_test.dart                                                                                                                   lib/widgets/focus_card.dart:15:32: Error: Local variable 'item' can't be referenced before it is declared.
+    final AcademicItem? item = item;
+                               ^^^^
+lib/widgets/focus_card.dart:15:25: Context: This is the declaration of the variable 'item'.
+    final AcademicItem? item = item;
+                        ^^^^
+lib/widgets/focus_card.dart:16:34: Error: Local variable 'event' can't be referenced before it is declared.
+    final AcademicEvent? event = event;
+                                 ^^^^^
+lib/widgets/focus_card.dart:16:26: Context: This is the declaration of the variable 'event'.
+    final AcademicEvent? event = event;
+                         ^^^^^
+lib/widgets/focus_card.dart:36:17: Error: Property 'type' cannot be accessed on 'AcademicEvent?' because it is potentially null.
+ - 'AcademicEvent' is from 'package:trial1/models/academic_event.dart' ('lib/models/academic_event.dart').
+Try accessing using ?. instead.
+        ? event.type.toString().split('.').last.toUpperCase()
+                ^^^^
+lib/widgets/focus_card.dart:9:24: Context: 'event' refers to a public property so it couldn't be promoted.
+See http://dart.dev/go/non-promo-public-field
+  final AcademicEvent? event;
+                       ^
+lib/widgets/timeline_section.dart:143:9: Error: Undefined name 'groups'.
+    if (groups.isEmpty) return _buildStaticTimeline(context);
+        ^^^^^^
+lib/widgets/timeline_section.dart:143:32: Error: Method not found: '_buildStaticTimeline'.
+    if (groups.isEmpty) return _buildStaticTimeline(context);
+                               ^^^^^^^^^^^^^^^^^^^^
+lib/widgets/timeline_section.dart:147:35: Error: Method not found: '_buildGroup'.
+      children: groups.map((g) => _buildGroup(context, g)).toList(),
+                                  ^^^^^^^^^^^
+lib/widgets/timeline_section.dart:147:17: Error: Undefined name 'groups'.
+      children: groups.map((g) => _buildGroup(context, g)).toList(),
+                ^^^^^^
+00:06 +0: loading /home/edith/Documents/Uni-Dash_Reborn/trial1/test/widget_test.dart                                                                                                                   00:07 +0: loading /home/edith/Documents/Uni-Dash_Reborn/trial1/test/widget_test.dart                                                                                                                   00:08 +0: loading /home/edith/Documents/Uni-Dash_Reborn/trial1/test/widget_test.dart                                                                                                                   00:09 +0: loading /home/edith/Documents/Uni-Dash_Reborn/trial1/test/widget_test.dart                                                                                                                   00:10 +0: loading /home/edith/Documents/Uni-Dash_Reborn/trial1/test/widget_test.dart                                                                                                                   00:10 +0 -1: loading /home/edith/Documents/Uni-Dash_Reborn/trial1/test/widget_test.dart [E]                                                                                                            
+  Failed to load "/home/edith/Documents/Uni-Dash_Reborn/trial1/test/widget_test.dart":
+  Compilation failed for testPath=/home/edith/Documents/Uni-Dash_Reborn/trial1/test/widget_test.dart: lib/widgets/timeline_section.dart:30:16: Error: Can't find ')' to match '('.
+          Padding(
+                 ^
+  lib/widgets/timeline_section.dart:150:1: Error: Expected a declaration, but got '}'.
+  }
+  ^
+  lib/widgets/focus_card.dart:15:32: Error: Local variable 'item' can't be referenced before it is declared.
+      final AcademicItem? item = item;
+                                 ^^^^
+  lib/widgets/focus_card.dart:15:25: Context: This is the declaration of the variable 'item'.
+      final AcademicItem? item = item;
+                          ^^^^
+  lib/widgets/focus_card.dart:16:34: Error: Local variable 'event' can't be referenced before it is declared.
+      final AcademicEvent? event = event;
+                                   ^^^^^
+  lib/widgets/focus_card.dart:16:26: Context: This is the declaration of the variable 'event'.
+      final AcademicEvent? event = event;
+                           ^^^^^
+  lib/widgets/focus_card.dart:36:17: Error: Property 'type' cannot be accessed on 'AcademicEvent?' because it is potentially null.
+   - 'AcademicEvent' is from 'package:trial1/models/academic_event.dart' ('lib/models/academic_event.dart').
+  Try accessing using ?. instead.
+          ? event.type.toString().split('.').last.toUpperCase()
+                  ^^^^
+  lib/widgets/focus_card.dart:9:24: Context: 'event' refers to a public property so it couldn't be promoted.
+  See http://dart.dev/go/non-promo-public-field
+    final AcademicEvent? event;
+                         ^
+  lib/widgets/timeline_section.dart:143:9: Error: Undefined name 'groups'.
+      if (groups.isEmpty) return _buildStaticTimeline(context);
+          ^^^^^^
+  lib/widgets/timeline_section.dart:143:32: Error: Method not found: '_buildStaticTimeline'.
+      if (groups.isEmpty) return _buildStaticTimeline(context);
+                                 ^^^^^^^^^^^^^^^^^^^^
+  lib/widgets/timeline_section.dart:147:35: Error: Method not found: '_buildGroup'.
+        children: groups.map((g) => _buildGroup(context, g)).toList(),
+                                    ^^^^^^^^^^^
+  lib/widgets/timeline_section.dart:147:17: Error: Undefined name 'groups'.
+        children: groups.map((g) => _buildGroup(context, g)).toList(),
+                  ^^^^^^
+  .
+
+To run this test again: /home/edith/flutter/bin/cache/dart-sdk/bin/dart test /home/edith/Documents/Uni-Dash_Reborn/trial1/test/widget_test.dart -p vm --plain-name 'loading /home/edith/Documents/Uni-Dash_Reborn/trial1/test/widget_test.dart'
+00:10 +0 -1: Some tests failed.                                                                                                                                                                        

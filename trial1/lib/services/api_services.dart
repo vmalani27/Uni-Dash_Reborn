@@ -208,6 +208,23 @@ class BackendService {
     }
   }
 
+  // Mark an academic item as missed
+  static Future<void> markAcademicItemMissed(int itemId) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) throw Exception("No Firebase user");
+    final idToken = await user.getIdToken();
+    final response = await http.post(
+      Uri.parse("$baseUrl/notifications/academic/$itemId/mark-missed"),
+      headers: {
+        "Authorization": "Bearer $idToken",
+        "ngrok-skip-browser-warning": "true",
+      },
+    );
+    if (response.statusCode != 200) {
+      throw Exception("Failed to mark academic item missed: ${response.body}");
+    }
+  }
+
   // Add an academic item to Google Calendar
   static Future<void> addAcademicItemToCalendar(int itemId) async {
     final user = FirebaseAuth.instance.currentUser;
@@ -224,6 +241,25 @@ class BackendService {
     );
     if (response.statusCode != 200) {
       throw Exception("Failed to add item to calendar: ${response.body}");
+    }
+  }
+
+  // Snooze an academic item for a period of time
+  static Future<void> snoozeAcademicItem(int itemId, {int hours = 24}) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) throw Exception("No Firebase user");
+    final idToken = await user.getIdToken();
+    final response = await http.post(
+      Uri.parse("$baseUrl/notifications/academic/$itemId/snooze"),
+      headers: {
+        "Authorization": "Bearer $idToken",
+        "Content-Type": "application/json",
+        "ngrok-skip-browser-warning": "true",
+      },
+      body: jsonEncode({"hours": hours}),
+    );
+    if (response.statusCode != 200) {
+      throw Exception("Failed to snooze academic item: ${response.body}");
     }
   }
 
@@ -257,6 +293,52 @@ class BackendService {
     );
     if (response.statusCode != 200) {
       throw Exception("Failed to dismiss follow up: ${response.body}");
+    }
+  }
+
+  /* =======================
+     SEARCH
+     ======================= */
+
+  static Future<SearchResults> searchAcademicItems(String query) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) throw Exception("No Firebase user");
+    final idToken = await user.getIdToken();
+    
+    final response = await http.get(
+      Uri.parse("$baseUrl/search/academic?q=${Uri.encodeComponent(query)}"),
+      headers: {
+        "Authorization": "Bearer $idToken",
+        "ngrok-skip-browser-warning": "true",
+      },
+    );
+    
+    if (response.statusCode == 200) {
+      final json = jsonDecode(response.body);
+      return SearchResults.fromJson(json);
+    } else {
+      throw Exception("Search failed: ${response.body}");
+    }
+  }
+
+  static Future<List<String>> getSearchSuggestions(String query) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) throw Exception("No Firebase user");
+    final idToken = await user.getIdToken();
+    
+    final response = await http.get(
+      Uri.parse("$baseUrl/search/academic/suggestions?q=${Uri.encodeComponent(query)}"),
+      headers: {
+        "Authorization": "Bearer $idToken",
+        "ngrok-skip-browser-warning": "true",
+      },
+    );
+    
+    if (response.statusCode == 200) {
+      final json = jsonDecode(response.body);
+      return List<String>.from(json['suggestions'] ?? []);
+    } else {
+      throw Exception("Suggestions failed: ${response.body}");
     }
   }
 
@@ -309,6 +391,26 @@ class BackendService {
     throw Exception('Failed to fetch health: ${response.body}');
   }
 
+  // Fetch user-scoped OAuth + sync state (suitable for user profile UI)
+  static Future<Map<String, dynamic>> fetchUserOAuthStatus() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) throw Exception("No Firebase user");
+
+    final idToken = await user.getIdToken();
+    final response = await http
+        .get(
+          Uri.parse("$baseUrl/user/oauth/status"),
+          headers: {"Authorization": "Bearer $idToken"},
+        )
+        .timeout(const Duration(seconds: 8));
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+
+    throw Exception('Failed to fetch user oauth status: ${response.body}');
+  }
+
   static Future<Map<String, dynamic>> createUserProfile({
     required String name,
     required String branch,
@@ -353,8 +455,15 @@ class BackendService {
 
     final idToken = await user.getIdToken();
 
+    // On web, callback must return to an HTTPS/HTTP URL, not a custom app scheme.
+    final oauthUrl = kIsWeb
+        ? Uri.parse(
+            "$baseUrl/auth/google/url",
+          ).replace(queryParameters: {"redirect_to": "${Uri.base.origin}/#/"})
+        : Uri.parse("$baseUrl/auth/google/url");
+
     final response = await http.get(
-      Uri.parse("$baseUrl/auth/google/url"),
+      oauthUrl,
       headers: {"Authorization": "Bearer $idToken"},
     );
 
@@ -366,9 +475,34 @@ class BackendService {
     final authUrl = data["auth_url"];
 
     final uri = Uri.parse(authUrl);
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+    final launched = kIsWeb
+        ? await launchUrl(
+            uri,
+            mode: LaunchMode.platformDefault,
+            webOnlyWindowName: '_self',
+          )
+        : await launchUrl(uri, mode: LaunchMode.externalApplication);
+
+    if (!launched) {
       throw Exception("Could not launch Google OAuth");
     }
+  }
+
+  static Future<Map<String, dynamic>> disconnectGoogleOAuth() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) throw Exception("No Firebase user");
+
+    final idToken = await user.getIdToken();
+    final response = await http.post(
+      Uri.parse("$baseUrl/auth/google/disconnect"),
+      headers: {"Authorization": "Bearer $idToken"},
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+
+    throw Exception("Failed to disconnect Google account: ${response.body}");
   }
 
   /* =======================
@@ -422,5 +556,68 @@ class BackendService {
       debugPrint("Backend logout error: $e");
       // Continue with client-side logout even if backend fails
     }
+  }
+}
+
+/// Search results model
+class SearchResults {
+  final String query;
+  final int total;
+  final Map<String, List<SearchResultItem>> groups;
+
+  SearchResults({
+    required this.query,
+    required this.total,
+    required this.groups,
+  });
+
+  factory SearchResults.fromJson(Map<String, dynamic> json) {
+    return SearchResults(
+      query: json['query'] ?? '',
+      total: json['total'] ?? 0,
+      groups: {
+        'today': _parseGroup(json['groups']?['today']),
+        'tomorrow': _parseGroup(json['groups']?['tomorrow']),
+        'thisWeek': _parseGroup(json['groups']?['thisWeek']),
+        'others': _parseGroup(json['groups']?['others']),
+      },
+    );
+  }
+
+  static List<SearchResultItem> _parseGroup(dynamic data) {
+    if (data == null) return [];
+    return (data as List)
+        .map((item) => SearchResultItem.fromJson(item))
+        .toList();
+  }
+}
+
+/// Individual search result item
+class SearchResultItem {
+  final int id;
+  final String gmailId;
+  final String subject;
+  final String? summary;
+  final String? category;
+  final double score;
+
+  SearchResultItem({
+    required this.id,
+    required this.gmailId,
+    required this.subject,
+    this.summary,
+    this.category,
+    required this.score,
+  });
+
+  factory SearchResultItem.fromJson(Map<String, dynamic> json) {
+    return SearchResultItem(
+      id: json['id'] ?? 0,
+      gmailId: json['gmail_id'] ?? '',
+      subject: json['subject'] ?? '',
+      summary: json['summary'],
+      category: json['category'],
+      score: (json['score'] as num?)?.toDouble() ?? 0.0,
+    );
   }
 }

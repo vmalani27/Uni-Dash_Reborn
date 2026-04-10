@@ -1,16 +1,20 @@
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from sqlalchemy import desc
 from app.core.database import get_supabase_db
 from app.models.oauthToken import OAuthToken
 from app.models.gmail.gmail_message import GmailMessage
 from app.models.academic_objects import AcademicItem
+from app.models.user import User
+from app.services.academic_context_engine import AcademicContextEngine
 from app.utils.firebase_util import verify_firebase_token
 from app.utils.timezone_util import format_ist_datetime
 from app.services.gmail_service import get_paginated_messages, get_message_detail
+from app.utils.encryption import decrypt_token
+from app.utils.google_oauth import get_access_token
 import re
 import unicodedata
+from datetime import datetime
 from datetime import timedelta
 
 # Safe normalization for email body text
@@ -103,14 +107,34 @@ def get_academic_dashboard(
     """Fetch academic items (assignments, exams, events, opportunities) for logged-in user."""
     uid = firebase_data["uid"]
 
-    # Query AcademicItem for this user, excluding dismissed items
-    items = db.query(AcademicItem).filter(
-        AcademicItem.uid == uid,
-        AcademicItem.dismissed == False
-    ).order_by(
-        desc(AcademicItem.academic_score),
-        AcademicItem.due_date.asc()
-    ).all()
+    user = db.query(User).filter(User.uid == uid).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if not user.oauth_connected:
+        return {
+            "focus": None,
+            "assignments": [],
+            "exams": [],
+            "admin": [],
+            "opportunities": [],
+            "timeline": [],
+            "blocked_reason": "oauth_not_connected",
+        }
+
+    items = db.query(AcademicItem).filter(AcademicItem.uid == uid).all()
+
+    source_ids = [item.source_email_id for item in items if item.source_email_id]
+    gmail_map = {}
+    if source_ids:
+        msgs = (
+            db.query(GmailMessage)
+            .filter(GmailMessage.gmail_id.in_(source_ids), GmailMessage.uid == uid)
+            .all()
+        )
+        gmail_map = {msg.gmail_id: msg for msg in msgs}
+
+    ranked_items = AcademicContextEngine.rank_academic_items(items)
 
     # Organize items by entity type
     grouped_items = {
@@ -122,50 +146,41 @@ def get_academic_dashboard(
     }
 
     focus_item = None
+    academic_items = []
     timeline = {}
 
-    for item in items:
-        # Determine entity type group
-        entity_group = grouped_items.get(item.entity_type.lower(), [])
-        grouped_items[item.entity_type.lower()] = entity_group  # Ensure the group exists
-        entity_group.append({
-            "id": item.id,
-            "title": item.title,
-            "due_date": item.due_date.isoformat() if item.due_date else None,
-            "location": item.location,
-            "course_code": item.course_code,
-            "completed": item.completed,
-        })
+    type_map = {
+        "ASSIGNMENT": "assignments",
+        "EXAM": "exams",
+        "ACADEMIC_ADMIN": "admin",
+        "OPPORTUNITY": "opportunities",
+        "INFORMATION": "information",
+    }
 
-        # Determine focus item (highest priority)
-        if not focus_item or (item.due_date and item.due_date < focus_item["due_date"]):
-            focus_item = {
-                "id": item.id,
-                "entity_type": item.entity_type,
-                "title": item.title,
-                "due_date": item.due_date,  # Keep as datetime for now
-                "location": item.location,
-                "course_code": item.course_code,
-                "completed": item.completed,
-            }
+    for item, metrics in ranked_items:
+        serialized = AcademicContextEngine.serialize_academic_item(
+            item,
+            gmail_map.get(item.source_email_id) if item.source_email_id else None,
+            metrics,
+        )
+        academic_items.append(serialized)
 
-        # Build timeline
-        if item.due_date:
-            date_key = item.due_date.date().isoformat()
-            if date_key not in timeline:
-                timeline[date_key] = []
-            timeline[date_key].append({
-                "id": item.id,
-                "entity_type": item.entity_type,
-                "title": item.title,
+        entity_group = type_map.get((item.entity_type or "INFORMATION").upper(), "information")
+        grouped_items[entity_group].append(serialized)
+
+        if serialized.get("due_date"):
+            date_key = serialized["due_date"][:10]
+            timeline.setdefault(date_key, []).append({
+                "id": serialized["id"],
+                "entity_type": serialized["entity_type"],
+                "title": serialized["title"],
             })
 
-    # Convert `focus_item["due_date"]` to ISO format when returning the response
-    if focus_item:
-        focus_item["due_date"] = focus_item["due_date"].isoformat()
+    focus_item = academic_items[0] if academic_items else None
 
     return {
         "focus": focus_item,
+        "academic_items": academic_items,
         "assignments": grouped_items["assignments"],
         "exams": grouped_items["exams"],
         "admin": grouped_items["admin"],
@@ -203,6 +218,34 @@ def mark_academic_item_done(
         raise HTTPException(status_code=404, detail="Item not found")
     
     item.completed = True
+    item.dismissed = False
+    item.status = "completed"
+    item.snoozed_until = None
+    item.last_updated_at = datetime.utcnow()
+    db.commit()
+    return {"status": "success", "item_id": item_id}
+
+
+@router.post("/academic/{item_id}/mark-missed")
+def mark_academic_item_missed(
+    item_id: int,
+    firebase_data=Depends(verify_firebase_token),
+    db: Session = Depends(get_supabase_db),
+):
+    """Mark an academic item as missed."""
+    uid = firebase_data["uid"]
+    item = db.query(AcademicItem).filter(
+        AcademicItem.id == item_id,
+        AcademicItem.uid == uid,
+    ).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+
+    item.completed = False
+    item.dismissed = False
+    item.status = "missed"
+    item.snoozed_until = None
+    item.last_updated_at = datetime.utcnow()
     db.commit()
     return {"status": "success", "item_id": item_id}
 
@@ -221,13 +264,17 @@ def add_academic_item_to_calendar(
     ).first()
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
+    if not item.due_date:
+        raise HTTPException(status_code=400, detail="This item does not have a due date to add to calendar")
     
     # Fetch OAuth token for this user
     oauth_token = db.query(OAuthToken).filter(
         OAuthToken.uid == uid
     ).first()
-    if not oauth_token or not oauth_token.access_token:
+    if not oauth_token or not oauth_token.refresh_token:
         raise HTTPException(status_code=401, detail="No Google OAuth token; please connect Gmail first")
+
+    access_token = get_access_token(decrypt_token(oauth_token.refresh_token))
     
     # Build calendar event
     event = {
@@ -245,7 +292,7 @@ def add_academic_item_to_calendar(
     }
     
     import requests
-    headers = {"Authorization": f"Bearer {oauth_token.access_token}"}
+    headers = {"Authorization": f"Bearer {access_token}"}
     cal_response = requests.post(
         "https://www.googleapis.com/calendar/v3/calendars/primary/events",
         json=event,
@@ -256,6 +303,37 @@ def add_academic_item_to_calendar(
         raise HTTPException(status_code=400, detail=f"Failed to create calendar event: {cal_response.text}")
     
     return {"status": "success", "item_id": item_id, "calendar_event_id": cal_response.json().get("id")}
+
+
+@router.post("/academic/{item_id}/snooze")
+def snooze_academic_item(
+    item_id: int,
+    request: SnoozeRequest,
+    firebase_data=Depends(verify_firebase_token),
+    db: Session = Depends(get_supabase_db),
+):
+    """Temporarily hide an academic item until a later time."""
+    uid = firebase_data["uid"]
+    item = db.query(AcademicItem).filter(
+        AcademicItem.id == item_id,
+        AcademicItem.uid == uid,
+    ).first()
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+
+    snooze_hours = max(1, request.hours)
+    # Canonical lifecycle keeps snooze as active + future snoozed_until gate.
+    item.status = "active"
+    item.completed = False
+    item.dismissed = False
+    item.snoozed_until = datetime.utcnow() + timedelta(hours=snooze_hours)
+    item.last_updated_at = datetime.utcnow()
+    db.commit()
+    return {
+        "status": "success",
+        "item_id": item_id,
+        "snoozed_until": item.snoozed_until.isoformat(),
+    }
 
 @router.post("/academic/{item_id}/dismiss")
 def dismiss_academic_item(
@@ -273,5 +351,9 @@ def dismiss_academic_item(
         raise HTTPException(status_code=404, detail="Item not found")
     
     item.dismissed = True
+    item.completed = False
+    item.status = "ignored"
+    item.snoozed_until = None
+    item.last_updated_at = datetime.utcnow()
     db.commit()
     return {"status": "success", "item_id": item_id}

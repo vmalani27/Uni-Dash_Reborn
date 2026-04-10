@@ -9,7 +9,9 @@ This engine handles:
 """
 
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+import json
+from difflib import SequenceMatcher
+from typing import Any, Dict, List, Optional, Tuple
 import re
 
 # ── Direct Topic Mapping ────────────────────────────────────────
@@ -31,6 +33,192 @@ TOPIC_TO_ENTITY = {
 
 class AcademicContextEngine:
     """Engine for processing academic context and deadline intelligence."""
+
+    VALID_LIFECYCLE_STATUSES = {
+        "active",
+        "completed",
+        "missed",
+        "ignored",
+        "expired",
+        "needs_review",
+    }
+    LEGACY_STATUS_ALIASES = {
+        "dismissed": "ignored",
+        "snoozed": "active",
+    }
+    _EVENT_STOPWORDS = {
+        "the", "and", "for", "with", "from", "this", "that", "your", "you", "are",
+        "fwd", "fw", "re", "reg", "regarding", "reminder", "please", "kindly",
+        "dear", "students", "student", "all", "about", "into", "our", "update",
+        "mail", "email", "subject", "message", "notification", "session", "class",
+    }
+
+    @staticmethod
+    def _utc_now() -> datetime:
+        return datetime.now(timezone.utc)
+
+    @staticmethod
+    def _ensure_aware(value: Optional[datetime]) -> Optional[datetime]:
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
+
+    @staticmethod
+    def get_item_status(item: Any) -> str:
+        status = getattr(item, "status", None)
+        if status:
+            normalized = str(status).strip().lower()
+        elif getattr(item, "completed", False):
+            normalized = "completed"
+        elif getattr(item, "dismissed", False):
+            normalized = "ignored"
+        else:
+            normalized = "active"
+
+        normalized = AcademicContextEngine.LEGACY_STATUS_ALIASES.get(
+            normalized,
+            normalized,
+        )
+
+        if normalized not in AcademicContextEngine.VALID_LIFECYCLE_STATUSES:
+            normalized = "active"
+        return normalized
+
+    @staticmethod
+    def compute_effective_relevance(item: Any, now: Optional[datetime] = None) -> Dict[str, Any]:
+        now = AcademicContextEngine._ensure_aware(now) or AcademicContextEngine._utc_now()
+        created_at = AcademicContextEngine._ensure_aware(getattr(item, "created_at", None)) or now
+        last_updated_at = AcademicContextEngine._ensure_aware(getattr(item, "last_updated_at", None)) or created_at
+        due_date = AcademicContextEngine._ensure_aware(getattr(item, "due_date", None))
+        snoozed_until = AcademicContextEngine._ensure_aware(getattr(item, "snoozed_until", None))
+        base_score = float(getattr(item, "academic_score", 0) or 0)
+        status = AcademicContextEngine.get_item_status(item)
+
+        if status == "active" and snoozed_until and snoozed_until > now:
+            return {
+                "status": "active",
+                "raw_academic_score": round(base_score, 2),
+                "effective_score": 0.0,
+                "decay_factor": 0.0,
+                "age_days": 0.0,
+                "urgency_boost": 0.0,
+                "signal_boost": 0.0,
+                "hidden": True,
+            }
+
+        if status == "active" and due_date is not None and due_date <= now:
+            status = "expired"
+
+        if status in {"completed", "missed", "expired", "ignored"}:
+            return {
+                "status": status,
+                "raw_academic_score": round(base_score, 2),
+                "effective_score": 0.0,
+                "decay_factor": 0.0,
+                "age_days": 0.0,
+                "urgency_boost": 0.0,
+                "signal_boost": 0.0,
+                "hidden": True,
+            }
+
+        anchor = last_updated_at if last_updated_at >= created_at else created_at
+        age_days = max(0.0, (now - anchor).total_seconds() / 86400.0)
+        decay_factor = max(0.35, 1.0 - min(age_days, 30.0) * 0.03)
+
+        urgency_boost = 0.0
+        if due_date is not None:
+            days_left = (due_date - now).total_seconds() / 86400.0
+            if days_left <= 0:
+                urgency_boost = 8.0 + min(abs(days_left) * 1.5, 12.0)
+            else:
+                urgency_boost = max(0.0, 12.0 - (days_left * 2.0))
+
+        signal_boost = AcademicContextEngine._source_signal_boost(item)
+        effective_score = (base_score * decay_factor) + urgency_boost + signal_boost
+
+        if status == "needs_review":
+            return {
+                "status": status,
+                "raw_academic_score": round(base_score, 2),
+                "effective_score": round(max(0.0, min(100.0, effective_score * 0.6)), 2),
+                "decay_factor": round(decay_factor * 0.6, 2),
+                "age_days": round(age_days, 2),
+                "urgency_boost": round(urgency_boost, 2),
+                "signal_boost": round(signal_boost, 2),
+                "hidden": False,
+            }
+
+        effective_score = max(0.0, min(100.0, effective_score))
+
+        return {
+            "status": status,
+            "raw_academic_score": round(base_score, 2),
+            "effective_score": round(effective_score, 2),
+            "decay_factor": round(decay_factor, 2),
+            "age_days": round(age_days, 2),
+            "urgency_boost": round(urgency_boost, 2),
+            "signal_boost": round(signal_boost, 2),
+            "hidden": False,
+        }
+
+    @staticmethod
+    def rank_academic_items(items: List[Any], now: Optional[datetime] = None) -> List[Tuple[Any, Dict[str, Any]]]:
+        ranked: List[Tuple[Any, Dict[str, Any]]] = []
+        for item in items:
+            metrics = AcademicContextEngine.compute_effective_relevance(item, now=now)
+            if metrics.get("hidden"):
+                continue
+            ranked.append((item, metrics))
+
+        ranked.sort(
+            key=lambda pair: (
+                -pair[1]["effective_score"],
+                AcademicContextEngine._ensure_aware(getattr(pair[0], "due_date", None)) or datetime.max.replace(tzinfo=timezone.utc),
+                getattr(pair[0], "id", 0),
+            )
+        )
+        return ranked
+
+    @staticmethod
+    def serialize_academic_item(item: Any, gmail_message: Any = None, metrics: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        metrics = metrics or AcademicContextEngine.compute_effective_relevance(item)
+        serialized = {
+            "id": item.id,
+            "title": item.title,
+            "entity_type": item.entity_type,
+            "due_date": item.due_date.isoformat() if item.due_date else None,
+            "course_code": item.course_code,
+            "location": item.location,
+            "source_email_id": item.source_email_id,
+            "description": item.description,
+            "academic_score": metrics["effective_score"],
+            "raw_academic_score": metrics["raw_academic_score"],
+            "effective_score": metrics["effective_score"],
+            "decay_factor": metrics["decay_factor"],
+            "age_days": metrics["age_days"],
+            "urgency_boost": metrics["urgency_boost"],
+            "signal_boost": metrics.get("signal_boost", 0.0),
+            "source_count": getattr(item, "source_count", 1) or 1,
+            "source_signals": AcademicContextEngine._load_source_signals(item),
+            "merge_key": getattr(item, "merge_key", None),
+            "status": metrics["status"],
+            "completed": item.completed,
+            "dismissed": item.dismissed,
+            "created_at": item.created_at.isoformat() if item.created_at else None,
+            "last_updated_at": item.last_updated_at.isoformat() if getattr(item, "last_updated_at", None) else None,
+            "snoozed_until": item.snoozed_until.isoformat() if getattr(item, "snoozed_until", None) else None,
+        }
+
+        if gmail_message is not None:
+            serialized.update({
+                "ai_summary": gmail_message.ai_summary,
+                "ai_label_topic": gmail_message.ai_label_topic,
+                "ai_label_source": gmail_message.ai_label_source,
+            })
+
+        return serialized
 
     @staticmethod
     def normalize_deadline(deadline: Optional[datetime]) -> Optional[datetime]:
@@ -161,6 +349,179 @@ class AcademicContextEngine:
         cleaned = re.sub(r'\s+', ' ', cleaned).strip()
         return cleaned
 
+    @staticmethod
+    def _normalize_event_text(text: Optional[str]) -> str:
+        if not text:
+            return ""
+        cleaned = AcademicContextEngine.clean_title(text)
+        cleaned = cleaned.lower()
+        cleaned = re.sub(r'[^a-z0-9\s]+', ' ', cleaned)
+        cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+        return cleaned
+
+    @staticmethod
+    def _extract_event_keywords(text: Optional[str]) -> set[str]:
+        normalized = AcademicContextEngine._normalize_event_text(text)
+        if not normalized:
+            return set()
+        return {
+            token
+            for token in normalized.split()
+            if len(token) > 2 and token not in AcademicContextEngine._EVENT_STOPWORDS
+        }
+
+    @staticmethod
+    def _event_title_similarity(first: Optional[str], second: Optional[str]) -> float:
+        first_norm = AcademicContextEngine._normalize_event_text(first)
+        second_norm = AcademicContextEngine._normalize_event_text(second)
+        if not first_norm or not second_norm:
+            return 0.0
+        return SequenceMatcher(None, first_norm, second_norm).ratio()
+
+    @staticmethod
+    def _source_kind(subject: Optional[str], body_text: Optional[str]) -> str:
+        combined = f"{subject or ''} {body_text or ''}".lower()
+        if re.search(r'\b(fwd|fw|forwarded message|forwarded)\b', combined):
+            return "forwarded"
+        if re.search(r'\b(reminder|remind|last date|deadline approaching|final call|nudge)\b', combined):
+            return "reminder"
+        return "original"
+
+    @staticmethod
+    def _load_source_signals(item: Any) -> List[Dict[str, Any]]:
+        raw_signals = getattr(item, "source_signals_json", None)
+        if not raw_signals:
+            return []
+        try:
+            parsed = json.loads(raw_signals)
+            if isinstance(parsed, list):
+                return [signal for signal in parsed if isinstance(signal, dict)]
+        except Exception:
+            pass
+        return []
+
+    @staticmethod
+    def _build_source_signal(message: Any, kind: str, due_date: Optional[datetime], course_code: Optional[str]) -> Dict[str, Any]:
+        return {
+            "email_id": getattr(message, "gmail_id", None),
+            "sender": getattr(message, "sender", None),
+            "subject": getattr(message, "subject", None),
+            "kind": kind,
+            "internal_date": getattr(message, "internal_date", None).isoformat() if getattr(message, "internal_date", None) else None,
+            "due_date": due_date.isoformat() if due_date else None,
+            "course_code": course_code,
+        }
+
+    @staticmethod
+    def _source_signal_boost(item: Any) -> float:
+        signals = AcademicContextEngine._load_source_signals(item)
+        if not signals:
+            return 0.0
+
+        source_count = max(1, int(getattr(item, "source_count", len(signals)) or len(signals)))
+        boost = min(max(source_count - 1, 0), 5) * 2.0
+
+        forwarded_count = sum(1 for signal in signals if signal.get("kind") == "forwarded")
+        reminder_count = sum(1 for signal in signals if signal.get("kind") == "reminder")
+        boost += min(forwarded_count, 3) * 1.0
+        boost += min(reminder_count, 3) * 1.5
+        return boost
+
+    @staticmethod
+    def find_matching_academic_item(db, message: Any, title: str, due_date: Optional[datetime], course_code: Optional[str], entity_type: str):
+        from app.models.academic_objects import AcademicItem
+
+        candidates = (
+            db.query(AcademicItem)
+            .filter(AcademicItem.uid == message.uid)
+            .filter(AcademicItem.entity_type == entity_type)
+            .all()
+        )
+
+        if not candidates:
+            return None
+
+        normalized_title = AcademicContextEngine._normalize_event_text(title)
+        title_keywords = AcademicContextEngine._extract_event_keywords(title)
+        due_day = due_date.date() if due_date else None
+        normalized_course = (course_code or "").strip().upper() or None
+
+        best_item = None
+        best_score = 0.0
+
+        for item in candidates:
+            if getattr(item, "source_email_id", None) == getattr(message, "gmail_id", None):
+                return item
+
+            item_title = AcademicContextEngine._normalize_event_text(getattr(item, "title", ""))
+            if not item_title or not normalized_title:
+                continue
+
+            item_due = AcademicContextEngine._ensure_aware(getattr(item, "due_date", None))
+            item_due_day = item_due.date() if item_due else None
+            item_course = (getattr(item, "course_code", None) or "").strip().upper() or None
+            item_keywords = AcademicContextEngine._extract_event_keywords(getattr(item, "title", "")) | AcademicContextEngine._extract_event_keywords(getattr(item, "description", ""))
+
+            title_similarity = SequenceMatcher(None, item_title, normalized_title).ratio()
+            keyword_overlap = 0.0
+            if item_keywords and title_keywords:
+                keyword_overlap = len(item_keywords & title_keywords) / max(1, min(len(item_keywords), len(title_keywords)))
+
+            same_due_day = bool(due_day and item_due_day and due_day == item_due_day)
+            same_course = bool(normalized_course and item_course and normalized_course == item_course)
+
+            # Strong gate: same deadline or same course, then title/keyword similarity.
+            if same_due_day:
+                score = (title_similarity * 0.7) + (keyword_overlap * 0.3)
+            elif same_course:
+                score = (title_similarity * 0.8) + (keyword_overlap * 0.2)
+            else:
+                continue
+
+            if score >= 0.72 and score > best_score:
+                best_item = item
+                best_score = score
+
+        return best_item
+
+    @staticmethod
+    def merge_academic_item_sources(item: Any, message: Any, due_date: Optional[datetime], course_code: Optional[str]) -> None:
+        signals = AcademicContextEngine._load_source_signals(item)
+        kind = AcademicContextEngine._source_kind(getattr(message, "subject", None), getattr(message, "body_text", None))
+        signals.append(AcademicContextEngine._build_source_signal(message, kind, due_date, course_code))
+
+        item.source_signals_json = json.dumps(signals, ensure_ascii=True)
+        item.source_count = len(signals)
+        item.last_updated_at = datetime.utcnow()
+
+        if due_date and not getattr(item, "due_date", None):
+            item.due_date = due_date
+        if course_code and not getattr(item, "course_code", None):
+            item.course_code = course_code
+
+        existing_title = getattr(item, "title", "") or ""
+        incoming_title = AcademicContextEngine.clean_title(getattr(message, "subject", ""))
+        if len(incoming_title) > len(existing_title):
+            item.title = incoming_title
+
+        note = f"[{kind}] {getattr(message, 'subject', '')}".strip()
+        description = getattr(item, "description", None) or ""
+        if note and note not in description:
+            item.description = (description + "\n\n" if description else "") + f"Related signal: {note}"
+
+        base_score = float(getattr(item, "academic_score", 0) or 0)
+        merged_score = max(base_score, float(getattr(message, "academic_score", 0) or 0))
+        merged_score = min(100.0, merged_score + min(max(item.source_count - 1, 0), 5) * 2.0)
+        item.academic_score = round(merged_score, 2)
+
+        merge_key_bits = [
+            AcademicContextEngine._normalize_event_text(item.title),
+            (item.course_code or "").strip().upper(),
+            (item.due_date.date().isoformat() if getattr(item, "due_date", None) else ""),
+            item.entity_type or "",
+        ]
+        item.merge_key = "|".join(bit for bit in merge_key_bits if bit)
+
 
     @staticmethod
     def process_academic_objects(message, parsed_data: dict, db) -> None:
@@ -175,8 +536,6 @@ class AcademicContextEngine:
         # We only create Academic Objects for important things (requires action or high score)
         if not requires_action and message.academic_score < 40 and message.normalized_topic not in ["EXAM", "ASSIGNMENT", "OPPORTUNITY"]:
             return
-
-        # We'll check for an existing AcademicItem after extracting course metadata
 
         # Attempt to glean metadata from the calendar/action items
         calendar_events = parsed_data.get("calendar_events", [])
@@ -203,17 +562,24 @@ class AcademicContextEngine:
             if course_code_match:
                 course_code = course_code_match.group(0).upper()
 
-        # Double check if an academic item already exists for this email or a similar one
-        existing_item = db.query(AcademicItem).filter(
-            (AcademicItem.source_email_id == message.gmail_id) |
-            (
-                (AcademicItem.uid == message.uid) & 
-                (AcademicItem.title == AcademicContextEngine.clean_title(message.subject)) &
-                (AcademicItem.entity_type == message.normalized_topic) &
-                (AcademicItem.course_code == course_code)
-            )
-        ).first()
+        clean_title = AcademicContextEngine.clean_title(message.subject)
+
+        # Double check if an academic item already exists for this event or a similar one.
+        existing_item = AcademicContextEngine.find_matching_academic_item(
+            db=db,
+            message=message,
+            title=clean_title,
+            due_date=due_date,
+            course_code=course_code,
+            entity_type=message.normalized_topic,
+        )
         if existing_item:
+            AcademicContextEngine.merge_academic_item_sources(
+                existing_item,
+                message=message,
+                due_date=due_date,
+                course_code=course_code,
+            )
             return  # Already processed
                 
         # Extract actions into description
@@ -237,9 +603,13 @@ class AcademicContextEngine:
             description = message.body_text or ""
 
         # Clean title
-        clean_title = AcademicContextEngine.clean_title(message.subject)
-
         # Create the Academic Item
+        source_signal = AcademicContextEngine._build_source_signal(
+            message,
+            AcademicContextEngine._source_kind(message.subject, message.body_text),
+            due_date,
+            course_code,
+        )
         item = AcademicItem(
             source_email_id=message.gmail_id,
             uid=message.uid,
@@ -250,7 +620,16 @@ class AcademicContextEngine:
             location=location,
             course_code=course_code,
             professor=None, # Will add professor extraction later
-            academic_score=message.academic_score
+            academic_score=message.academic_score,
+            status="active",
+            source_count=1,
+            source_signals_json=json.dumps([source_signal], ensure_ascii=True),
+            merge_key="|".join(bit for bit in [
+                AcademicContextEngine._normalize_event_text(clean_title),
+                (course_code or "").strip().upper(),
+                (due_date.date().isoformat() if due_date else ""),
+                message.normalized_topic or "",
+            ] if bit),
         )
         
         db.add(item)

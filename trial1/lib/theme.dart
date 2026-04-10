@@ -2,35 +2,51 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 // ─── Core Palette ───────────────────────────────────────────
-// Dark tokens
-const Color kBgPrimaryDark = Color(0xFF0F1115);
-const Color kBgSurfaceDark = Color(0xFF171A21);
-const Color kBgElevatedDark = Color(0xFF1E222B);
-const Color kSidebarDark = Color(0xFF181B22);
+// DARK MODE TOKENS
+const Color kBgPrimaryDark = Color(0xFF0F1115);       // page bg
+const Color kBgSecondaryDark = Color(0xFF171A21);     // nested bg
+const Color kBgSurfaceDark = Color(0xFF1E222B);       // cards
+const Color kBgElevatedDark = Color(0xFF272D38);      // raised surfaces
+const Color kSidebarDark = Color(0xFF181B22);         // sidebar
 const Color kTextPrimaryDark = Color(0xFFE6E6E6);
 const Color kTextSecondaryDark = Color(0xFF9CA3AF);
-const Color kTextDisabledDark = Color(0xFF6B7280);
+const Color kTextTertiaryDark = Color(0xFF6B7280);
+const Color kBorderSubtleDark = Color(0xFF404854);    // light dividers
+const Color kBorderMediumDark = Color(0xFF505866);    // active states
+const Color kBorderStrongDark = Color(0xFF646F85);    // focus states
 
-// Light tokens
-const Color kBgPrimaryLight = Color(0xFFF6F7F9); // page background
-const Color kBgSurfaceLight = Color(0xFFFFFFFF); // card background
-const Color kBgElevatedLight = Color(0xFFF2F3F7); // raised surface
-const Color kSidebarLight = Color(0xFFE9EAEC); // sidebar background
-const Color kTextPrimaryLight = Color(0xFF23272F);
-const Color kTextSecondaryLight = Color(0xFF5A5F6B);
-const Color kTextDisabledLight = Color(0xFFB0B4BE);
+// LIGHT MODE TOKENS
+const Color kBgPrimaryLight = Color(0xFFFFFFFF);      // page bg (pure white)
+const Color kBgSecondaryLight = Color(0xFFF9FAFB);    // nested bg
+const Color kBgSurfaceLight = Color(0xFFF3F4F6);      // cards (light gray)
+const Color kBgElevatedLight = Color(0xFFE5E7EB);     // raised surfaces
+const Color kSidebarLight = Color(0xFFF3F4F6);        // sidebar
+const Color kTextPrimaryLight = Color(0xFF1F2937);    // darker text
+const Color kTextSecondaryLight = Color(0xFF4B5563);  // secondary
+const Color kTextTertiaryLight = Color(0xFF9CA3AF);   // disabled
+const Color kBorderSubtleLight = Color(0xFFD1D5DB);   // visible borders
+const Color kBorderMediumLight = Color(0xFF9CA3AF);   // active borders
+const Color kBorderStrongLight = Color(0xFF6B7280);   // focus borders
 
-const Color kAccentPrimary = Color(0xFFE59A23);
-const Color kAccentSecondary = Color(0xFFF4C76B);
+// ACCENT COLORS
+const Color kAccentPrimary = Color(0xFF4F46E5);       // indigo
+const Color kAccentPrimaryDark = Color(0xFF4F46E5);   // indigo
+const Color kAccentPrimaryLight = Color(0xFF4F46E5);  // indigo
+const Color kAccentSecondary = Color(0xFF6366F1);     // indigo lighter
+const Color kAccentSecondaryLight = Color(0xFF4338CA); // indigo darker
+const Color kAccentHover = Color(0xFF4338CA);         // indigo interaction
+const Color kAccentHoverLight = Color(0xFF3730A3);    // indigo interaction
+const Color kAccentFocus = Color(0xFF3730A3);         // indigo focus
+const Color kAccentFocusLight = Color(0xFF312E81);    // indigo focus
 
 // ─── Topic Semantic Colors ──────────────────────────────────
-// Entity / topic semantic colors (updated per design requirements)
-const Color kTopicAssignment = Color(0xFFF97316); // orange
-const Color kTopicExam = Color(0xFFEF4444); // red
-const Color kTopicAcademic = Color(0xFF60A5FA); // blue (admin/academic)
-const Color kTopicOpportunity = Color(0xFFA78BFA); // purple
-const Color kTopicInformation = Color(0xFFFBBF24); // amber
-const Color kTopicOther = Color(0xFF9CA3AF); // gray
+// Entity / topic semantic colors (same in both modes for consistency)
+const Color kTopicAssignment = Color(0xFF64748B);    // slate
+const Color kTopicExam = Color(0xFF64748B);          // slate
+const Color kTopicAcademic = Color(0xFF64748B);      // slate
+const Color kTopicOpportunity = Color(0xFF64748B);   // slate
+const Color kTopicInformation = Color(0xFF64748B);   // slate
+const Color kTopicOther = Color(0xFF64748B);         // slate
 
 // ─── Urgency Colors ─────────────────────────────────────────
 const Color kUrgencyCritical = Color(0xFFEF4444);
@@ -40,69 +56,106 @@ const Color kUrgencyLow = Color(0xFF22C55E);
 const Color kUrgencyNone = Color(0xFF6B7280);
 
 // ─── Helpers ────────────────────────────────────────────────
-Color topicColor(String normalizedTopic) {
+class AcademicCategoryMeta {
+  final String key;
+  final String label;
+  final IconData icon;
+  final Color color;
+
+  const AcademicCategoryMeta({
+    required this.key,
+    required this.label,
+    required this.icon,
+    required this.color,
+  });
+
+  Color tint([double alpha = 0.12]) => color.withOpacity(alpha);
+}
+
+AcademicCategoryMeta academicCategoryMeta(String normalizedTopic) {
   final key = normalizedTopic.trim().toUpperCase();
   switch (key) {
     case 'ASSIGNMENT':
-      return kTopicAssignment;
+      return const AcademicCategoryMeta(
+        key: 'ASSIGNMENT',
+        label: 'Assignment',
+        icon: Icons.assignment_outlined,
+        color: kTopicAssignment,
+      );
     case 'EXAM':
-      return kTopicExam;
+      return const AcademicCategoryMeta(
+        key: 'EXAM',
+        label: 'Exam',
+        icon: Icons.school_outlined,
+        color: kTopicExam,
+      );
     case 'ACADEMIC_ADMIN':
     case 'ACADEMIC':
-      return kTopicAcademic;
+      return const AcademicCategoryMeta(
+        key: 'ACADEMIC_ADMIN',
+        label: 'Announcement',
+        icon: Icons.campaign_outlined,
+        color: kTopicAcademic,
+      );
     case 'OPPORTUNITY':
-      return kTopicOpportunity;
+      return const AcademicCategoryMeta(
+        key: 'OPPORTUNITY',
+        label: 'Opportunity',
+        icon: Icons.rocket_launch_outlined,
+        color: kTopicOpportunity,
+      );
     case 'INFORMATION':
     case 'INFO':
-      return kTopicInformation;
+      return const AcademicCategoryMeta(
+        key: 'INFORMATION',
+        label: 'Info',
+        icon: Icons.info_outline,
+        color: kTopicInformation,
+      );
     default:
-      return kTopicOther;
+      return AcademicCategoryMeta(
+        key: key.isEmpty ? 'OTHER' : key,
+        label: _fallbackTopicLabel(key),
+        icon: _fallbackTopicIcon(key),
+        color: kTopicOther,
+      );
   }
+}
+
+Color topicColor(String normalizedTopic) {
+  return academicCategoryMeta(normalizedTopic).color;
 }
 
 String topicLabel(String normalizedTopic) {
-  final key = normalizedTopic.trim().toUpperCase();
-  switch (key) {
-    case 'ASSIGNMENT':
-      return 'Assignment';
-    case 'EXAM':
-      return 'Exam';
-    case 'ACADEMIC_ADMIN':
-    case 'ACADEMIC':
-      return 'Academic';
-    case 'OPPORTUNITY':
-      return 'Opportunity';
-    case 'INFORMATION':
-    case 'INFO':
-      return 'Info';
-    case 'UNCLASSIFIED':
-      return 'Unclassified';
-    default:
-      // For freeform AI labels, return title-cased label
-      final s = normalizedTopic.trim();
-      if (s.isEmpty) return 'Other';
-      return s[0].toUpperCase() + s.substring(1).toLowerCase();
+  final meta = academicCategoryMeta(normalizedTopic);
+  if (meta.key == 'OTHER') {
+    final s = normalizedTopic.trim();
+    if (s.isEmpty) return 'Other';
+    return s[0].toUpperCase() + s.substring(1).toLowerCase();
   }
+  if (meta.key == 'UNCLASSIFIED') return 'Unclassified';
+  return meta.label;
 }
 
 IconData topicIcon(String normalizedTopic) {
-  final key = normalizedTopic.trim().toUpperCase();
-  switch (key) {
-    case 'ASSIGNMENT':
-      return Icons.assignment_outlined;
-    case 'EXAM':
-      return Icons.quiz_outlined;
-    case 'ACADEMIC_ADMIN':
-    case 'ACADEMIC':
-      return Icons.school_outlined;
-    case 'OPPORTUNITY':
-      return Icons.rocket_launch_outlined;
-    case 'INFORMATION':
-    case 'INFO':
-      return Icons.info_outline;
-    default:
-      return Icons.mail_outline;
-  }
+  return academicCategoryMeta(normalizedTopic).icon;
+}
+
+String _fallbackTopicLabel(String key) {
+  if (key.isEmpty) return 'Other';
+  if (key == 'UNCLASSIFIED') return 'Unclassified';
+
+  final words = key.replaceAll('_', ' ').split(RegExp(r'\s+'));
+  final titleCased = words
+      .where((word) => word.isNotEmpty)
+      .map((word) => word[0].toUpperCase() + word.substring(1).toLowerCase())
+      .join(' ');
+  return titleCased.isEmpty ? 'Other' : titleCased;
+}
+
+IconData _fallbackTopicIcon(String key) {
+  if (key.isEmpty) return Icons.mail_outline;
+  return Icons.mail_outline;
 }
 
 Color urgencyColor(String? urgency) {
@@ -136,12 +189,17 @@ final ThemeData uniDashDarkTheme = ThemeData(
     displayColor: kTextPrimaryDark,
   ),
   colorScheme: const ColorScheme.dark(
-    primary: kAccentPrimary,
+    primary: kAccentPrimaryDark,
     secondary: kAccentSecondary,
+    tertiary: kAccentHover,
     surface: kBgSurfaceDark,
+    surfaceContainer: kBgElevatedDark,
     surfaceContainerHighest: kSidebarDark,
     onPrimary: Colors.black,
     onSurface: kTextPrimaryDark,
+    onSurfaceVariant: kTextSecondaryDark,
+    outline: kBorderSubtleDark,
+    outlineVariant: kBorderMediumDark,
   ),
   appBarTheme: AppBarTheme(
     backgroundColor: kBgPrimaryDark,
@@ -163,7 +221,7 @@ final ThemeData uniDashDarkTheme = ThemeData(
   drawerTheme: const DrawerThemeData(backgroundColor: kSidebarDark),
   elevatedButtonTheme: ElevatedButtonThemeData(
     style: ElevatedButton.styleFrom(
-      backgroundColor: kAccentPrimary,
+      backgroundColor: kAccentPrimaryDark,
       foregroundColor: Colors.black,
       elevation: 0,
       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
@@ -181,18 +239,18 @@ final ThemeData uniDashDarkTheme = ThemeData(
     style: ButtonStyle(
       backgroundColor: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) {
-          return kAccentPrimary.withOpacity(0.15);
+          return kAccentPrimaryDark.withOpacity(0.15);
         }
         return kBgSurfaceDark;
       }),
       foregroundColor: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) {
-          return kAccentPrimary;
+          return kAccentPrimaryDark;
         }
         return kTextSecondaryDark;
       }),
       side: WidgetStateProperty.all(
-        BorderSide(color: kTextDisabledDark.withOpacity(0.2)),
+        BorderSide(color: kBorderSubtleDark.withOpacity(0.5)),
       ),
       shape: WidgetStateProperty.all(
         RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -205,8 +263,8 @@ final ThemeData uniDashDarkTheme = ThemeData(
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     behavior: SnackBarBehavior.floating,
   ),
-  dividerColor: kTextDisabledDark.withOpacity(0.22),
-  disabledColor: kTextDisabledDark,
+  dividerColor: kBorderSubtleDark.withOpacity(0.4),
+  disabledColor: kTextTertiaryDark,
 );
 
 // ─── Light Theme ───────────────────────────────────────────
@@ -218,12 +276,17 @@ final ThemeData uniDashLightTheme = ThemeData(
     displayColor: kTextPrimaryLight,
   ),
   colorScheme: const ColorScheme.light(
-    primary: kAccentPrimary,
-    secondary: kAccentSecondary,
+    primary: kAccentPrimaryLight,
+    secondary: kAccentSecondaryLight,
+    tertiary: kAccentHoverLight,
     surface: kBgSurfaceLight,
+    surfaceContainer: kBgElevatedLight,
     surfaceContainerHighest: kSidebarLight,
-    onPrimary: Colors.black,
+    onPrimary: Colors.white,
     onSurface: kTextPrimaryLight,
+    onSurfaceVariant: kTextSecondaryLight,
+    outline: kBorderSubtleLight,
+    outlineVariant: kBorderMediumLight,
   ),
   appBarTheme: AppBarTheme(
     backgroundColor: kBgPrimaryLight,
@@ -239,14 +302,17 @@ final ThemeData uniDashLightTheme = ThemeData(
   cardTheme: CardThemeData(
     color: kBgSurfaceLight,
     elevation: 0,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(16),
+      side: const BorderSide(color: kBorderSubtleLight, width: 1),
+    ),
     margin: EdgeInsets.zero,
   ),
   drawerTheme: const DrawerThemeData(backgroundColor: kSidebarLight),
   elevatedButtonTheme: ElevatedButtonThemeData(
     style: ElevatedButton.styleFrom(
-      backgroundColor: kAccentPrimary,
-      foregroundColor: Colors.black,
+      backgroundColor: kAccentPrimaryLight,
+      foregroundColor: Colors.white,
       elevation: 0,
       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -263,19 +329,22 @@ final ThemeData uniDashLightTheme = ThemeData(
     style: ButtonStyle(
       backgroundColor: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) {
-          return kAccentPrimary.withOpacity(0.10);
+          return kAccentPrimaryLight.withOpacity(0.12);
         }
         return kBgSurfaceLight;
       }),
       foregroundColor: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) {
-          return kAccentPrimary;
+          return kAccentPrimaryLight;
         }
         return kTextSecondaryLight;
       }),
-      side: WidgetStateProperty.all(
-        BorderSide(color: kTextDisabledLight.withOpacity(0.18)),
-      ),
+      side: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) {
+          return const BorderSide(color: kAccentPrimaryLight, width: 2);
+        }
+        return const BorderSide(color: kBorderSubtleLight, width: 1);
+      }),
       shape: WidgetStateProperty.all(
         RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
@@ -287,6 +356,6 @@ final ThemeData uniDashLightTheme = ThemeData(
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     behavior: SnackBarBehavior.floating,
   ),
-  dividerColor: kTextDisabledLight.withOpacity(0.13),
-  disabledColor: kTextDisabledLight,
+  dividerColor: kBorderSubtleLight.withOpacity(0.6),
+  disabledColor: kTextTertiaryLight,
 );

@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 
 
 # Load dotenv file by name if provided, otherwise fall back to ../.env
-dotenv_file = os.path.join(os.path.dirname(__file__), '..', '.env')
+dotenv_file = os.path.join(os.path.dirname(__file__), '..', '.env.dev')
 
 # replace dev with prod based on branch, for feature branch stay on env.dev, 
 from pathlib import Path
@@ -33,6 +33,7 @@ from app.routers import gmail_sync_routes
 from app.routers import sync_events
 from app.routers import health
 from app.routers import admin_routes
+# from app.routers import search_router  # Disabled: using local search in Flutter instead
 from app.core import firebase_config  # Initialize Firebase Admin SDK
 from app.services.background_scheduler import ingestion_loop, ai_processing_loop
 
@@ -77,6 +78,7 @@ app.include_router(gmail_sync_routes.router)
 app.include_router(sync_events.router)
 app.include_router(health.router)
 app.include_router(admin_routes.router)
+# app.include_router(search_router.router)  # Disabled: using local search in Flutter instead
 
 
 @app.get("/")

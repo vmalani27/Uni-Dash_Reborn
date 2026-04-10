@@ -41,8 +41,22 @@ class UnifiedDashboardData {
       location: json['location'] as String?,
       courseCode: json['course_code'] as String?,
       professor: json['professor'] as String?,
-      academicScore: (json['academic_score'] as num?)?.toDouble() ?? 0.0,
+        academicScore:
+          (json['effective_score'] as num?)?.toDouble() ??
+          (json['academic_score'] as num?)?.toDouble() ??
+          0.0,
       completed: json['completed'] as bool? ?? false,
+        dismissed: json['dismissed'] as bool? ?? false,
+        status: json['status'] as String?,
+        rawAcademicScore: (json['raw_academic_score'] as num?)?.toDouble(),
+        effectiveScore: (json['effective_score'] as num?)?.toDouble(),
+        decayFactor: (json['decay_factor'] as num?)?.toDouble(),
+        lastUpdatedAt: json['last_updated_at'] != null
+          ? DateTime.parse(json['last_updated_at'] as String).toLocal()
+          : null,
+        snoozedUntil: json['snoozed_until'] != null
+          ? DateTime.parse(json['snoozed_until'] as String).toLocal()
+          : null,
       aiSummary: json['ai_summary'] as String?,
       aiLabelTopic: json['ai_label_topic'] as String?,
       aiLabelSource: json['ai_label_source'] as String?,
@@ -66,6 +80,15 @@ class UnifiedDashboardData {
         }
       } else if (focusObj is Map<String, dynamic>) {
         focusList.add(_toAcademicItem(focusObj));
+      }
+    }
+
+    final academicItemsRaw = json['academic_items'] as List<dynamic>? ?? [];
+    for (final item in academicItemsRaw) {
+      if (item is Map<String, dynamic>) {
+        // Ensure the legacy academic_items contract can still be consumed later.
+        // Parsed items are not merged into focus/grouped here yet.
+        _toAcademicItem(item);
       }
     }
 

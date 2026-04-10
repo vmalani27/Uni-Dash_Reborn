@@ -1,50 +1,61 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:trial1/models/academic_models.dart';
+import 'package:trial1/services/api_services.dart';
 import 'package:trial1/theme.dart';
+import 'package:trial1/utils/status_formatter.dart';
 
 class AcademicItemCard extends StatelessWidget {
   final AcademicItem item;
   final VoidCallback onTap;
+  final Future<void> Function()? onActionCompleted;
   // When true, tapping opens preview dialog instead of immediately calling onTap
   final bool previewOnTap;
+  // When true, hides the category label (entity type badge)
+  final bool hideLabel;
 
   const AcademicItemCard({
     super.key,
     required this.item,
     required this.onTap,
+    this.onActionCompleted,
     this.previewOnTap = true,
+    this.hideLabel = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      clipBehavior: Clip.antiAlias,
       elevation: 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: Theme.of(context).dividerColor),
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(
+          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.08),
+          width: 1,
+        ),
       ),
       child: InkWell(
-        onTap: () {
-          if (previewOnTap) {
-            _showPreview(context);
-          } else {
-            onTap();
-          }
-        },
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildHeader(context),
-              const SizedBox(height: 8),
-              Text(
-                item.title,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
+          onTap: () {
+            if (previewOnTap) {
+              _showPreview(context);
+            } else {
+              onTap();
+            }
+          },
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (!hideLabel) ...[
+                  _buildHeader(context),
+                  const SizedBox(height: 8),
+                ],
+                Text(
+                  item.title,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
                   height: 1.18,
                 ),
                 maxLines: 2,
@@ -86,7 +97,22 @@ class AcademicItemCard extends StatelessWidget {
     showDialog(
       context: context,
       barrierDismissible: true,
-      builder: (context) {
+      builder: (dialogContext) {
+        Future<void> _runAction(
+          Future<void> Function() action,
+          String successMessage,
+        ) async {
+          await action();
+          if (!dialogContext.mounted) return;
+          Navigator.of(dialogContext).pop();
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(successMessage)),
+            );
+          }
+          await onActionCompleted?.call();
+        }
+
         return Dialog(
           insetPadding: const EdgeInsets.symmetric(
             horizontal: 24,
@@ -180,6 +206,73 @@ class AcademicItemCard extends StatelessWidget {
                                 style: Theme.of(context).textTheme.bodyMedium,
                               ),
                             ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Card(
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(14.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Actions',
+                            style: Theme.of(context).textTheme.titleSmall
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                          const SizedBox(height: 10),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              ElevatedButton.icon(
+                                onPressed: () => _runAction(
+                                  () => BackendService.markAcademicItemDone(
+                                    item.id,
+                                  ),
+                                  'Marked as done',
+                                ),
+                                icon: const Icon(Icons.check_circle_outline),
+                                label: const Text('Mark Done'),
+                              ),
+                              OutlinedButton.icon(
+                                onPressed: () => _runAction(
+                                  () => BackendService.snoozeAcademicItem(
+                                    item.id,
+                                  ),
+                                  'Snoozed for later',
+                                ),
+                                icon: const Icon(Icons.schedule),
+                                label: const Text('Snooze'),
+                              ),
+                              OutlinedButton.icon(
+                                onPressed: () => _runAction(
+                                  () => BackendService.addAcademicItemToCalendar(
+                                    item.id,
+                                  ),
+                                  'Added to calendar',
+                                ),
+                                icon: const Icon(Icons.calendar_today),
+                                label: const Text('Add to Calendar'),
+                              ),
+                              TextButton.icon(
+                                onPressed: () => _runAction(
+                                  () => BackendService.dismissAcademicItem(
+                                    item.id,
+                                  ),
+                                  'Dismissed',
+                                ),
+                                icon: const Icon(Icons.delete_outline),
+                                label: const Text('Dismiss'),
+                              ),
+                            ],
                           ),
                         ],
                       ),

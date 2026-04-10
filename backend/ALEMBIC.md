@@ -32,7 +32,21 @@ alembic history --verbose
 ```
 
 Autogenerate a migration
-- Create an autogeneraged migration (ALWAYS review the generated file before applying):
+- Create and immediately apply a migration using the local helper script:
+
+```bash
+migrate_schema.bat "Describe change"
+```
+
+- If you only want to generate the file without applying it:
+
+```bash
+python scripts/migrate_schema.py "Describe change" --no-upgrade
+```
+
+- This helper autogenerates the revision and then runs `alembic upgrade head`.
+- It also runs `alembic upgrade head` first so autogenerate won't fail when the local database is behind the latest revision.
+- For manual review, you can still use plain Alembic directly:
 
 ```bash
 alembic revision --autogenerate -m "Describe change"

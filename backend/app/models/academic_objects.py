@@ -28,7 +28,15 @@ class AcademicItem(Base):
     academic_score = Column(Integer, default=0)
     
     # UI state
+    status = Column(String, default="active", index=True)
     completed = Column(Boolean, default=False)
     dismissed = Column(Boolean, default=False)
+    snoozed_until = Column(DateTime, nullable=True)
+
+    # Source consolidation
+    source_count = Column(Integer, default=1)
+    source_signals_json = Column(Text, nullable=True)
+    merge_key = Column(String, index=True, nullable=True)
     
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    last_updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)

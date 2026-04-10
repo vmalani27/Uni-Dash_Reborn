@@ -180,10 +180,16 @@ def _count_users():
     """Blocking: returns list of UIDs with OAuth tokens."""
     from app.core.database import SupabaseSessionLocal
     from app.models.oauthToken import OAuthToken
+    from app.models.user import User
 
     db = SupabaseSessionLocal()
     try:
-        users = db.query(OAuthToken.uid).all()
+        users = (
+            db.query(OAuthToken.uid)
+            .join(User, User.uid == OAuthToken.uid)
+            .filter(User.oauth_connected.is_(True))
+            .all()
+        )
         return [u.uid for u in users]
     finally:
         db.close()
@@ -220,7 +226,7 @@ async def ingestion_loop():
     """
     global _start_time
     _start_time = time.time()
-    _worker_status["ingestion"]["status"] = "running"
+    _worker_status["ingestion"]["status"] = "waiting_for_users"
 
     await asyncio.sleep(STARTUP_DELAY_SECONDS)
     print(f"[INGESTION] Background ingestion loop started (interval: {INGESTION_INTERVAL_SECONDS}s)")
@@ -228,6 +234,13 @@ async def ingestion_loop():
     while True:
         try:
             uids = await asyncio.to_thread(_count_users)
+            
+            # Skip if no users are connected
+            if not uids:
+                _worker_status["ingestion"]["status"] = "waiting_for_users"
+                await asyncio.sleep(INGESTION_INTERVAL_SECONDS)
+                continue
+            
             print(f"[INGESTION] Running for {len(uids)} user(s) at {datetime.utcnow().isoformat()}")
             
             _worker_status["ingestion"]["status"] = "running"
@@ -244,8 +257,8 @@ async def ingestion_loop():
                     except Exception as e:
                         print(f"[INGESTION] Failed for user {uid[:8]}…: {e}")
 
-            if uids:
-                await asyncio.gather(*(bounded_sync(uid) for uid in uids))
+            await asyncio.gather(*(bounded_sync(uid) for uid in uids))
+            _worker_status["ingestion"]["status"] = "idle"
 
         except Exception as e:
             _worker_status["ingestion"]["status"] = "error"

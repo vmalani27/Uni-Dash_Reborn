@@ -99,6 +99,16 @@ class _ItemDetailsScreenState extends State<ItemDetailsScreen> {
                   icon: const Icon(Icons.calendar_today),
                   label: const Text('Add to Calendar'),
                 ),
+                OutlinedButton.icon(
+                  onPressed: _working
+                      ? null
+                      : () => _doAction(
+                          () => BackendService.snoozeAcademicItem(item.id),
+                          'Snoozed for later',
+                        ),
+                  icon: const Icon(Icons.schedule),
+                  label: const Text('Snooze'),
+                ),
                 TextButton.icon(
                   onPressed: _working
                       ? null
