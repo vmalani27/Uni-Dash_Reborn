@@ -11,20 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import os
 from dotenv import load_dotenv
 
-
-# Load dotenv file by name if provided, otherwise fall back to ../.env
-dotenv_file = os.path.join(os.path.dirname(__file__), '..', '.env.staging')
-
-# replace dev with prod based on branch, for feature branch stay on env.dev, 
-from pathlib import Path
-_dotenv_path = Path(dotenv_file)
-if _dotenv_path.exists():
-    load_dotenv(str(_dotenv_path))
-    print("file loaded sucessfully")
-else:
-    # Fall back to default load (no-op if no .env present)
-    load_dotenv()
-    print("cant find file")
+load_dotenv("/backend/.env")
 
 
 from app.routers import user_routers, oauth_routes, dashboard_routes
