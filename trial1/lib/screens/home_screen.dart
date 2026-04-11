@@ -12,6 +12,7 @@ import 'package:trial1/widgets/dashboard/vertical_sections.dart';
 import 'package:trial1/widgets/timeline_section.dart';
 import 'package:trial1/widgets/timeline_desktop.dart';
 import 'package:trial1/services/api_services.dart';
+import 'package:trial1/services/sync_event_service.dart';
 import 'package:trial1/models/dashboard_models.dart';
 import 'package:trial1/widgets/global_search_bar.dart';
 import 'package:trial1/widgets/search_results_view.dart';
@@ -45,7 +46,9 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _dashboardLoading = true;
   bool _refreshInFlight = false;
   String? _dashboardError;
-  String _searchQuery = '';  // NEW: track search query
+  bool _syncBootstrapInProgress = false;
+  String _syncBootstrapMessage = 'Preparing your dashboard...';
+  String _searchQuery = ''; // NEW: track search query
 
   @override
   void initState() {
@@ -55,8 +58,7 @@ class _HomeScreenState extends State<HomeScreen> {
         .then((profile) {
           if (!mounted) return;
           if (_isOauthConnected(profile)) {
-            _startPolling();
-            unawaited(_refreshDashboard(force: true));
+            unawaited(_bootstrapDashboard());
           } else {
             setState(() {
               _dashboardLoading = false;
@@ -85,6 +87,57 @@ class _HomeScreenState extends State<HomeScreen> {
     _pollTimer ??= Timer.periodic(_pollInterval, (_) {
       unawaited(_refreshDashboard());
     });
+  }
+
+  Future<void> _bootstrapDashboard() async {
+    if (_syncBootstrapInProgress) return;
+
+    setState(() {
+      _syncBootstrapInProgress = true;
+      _dashboardLoading = true;
+      _dashboardError = null;
+      _syncBootstrapMessage = 'Preparing your dashboard...';
+    });
+
+    try {
+      final uid = await BackendService.getCurrentUid();
+      final syncStatus = await BackendService.fetchGmailSyncStatus(uid);
+
+      if (syncStatus == 'in_progress') {
+        _syncBootstrapMessage = 'Your dashboard is already syncing...';
+      } else {
+        _syncBootstrapMessage = 'Updating your inbox before you continue...';
+        await BackendService.triggerIncrementalSync(uid);
+      }
+
+      final result = await SyncEventService.waitForSyncCompletion(
+        uid,
+        timeout: const Duration(minutes: 2),
+      );
+
+      if (!mounted) return;
+
+      if (result['success'] == true) {
+        await _refreshDashboard(force: true);
+        _startPolling();
+        return;
+      }
+
+      throw Exception('Sync did not complete successfully.');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _dashboardError =
+            'We could not finish preparing your dashboard. Please try again.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _syncBootstrapInProgress = false;
+          _dashboardLoading = false;
+        });
+      }
+    }
   }
 
   Future<void> _refreshDashboard({bool force = false}) async {
@@ -182,10 +235,10 @@ class _HomeScreenState extends State<HomeScreen> {
   List<AcademicItem> _extractAllItems(_DashboardSnapshot snapshot) {
     final allItems = <AcademicItem>[];
     final seenIds = <int>{};
-    
+
     // Try to extract from raw data
     final data = snapshot.raw;
-    
+
     // From focus items
     final focus = data['focus'];
     if (focus is List) {
@@ -203,7 +256,13 @@ class _HomeScreenState extends State<HomeScreen> {
     // From grouped items
     final grouped = data['groups'];
     if (grouped is Map<String, dynamic>) {
-      for (final key in ['ASSIGNMENT', 'EXAM', 'ACADEMIC_ADMIN', 'OPPORTUNITY', 'INFORMATION']) {
+      for (final key in [
+        'ASSIGNMENT',
+        'EXAM',
+        'ACADEMIC_ADMIN',
+        'OPPORTUNITY',
+        'INFORMATION',
+      ]) {
         final groupItems = grouped[key];
         if (groupItems is List) {
           for (final item in groupItems.whereType<Map<String, dynamic>>()) {
@@ -311,14 +370,79 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             Expanded(
               flex: 30,
-              child: _buildSecondaryPanel(
-                context,
-                timelineGroups: [],
-              ),
+              child: _buildSecondaryPanel(context, timelineGroups: []),
             ),
           ],
         );
       },
+    );
+  }
+
+  Widget _buildSyncBootstrapState(BuildContext context) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 520),
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 92,
+                height: 92,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Center(
+                  child: CircularProgressIndicator(
+                    strokeWidth: 3,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'Preparing your dashboard',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 10),
+              Text(
+                _syncBootstrapMessage,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withOpacity(0.72),
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Please come back in a moment while we sync your latest mail and build your view.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withOpacity(0.56),
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              TextButton(
+                onPressed: _syncBootstrapInProgress
+                    ? null
+                    : () {
+                        unawaited(_bootstrapDashboard());
+                      },
+                child: const Text('Retry sync'),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -373,9 +497,9 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 12),
             ElevatedButton(
               onPressed: () {
-                unawaited(_refreshDashboard(force: true));
+                unawaited(_bootstrapDashboard());
               },
-              child: const Text('Retry'),
+              child: const Text('Retry sync'),
             ),
           ],
         ),
@@ -393,8 +517,9 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
-          color:
-              Theme.of(context).colorScheme.surfaceContainer.withOpacity(0.3),
+          color: Theme.of(
+            context,
+          ).colorScheme.surfaceContainer.withOpacity(0.3),
           border: Border.all(
             color: Theme.of(context).dividerColor.withOpacity(0.08),
           ),
@@ -407,7 +532,10 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               // Timeline section
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 8.0),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 4.0,
+                  vertical: 8.0,
+                ),
                 child: Text(
                   'Timeline',
                   style: Theme.of(context).textTheme.labelLarge?.copyWith(
@@ -463,10 +591,7 @@ class _HomeScreenState extends State<HomeScreen> {
       children: [
         focusWidget,
         const SizedBox(height: 16),
-        BucketTabsWithPanel(
-          counts: counts,
-          groupedItems: groupedItems,
-        ),
+        BucketTabsWithPanel(counts: counts, groupedItems: groupedItems),
       ],
     );
   }
@@ -478,11 +603,11 @@ class _HomeScreenState extends State<HomeScreen> {
     // NEW: Check if user is searching
     if (_searchQuery.isNotEmpty && _dashboardSnapshot.value != null) {
       final allItems = _extractAllItems(_dashboardSnapshot.value!);
-      
+
       return LayoutBuilder(
         builder: (context, constraints) {
           final isMobile = constraints.maxWidth < 600;
-          
+
           if (isMobile) {
             return SearchResultsView(
               query: _searchQuery,
@@ -493,7 +618,7 @@ class _HomeScreenState extends State<HomeScreen> {
               },
             );
           }
-          
+
           // Tablet & Desktop: show results on left, timeline on right
           return Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -705,9 +830,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 CategoryOverview(
                   counts: counts,
                   onSelect: (label) {
-                    Navigator.of(
-                      context,
-                    ).pushNamed('/dashboard/list', arguments: {'filter': label});
+                    Navigator.of(context).pushNamed(
+                      '/dashboard/list',
+                      arguments: {'filter': label},
+                    );
                   },
                 ),
                 const SizedBox(height: 16),
@@ -761,13 +887,10 @@ class _HomeScreenState extends State<HomeScreen> {
               // Left: App title
               const Text(
                 'UniDash',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
               ),
               const SizedBox(width: 24),
-      // Center: Search bar
+              // Center: Search bar
               Expanded(
                 child: ValueListenableBuilder<_DashboardSnapshot?>(
                   valueListenable: _dashboardSnapshot,
@@ -776,7 +899,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     final allItems = snapshot != null
                         ? _extractAllItems(snapshot)
                         : <AcademicItem>[];
-                    
+
                     return GlobalSearchBar(
                       academicItems: allItems,
                       onResultSelected: () {
@@ -850,8 +973,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       return const Center(child: CircularProgressIndicator());
                     }
 
-                    if (profileSnapshot.hasError ||
-                        !profileSnapshot.hasData) {
+                    if (profileSnapshot.hasError || !profileSnapshot.hasData) {
                       return SingleChildScrollView(
                         child: Center(
                           child: Padding(
@@ -875,14 +997,17 @@ class _HomeScreenState extends State<HomeScreen> {
                       );
                     }
 
+                    if (_syncBootstrapInProgress && dashboardSnapshot == null) {
+                      return _buildSyncBootstrapState(context);
+                    }
+
                     if (_dashboardLoading &&
                         profileSnapshot.data != null &&
                         dashboardSnapshot == null) {
-                      return _buildLoadingState(context);
+                      return _buildSyncBootstrapState(context);
                     }
 
-                    if (_dashboardError != null &&
-                        dashboardSnapshot == null) {
+                    if (_dashboardError != null && dashboardSnapshot == null) {
                       return SingleChildScrollView(
                         child: _buildDashboardError(context, _dashboardError!),
                       );

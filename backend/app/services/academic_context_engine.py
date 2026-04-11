@@ -784,7 +784,7 @@ class AcademicContextEngine:
         
         Example usage:
             from ollama import Client
-            client = Client(host='http://localhost:11434')
+            client = Client(host='https://ollama.com')
             insights = engine._extract_with_llm(subject, body, client)
         """
         

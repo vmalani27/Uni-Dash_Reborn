@@ -19,6 +19,7 @@ Machine_Learning_Algo/venv
 backend/.env
 backend/.env.dev
 backend/.env.prod
+backend/.env.staging
 backend/WEB_CLIENT_OAUTH_SECRET.json
 backend/app/core/credentials.json
 trial1/.env
@@ -40,3 +41,7 @@ Machine_Learning_Algo/__pycache__/
 /backend/.env.dev
 /backend/.env.prod
 /trial1/devtools_options.yaml
+/web/node_modules
+/web/.next
+/web/.env.local
+/web/*

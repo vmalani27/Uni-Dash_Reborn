@@ -7,6 +7,7 @@ from fastapi import APIRouter, Query, HTTPException
 from datetime import datetime, timezone
 from typing import Optional, List
 from app.services.academic_context_engine import AcademicContextEngine
+from app.services.ollama_runtime import get_inference_client
 import httpx
 
 router = APIRouter(prefix="/api/notifications", tags=["notifications"])
@@ -59,12 +60,11 @@ async def get_enriched_notification(
     llm_client = None
     if use_llm:
         try:
-            from ollama import Client
-            llm_client = Client(host='http://localhost:11434')
-        except ImportError:
+            llm_client = get_inference_client()
+        except RuntimeError as exc:
             raise HTTPException(
                 status_code=503,
-                detail="LLM enrichment requested but Ollama not available. Install: pip install ollama"
+                detail=str(exc)
             )
     
     # Enrich with insights
@@ -152,9 +152,8 @@ async def get_high_priority_dashboard(
     llm_client = None
     if enrich_with_llm:
         try:
-            from ollama import Client
-            llm_client = Client(host='http://localhost:11434')
-        except ImportError:
+            llm_client = get_inference_client()
+        except RuntimeError:
             # Gracefully degrade: skip LLM enrichment
             enrich_with_llm = False
     
@@ -207,9 +206,8 @@ async def batch_enrich_notifications(
     llm_client = None
     if use_llm:
         try:
-            from ollama import Client
-            llm_client = Client(host='http://localhost:11434')
-        except ImportError:
+            llm_client = get_inference_client()
+        except RuntimeError:
             pass
     
     for gmail_id in gmail_ids[:100]:  # Cap at 100 to prevent abuse

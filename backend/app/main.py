@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 
 
 # Load dotenv file by name if provided, otherwise fall back to ../.env
-dotenv_file = os.path.join(os.path.dirname(__file__), '..', '.env.dev')
+dotenv_file = os.path.join(os.path.dirname(__file__), '..', '.env.staging')
 
 # replace dev with prod based on branch, for feature branch stay on env.dev, 
 from pathlib import Path
@@ -36,6 +36,7 @@ from app.routers import admin_routes
 # from app.routers import search_router  # Disabled: using local search in Flutter instead
 from app.core import firebase_config  # Initialize Firebase Admin SDK
 from app.services.background_scheduler import ingestion_loop, ai_processing_loop
+from app.services.ai_service import AIService
 
 
 
@@ -44,6 +45,7 @@ from app.services.background_scheduler import ingestion_loop, ai_processing_loop
 async def lifespan(app: FastAPI):
     """Start background workers on startup, cancel on shutdown."""
     print("[LIFESPAN] Starting background workers…")
+    await asyncio.to_thread(AIService.initialize_inference_backend)
     ingestion_task = asyncio.create_task(ingestion_loop())
     ai_task = asyncio.create_task(ai_processing_loop())
     yield

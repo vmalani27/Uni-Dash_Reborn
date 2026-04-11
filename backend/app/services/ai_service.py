@@ -1,13 +1,13 @@
+import os
 import json
 import datetime
-import os
-from ollama import Client
 from typing import Optional, Dict, Any
 
 from app.ai.preprocessing import preprocess_email_for_llm
 from app.models.gmail.gmail_message import GmailMessage
 from app.services.domain_trust_scorer import DomainTrustScorer
 from app.services.academic_context_engine import AcademicContextEngine
+from app.services.ollama_runtime import get_inference_client, get_inference_mode, get_inference_model, initialize_ollama_runtime
 
 
 # Platform domains to skip processing (easy to extend)
@@ -36,13 +36,6 @@ def _is_platform_sender(domain_profile, sender: str, platform_key: str) -> bool:
         return True
 
     return False
-
-
-# Ollama configuration (kept unchanged)
-OLLAMA_URL = os.getenv("OLLAMA_URL","127.0.0.1:11434/api/generate")
-MODEL_20B = os.getenv("OLLAMA_MODEL_20B", "gpt-oss:20b-cloud")
-MODEL_120B = os.getenv("OLLAMA_MODEL_120B", "gpt-oss:120b-cloud")
-
 LEVEL2_LABELS = [
     "Timetable / Schedule Update",
     "Exam Notifications",
@@ -98,13 +91,24 @@ class AIService:
     def call_small_model(prompt: str) -> str:
         """Call the smaller model (20B) and return the raw text response."""
         print("[AI] Calling small model")
-        return AIService._call_ollama(prompt, MODEL_20B)
+        return AIService._call_inference(prompt, get_inference_model("small"))
 
     @staticmethod
     def call_large_model(prompt: str) -> str:
         """Call the larger model (120B) and return the raw text response."""
         print("[AI] Calling large model for extra details")
-        return AIService._call_ollama(prompt, MODEL_120B)
+        return AIService._call_inference(prompt, get_inference_model("large"))
+
+    @staticmethod
+    def initialize_inference_backend() -> None:
+        """Probe cloud inference once and lock the selected backend for the process."""
+        state = initialize_ollama_runtime()
+        if get_inference_mode().value == "ollama_cloud":
+            print(f"[AI] Cloud inference locked to Ollama at {state.base_url}")
+        elif get_inference_mode().value == "openrouter":
+            print(f"[AI] Cloud inference locked to OpenRouter at {state.base_url}")
+        else:
+            print(f"[AI] Cloud inference unavailable: {state.probe_error}")
 
     @staticmethod
     def parse_llm_response(llm_response: str) -> Dict[str, Any]:
@@ -295,19 +299,15 @@ class AIService:
             raise
 
     @staticmethod
-    def _call_ollama(prompt: str, model: str) -> str:
-        """Call local Ollama and return the raw response string.
+    def _call_inference(prompt: str, model: str) -> str:
+        """Call the configured cloud inference provider and return the raw response string.
 
         This is a thin wrapper over the HTTP call; it does not attempt to
         recover malformed JSON. Caller must parse and validate.
         """
-        print(f"[AI] Ollama -> {model}")
+        print(f"[AI] Inference -> {model}")
 
-        # Use the Ollama Python client for remote inference
-        client = Client(
-            host="https://ollama.com",
-            headers={"Authorization": "Bearer " + os.getenv("OLLAMA_API_KEY", "")},
-        )
+        client = get_inference_client()
 
         # The client.generate method returns a dict with a 'response' field containing the generated text.
         result = client.generate(
@@ -331,6 +331,16 @@ class AIService:
             raw = raw[:-3]
 
         return raw.strip()
+
+    @staticmethod
+    def initialize_ollama_backend() -> None:
+        """Compatibility wrapper for the existing startup hook."""
+        AIService.initialize_inference_backend()
+
+    @staticmethod
+    def _call_ollama(prompt: str, model: str) -> str:
+        """Compatibility wrapper for existing callers."""
+        return AIService._call_inference(prompt, model)
 
     # Backwards-compatible alias for older callers
     @staticmethod

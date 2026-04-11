@@ -330,6 +330,15 @@ async def ai_processing_loop():
             await asyncio.sleep(30)
             continue
 
+        except RuntimeError as e:
+            if str(e).startswith("[OLLAMA]"):
+                _worker_status["ai_processing"]["status"] = "offline_llm"
+                _worker_status["ai_processing"]["last_error"] = str(e)
+                print(f"[AI_WORKER] Ollama backend unavailable, retrying in 30s: {e}")
+                await asyncio.sleep(30)
+                continue
+            raise
+
         except Exception as e:
             _worker_status["ai_processing"]["status"] = "error"
             _worker_status["ai_processing"]["last_error"] = str(e)
