@@ -7,7 +7,7 @@ from alembic import context
 from dotenv import load_dotenv
 
 # Load dotenv file by name if provided, otherwise fall back to ../.env
-dotenv_file = os.path.join(os.path.dirname(__file__), '..', '.env.dev')
+dotenv_file = os.path.join(os.path.dirname(__file__), '..', '.env.staging')
 from pathlib import Path
 _dotenv_path = Path(dotenv_file)
 if _dotenv_path.exists():
