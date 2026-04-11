@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import os
 from dotenv import load_dotenv
 
-load_dotenv("/backend/.env")
+load_dotenv()
 
 
 from app.routers import user_routers, oauth_routes, dashboard_routes
