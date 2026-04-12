@@ -172,9 +172,9 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_syncUiState?.isActive == true) return;
 
     setState(() {
-      _syncUiState = null;
       _dashboardLoading = true;
       _dashboardError = null;
+      _syncUiState = null;
     });
 
     try {
@@ -211,69 +211,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
       if (!mounted) return;
 
-      setState(() {
-        _syncUiState = SyncUIState.preparing();
-      });
-
       if (syncStatus == 'in_progress') {
-        setState(() {
-          _syncUiState = SyncUIState.syncing(
-            message: 'Your dashboard is already syncing...',
-            detail:
-                'We will wait for the current sync and AI processing to finish.',
-          );
-        });
+        _startSseWatcher(uid);
       } else {
-        setState(() {
-          _syncUiState = SyncUIState.preparing(
-            message: 'Updating your inbox before you continue...',
-            detail:
-                'We are starting a fresh sync before showing your dashboard.',
-          );
-        });
         await BackendService.triggerIncrementalSync(uid);
+        _startSseWatcher(uid);
       }
-
-      SyncUIState? lastState = _syncUiState;
-      var reachedReady = false;
-      final stream = SyncEventService.subscribeSyncStatus(uid).timeout(
-        const Duration(minutes: 2),
-        onTimeout: (sink) {
-          sink.add({'status': 'timeout'});
-          sink.close();
-        },
-      );
-
-      await for (final event in stream) {
-        if (!mounted) return;
-
-        final nextState = SyncUIState.fromSyncEvent(event, previous: lastState);
-
-        setState(() {
-          _syncUiState = nextState;
-        });
-
-        lastState = nextState;
-
-        if (nextState.phase == SyncUIPhase.failed ||
-            nextState.phase == SyncUIPhase.timeout) {
-          throw Exception(nextState.message);
-        }
-
-        if (nextState.phase == SyncUIPhase.ready) {
-          reachedReady = true;
-          break;
-        }
-      }
-
-      if (!reachedReady) {
-        throw Exception(
-          'Realtime sync stream ended before the pipeline completed.',
-        );
-      }
-
-      await _refreshDashboard(force: true);
-      _startSseWatcher(uid);
     } catch (e) {
       if (!mounted) return;
       final failureDetail =
