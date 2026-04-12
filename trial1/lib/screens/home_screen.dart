@@ -51,6 +51,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _refreshInFlight = false;
   bool _sseHealthy = false;
   bool _sseReconnectScheduled = false;
+  bool _syncWatchActive = false;
   String? _dashboardError;
   SyncUIState? _syncUiState;
   String _searchQuery = ''; // NEW: track search query
@@ -120,7 +121,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _startSseWatcher(String uid) {
-    if (_sseSubscription != null) {
+    if (_sseSubscription != null || !_syncWatchActive) {
       return;
     }
 
@@ -134,12 +135,14 @@ class _HomeScreenState extends State<HomeScreen> {
         final pipelineComplete = event['pipeline_complete'] == true;
 
         if (pipelineComplete || status == 'completed' || status == 'no_action') {
+          _syncWatchActive = false;
+          _sseSubscription?.cancel();
+          _sseSubscription = null;
           unawaited(_refreshDashboard(force: true, updateLoadingState: false));
         }
       },
       onError: (_) {
         _sseHealthy = false;
-        _sseSubscription?.cancel();
         _sseSubscription = null;
         _startPolling();
         _scheduleSseReconnect(uid);
@@ -148,20 +151,22 @@ class _HomeScreenState extends State<HomeScreen> {
         _sseHealthy = false;
         _sseSubscription = null;
         _startPolling();
-        _scheduleSseReconnect(uid);
+        if (_syncWatchActive) {
+          _scheduleSseReconnect(uid);
+        }
       },
       cancelOnError: true,
     );
   }
 
   void _scheduleSseReconnect(String uid) {
-    if (_sseReconnectScheduled || !mounted) {
+    if (_sseReconnectScheduled || !mounted || !_syncWatchActive) {
       return;
     }
     _sseReconnectScheduled = true;
     Future<void>.delayed(const Duration(seconds: 5), () {
       _sseReconnectScheduled = false;
-      if (!mounted || _sseSubscription != null) {
+      if (!mounted || _sseSubscription != null || !_syncWatchActive) {
         return;
       }
       _startSseWatcher(uid);
@@ -187,7 +192,6 @@ class _HomeScreenState extends State<HomeScreen> {
           _dashboardLoading = false;
           _dashboardError = null;
         });
-        _startSseWatcher(uid);
         unawaited(_refreshDashboard(force: true, updateLoadingState: false));
         return;
       }
@@ -203,7 +207,6 @@ class _HomeScreenState extends State<HomeScreen> {
           _dashboardLoading = false;
           _dashboardError = null;
         });
-        _startSseWatcher(uid);
         return;
       }
 
@@ -212,9 +215,11 @@ class _HomeScreenState extends State<HomeScreen> {
       if (!mounted) return;
 
       if (syncStatus == 'in_progress') {
+        _syncWatchActive = true;
         _startSseWatcher(uid);
       } else {
         await BackendService.triggerIncrementalSync(uid);
+        _syncWatchActive = true;
         _startSseWatcher(uid);
       }
     } catch (e) {
