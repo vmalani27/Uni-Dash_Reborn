@@ -19,7 +19,7 @@ services:
     ports:
       - "8001:8000"
     env_file:
-      - .env
+      - .env.staging
     environment:
       REDIS_URL: redis://redis:6379/0
     depends_on:
