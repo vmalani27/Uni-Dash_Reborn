@@ -104,7 +104,7 @@ def _sync_user(uid: str, limit: int = 50):
 def _process_batch_emails():
     """
     Blocking: picks a batch of unprocessed emails and runs AI inference.
-    Returns: List of (gmail_id, topic) on success, empty list if nothing to process.
+    Returns: Dict with processed message IDs and affected user IDs.
     """
     from app.core.database import SupabaseSessionLocal
     from app.models.gmail.gmail_message import GmailMessage
@@ -126,7 +126,7 @@ def _process_batch_emails():
         )
 
         if not messages:
-            return []
+            return {"message_ids": [], "uids": []}
 
         # Lock them all
         for msg in messages:
@@ -136,8 +136,10 @@ def _process_batch_emails():
         print(f"[AI_WORKER] Processing up to {len(messages)} email(s) sequentially...")
 
         succeeded = []
+        affected_uids = set()
         try:
             for msg in messages:
+                affected_uids.add(msg.uid)
                 try:
                     # run single-email inference; this function updates the msg object fields
                     result = AIService.run_email_inference(msg)
@@ -163,12 +165,12 @@ def _process_batch_emails():
 
             if succeeded:
                 print(f"[AI_WORKER] Completed: {len(succeeded)} succeeded.")
-            return succeeded
+            return {"message_ids": succeeded, "uids": list(affected_uids)}
 
         except Exception as e:
             print(f"[AI_WORKER] Sequential processing catastrophic failure: {e}")
             db.rollback()
-            return []
+            return {"message_ids": [], "uids": list(affected_uids)}
 
     finally:
         db.close()
@@ -250,6 +252,13 @@ async def ingestion_loop():
 
             async def bounded_sync(uid):
                 async with sem:
+                    from app.services.sync_event_bus import is_sync_locked
+                    
+                    # Skip if sync already in progress (avoid race with API trigger)
+                    if is_sync_locked(uid):
+                        print(f"[INGESTION] Skipping {uid[:8]}… (already locked/syncing)")
+                        return
+                    
                     try:
                         await asyncio.to_thread(_sync_user, uid)
                         _worker_status["ingestion"]["total_synced"] += 1
@@ -314,9 +323,23 @@ async def ai_processing_loop():
                 continue
 
             if result:
-                _worker_status["ai_processing"]["total_processed"] += len(result)
+                _worker_status["ai_processing"]["total_processed"] += len(result.get("message_ids", []))
 
-            if not result:
+                if result.get("uids"):
+                    from app.services.sync_event_bus import (
+                        invalidate_dashboard_snapshot,
+                        publish_pipeline_event_with_new_session,
+                    )
+
+                    for affected_uid in result["uids"]:
+                        await asyncio.to_thread(invalidate_dashboard_snapshot, affected_uid)
+                        await asyncio.to_thread(
+                            publish_pipeline_event_with_new_session,
+                            affected_uid,
+                            "ai_worker_progress",
+                        )
+
+            if not result or not result.get("message_ids"):
                 # Nothing to process — sleep longer
                 _worker_status["ai_processing"]["status"] = "idle"
                 await asyncio.sleep(15)

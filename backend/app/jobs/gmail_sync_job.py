@@ -8,7 +8,7 @@ from app.services.gmail_sync import sync_gmail_for_user
 from app.core.database import SupabaseSessionLocal
 
 # Initial sync for a single user
-def initial_gmail_sync(uid, supabase_db, limit=300):
+def initial_gmail_sync(uid, supabase_db, limit=500):
     try:
         sync_gmail_for_user(uid, supabase_db, limit=limit)
     except Exception as e:

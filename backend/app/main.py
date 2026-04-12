@@ -24,15 +24,58 @@ from app.routers import admin_routes
 from app.core import firebase_config  # Initialize Firebase Admin SDK
 from app.services.background_scheduler import ingestion_loop, ai_processing_loop
 from app.services.ai_service import AIService
+from app.services.sync_event_bus import ensure_redis_ready
+import datetime
+from datetime import timedelta
 
 
+def _recover_orphaned_syncs():
+    """
+    Recover from crashes: reset syncs stuck in 'in_progress' state for >30 min.
+    Called on app startup.
+    """
+    from app.core.database import SupabaseSessionLocal
+    from app.models.gmail.gmail_message import GmailSyncStatus
+    
+    db = SupabaseSessionLocal()
+    try:
+        cutoff = datetime.datetime.utcnow() - timedelta(minutes=30)
+        
+        orphaned = db.query(GmailSyncStatus).filter(
+            GmailSyncStatus.status == "in_progress",
+            GmailSyncStatus.started_at < cutoff
+        ).all()
+        
+        if orphaned:
+            for sync in orphaned:
+                print(
+                    f"[RECOVERY] Marking orphaned sync as failed for {sync.uid[:8]}… "
+                    f"(started {(datetime.datetime.utcnow() - sync.started_at).total_seconds() / 60:.0f} min ago)"
+                )
+                sync.status = "failed"
+                sync.error_message = "Orphaned sync (worker crash or timeout). Please retry manually."
+                sync.finished_at = datetime.datetime.utcnow()
+            
+            db.commit()
+            print(f"[RECOVERY] Recovered {len(orphaned)} orphaned sync(es).")
+    except Exception as e:
+        print(f"[RECOVERY] Failed to recover orphaned syncs: {e}")
+        db.rollback()
+    finally:
+        db.close()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Start background workers on startup, cancel on shutdown."""
     print("[LIFESPAN] Starting background workers…")
+    await asyncio.to_thread(ensure_redis_ready)
     await asyncio.to_thread(AIService.initialize_inference_backend)
+    
+    # Recover orphaned syncs from previous crashes/restarts
+    print("[LIFESPAN] Recovering orphaned syncs…")
+    await asyncio.to_thread(_recover_orphaned_syncs)
+    
     ingestion_task = asyncio.create_task(ingestion_loop())
     ai_task = asyncio.create_task(ai_processing_loop())
     yield

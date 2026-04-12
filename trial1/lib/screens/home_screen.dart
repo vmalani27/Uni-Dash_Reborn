@@ -12,8 +12,10 @@ import 'package:trial1/widgets/dashboard/vertical_sections.dart';
 import 'package:trial1/widgets/timeline_section.dart';
 import 'package:trial1/widgets/timeline_desktop.dart';
 import 'package:trial1/services/api_services.dart';
+import 'package:trial1/services/dashboard_cache_service.dart';
 import 'package:trial1/services/sync_event_service.dart';
 import 'package:trial1/models/dashboard_models.dart';
+import 'package:trial1/models/sync_ui_state.dart';
 import 'package:trial1/widgets/global_search_bar.dart';
 import 'package:trial1/widgets/search_results_view.dart';
 import 'package:trial1/widgets/context_feed_container.dart';
@@ -35,19 +37,22 @@ class _DashboardSnapshot {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  static const Duration _pollInterval = Duration(seconds: 30);
+  static const Duration _fallbackPollInterval = Duration(seconds: 60);
 
   late final Future<Map<String, dynamic>> _profileFuture;
   final ValueNotifier<_DashboardSnapshot?> _dashboardSnapshot =
       ValueNotifier<_DashboardSnapshot?>(null);
 
   Timer? _pollTimer;
+  StreamSubscription<Map<String, dynamic>>? _sseSubscription;
+  Duration? _activePollInterval;
   String? _lastFingerprint;
   bool _dashboardLoading = true;
   bool _refreshInFlight = false;
+  bool _sseHealthy = false;
+  bool _sseReconnectScheduled = false;
   String? _dashboardError;
-  bool _syncBootstrapInProgress = false;
-  String _syncBootstrapMessage = 'Preparing your dashboard...';
+  SyncUIState? _syncUiState;
   String _searchQuery = ''; // NEW: track search query
 
   @override
@@ -74,6 +79,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _pollTimer?.cancel();
+    _sseSubscription?.cancel();
     _dashboardSnapshot.dispose();
     super.dispose();
   }
@@ -83,68 +89,224 @@ class _HomeScreenState extends State<HomeScreen> {
         profile['oauth_connected'] == 1;
   }
 
-  void _startPolling() {
-    _pollTimer ??= Timer.periodic(_pollInterval, (_) {
+  void _startPolling([Duration interval = _fallbackPollInterval]) {
+    if (_pollTimer != null && _activePollInterval == interval) {
+      return;
+    }
+
+    _pollTimer?.cancel();
+    _activePollInterval = interval;
+    _pollTimer = Timer.periodic(interval, (_) {
       unawaited(_refreshDashboard());
     });
   }
 
+  void _stopPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = null;
+    _activePollInterval = null;
+  }
+
+  Future<bool> _loadLocalSnapshot() async {
+    final cached = await DashboardCacheService.loadSnapshot();
+    if (cached == null) {
+      return false;
+    }
+
+    final fingerprint = _dashboardFingerprint(cached);
+    _lastFingerprint = fingerprint;
+    _dashboardSnapshot.value = _DashboardSnapshot(raw: cached);
+    return true;
+  }
+
+  void _startSseWatcher(String uid) {
+    if (_sseSubscription != null) {
+      return;
+    }
+
+    final stream = SyncEventService.subscribeSyncStatus(uid);
+    _sseSubscription = stream.listen(
+      (event) {
+        _sseHealthy = true;
+        _stopPolling();
+
+        final status = event['status']?.toString();
+        final pipelineComplete = event['pipeline_complete'] == true;
+
+        if (pipelineComplete || status == 'completed' || status == 'no_action') {
+          unawaited(_refreshDashboard(force: true, updateLoadingState: false));
+        }
+      },
+      onError: (_) {
+        _sseHealthy = false;
+        _sseSubscription?.cancel();
+        _sseSubscription = null;
+        _startPolling();
+        _scheduleSseReconnect(uid);
+      },
+      onDone: () {
+        _sseHealthy = false;
+        _sseSubscription = null;
+        _startPolling();
+        _scheduleSseReconnect(uid);
+      },
+      cancelOnError: true,
+    );
+  }
+
+  void _scheduleSseReconnect(String uid) {
+    if (_sseReconnectScheduled || !mounted) {
+      return;
+    }
+    _sseReconnectScheduled = true;
+    Future<void>.delayed(const Duration(seconds: 5), () {
+      _sseReconnectScheduled = false;
+      if (!mounted || _sseSubscription != null) {
+        return;
+      }
+      _startSseWatcher(uid);
+    });
+  }
+
   Future<void> _bootstrapDashboard() async {
-    if (_syncBootstrapInProgress) return;
+    if (_syncUiState?.isActive == true) return;
 
     setState(() {
-      _syncBootstrapInProgress = true;
+      _syncUiState = null;
       _dashboardLoading = true;
       _dashboardError = null;
-      _syncBootstrapMessage = 'Preparing your dashboard...';
     });
 
     try {
       final uid = await BackendService.getCurrentUid();
-      final syncStatus = await BackendService.fetchGmailSyncStatus(uid);
-
-      if (syncStatus == 'in_progress') {
-        _syncBootstrapMessage = 'Your dashboard is already syncing...';
-      } else {
-        _syncBootstrapMessage = 'Updating your inbox before you continue...';
-        await BackendService.triggerIncrementalSync(uid);
-      }
-
-      final result = await SyncEventService.waitForSyncCompletion(
-        uid,
-        timeout: const Duration(minutes: 2),
-      );
-
+      final localLoaded = await _loadLocalSnapshot();
       if (!mounted) return;
 
-      if (result['success'] == true) {
-        await _refreshDashboard(force: true);
-        _startPolling();
+      if (localLoaded) {
+        setState(() {
+          _dashboardLoading = false;
+          _dashboardError = null;
+        });
+        _startSseWatcher(uid);
+        unawaited(_refreshDashboard(force: true, updateLoadingState: false));
         return;
       }
 
-      throw Exception('Sync did not complete successfully.');
+      final hasServerSnapshot = await _refreshDashboard(
+        force: true,
+        updateLoadingState: false,
+      );
+      if (!mounted) return;
+
+      if (hasServerSnapshot && _dashboardSnapshot.value != null) {
+        setState(() {
+          _dashboardLoading = false;
+          _dashboardError = null;
+        });
+        _startSseWatcher(uid);
+        return;
+      }
+
+      final syncStatus = await BackendService.fetchGmailSyncStatus(uid);
+
+      if (!mounted) return;
+
+      setState(() {
+        _syncUiState = SyncUIState.preparing();
+      });
+
+      if (syncStatus == 'in_progress') {
+        setState(() {
+          _syncUiState = SyncUIState.syncing(
+            message: 'Your dashboard is already syncing...',
+            detail:
+                'We will wait for the current sync and AI processing to finish.',
+          );
+        });
+      } else {
+        setState(() {
+          _syncUiState = SyncUIState.preparing(
+            message: 'Updating your inbox before you continue...',
+            detail:
+                'We are starting a fresh sync before showing your dashboard.',
+          );
+        });
+        await BackendService.triggerIncrementalSync(uid);
+      }
+
+      SyncUIState? lastState = _syncUiState;
+      var reachedReady = false;
+      final stream = SyncEventService.subscribeSyncStatus(uid).timeout(
+        const Duration(minutes: 2),
+        onTimeout: (sink) {
+          sink.add({'status': 'timeout'});
+          sink.close();
+        },
+      );
+
+      await for (final event in stream) {
+        if (!mounted) return;
+
+        final nextState = SyncUIState.fromSyncEvent(event, previous: lastState);
+
+        setState(() {
+          _syncUiState = nextState;
+        });
+
+        lastState = nextState;
+
+        if (nextState.phase == SyncUIPhase.failed ||
+            nextState.phase == SyncUIPhase.timeout) {
+          throw Exception(nextState.message);
+        }
+
+        if (nextState.phase == SyncUIPhase.ready) {
+          reachedReady = true;
+          break;
+        }
+      }
+
+      if (!reachedReady) {
+        throw Exception(
+          'Realtime sync stream ended before the pipeline completed.',
+        );
+      }
+
+      await _refreshDashboard(force: true);
+      _startSseWatcher(uid);
     } catch (e) {
       if (!mounted) return;
+      final failureDetail =
+          e is SyncStreamUnavailableException
+          ? e.message
+          : 'Please try again to restart the sync.';
       setState(() {
+        _syncUiState = SyncUIState.failed(detail: failureDetail);
         _dashboardError =
             'We could not finish preparing your dashboard. Please try again.';
       });
     } finally {
       if (mounted) {
         setState(() {
-          _syncBootstrapInProgress = false;
           _dashboardLoading = false;
         });
       }
     }
   }
 
-  Future<void> _refreshDashboard({bool force = false}) async {
-    if (_refreshInFlight) return;
+  Future<bool> _refreshDashboard({
+    bool force = false,
+    bool updateLoadingState = true,
+  }) async {
+    if (_refreshInFlight) return false;
+
+    if (!force && _sseHealthy) {
+      return true;
+    }
+
     _refreshInFlight = true;
     final shouldUpdateLoadingState =
-        _dashboardLoading || _dashboardError != null;
+        updateLoadingState && (_dashboardLoading || _dashboardError != null);
 
     try {
       final data = await BackendService.fetchUnifiedDashboard();
@@ -153,6 +315,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (force || fingerprint != _lastFingerprint) {
         _lastFingerprint = fingerprint;
         _dashboardSnapshot.value = _DashboardSnapshot(raw: data);
+        await DashboardCacheService.saveSnapshot(data);
       }
 
       if (mounted && shouldUpdateLoadingState) {
@@ -161,14 +324,16 @@ class _HomeScreenState extends State<HomeScreen> {
           _dashboardError = null;
         });
       }
+      return true;
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted) return false;
       if (_dashboardSnapshot.value == null || _dashboardError != null) {
         setState(() {
           _dashboardLoading = false;
           _dashboardError = 'Failed to load dashboard: $e';
         });
       }
+      return false;
     } finally {
       _refreshInFlight = false;
     }
@@ -378,7 +543,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildSyncBootstrapState(BuildContext context) {
+  Widget _buildSyncBootstrapState(BuildContext context, SyncUIState state) {
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 520),
@@ -396,15 +561,34 @@ class _HomeScreenState extends State<HomeScreen> {
                   shape: BoxShape.circle,
                 ),
                 child: Center(
-                  child: CircularProgressIndicator(
-                    strokeWidth: 3,
-                    color: Theme.of(context).colorScheme.primary,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      SizedBox(
+                        width: 92,
+                        height: 92,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 3,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                      Icon(
+                        state.phase == SyncUIPhase.ready
+                            ? Icons.check_rounded
+                            : state.phase == SyncUIPhase.failed ||
+                                  state.phase == SyncUIPhase.timeout
+                            ? Icons.refresh_rounded
+                            : Icons.cloud_sync,
+                        color: Theme.of(context).colorScheme.primary,
+                        size: 30,
+                      ),
+                    ],
                   ),
                 ),
               ),
               const SizedBox(height: 24),
               Text(
-                'Preparing your dashboard',
+                state.title,
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.w700,
                 ),
@@ -412,7 +596,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(height: 10),
               Text(
-                _syncBootstrapMessage,
+                state.message,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: Theme.of(
                     context,
@@ -422,7 +606,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(height: 12),
               Text(
-                'Please come back in a moment while we sync your latest mail and build your view.',
+                state.detail,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: Theme.of(
                     context,
@@ -430,9 +614,30 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 textAlign: TextAlign.center,
               ),
+              const SizedBox(height: 20),
+              TweenAnimationBuilder<double>(
+                tween: Tween<double>(begin: 0, end: state.progress),
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOutCubic,
+                builder: (context, value, _) {
+                  return ClipRRect(
+                    borderRadius: BorderRadius.circular(999),
+                    child: LinearProgressIndicator(
+                      minHeight: 10,
+                      value: value.clamp(0.0, 1.0),
+                      backgroundColor: Theme.of(
+                        context,
+                      ).colorScheme.surfaceContainerHighest.withOpacity(0.6),
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        Theme.of(context).colorScheme.primary,
+                      ),
+                    ),
+                  );
+                },
+              ),
               const SizedBox(height: 24),
               TextButton(
-                onPressed: _syncBootstrapInProgress
+                onPressed: state.isActive
                     ? null
                     : () {
                         unawaited(_bootstrapDashboard());
@@ -649,27 +854,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     // EXISTING: Normal dashboard mode (non-search)
-    final allItems = data.grouped.values.expand((items) => items).toList();
-
-    AcademicItem? topPriorityItem;
-    if (allItems.isNotEmpty) {
-      final activeItems = allItems.where((item) {
-        if (item.dueDate == null) return true;
-        final overdueHours = DateTime.now().difference(item.dueDate!).inHours;
-        return overdueHours <= 1;
-      }).toList();
-
-      final candidateItems = activeItems.isNotEmpty ? activeItems : allItems;
-      candidateItems.sort((a, b) {
-        final scoreCmp = b.academicScore.compareTo(a.academicScore);
-        if (scoreCmp != 0) return scoreCmp;
-        final aDue = a.dueDate ?? DateTime.fromMillisecondsSinceEpoch(0);
-        final bDue = b.dueDate ?? DateTime.fromMillisecondsSinceEpoch(0);
-        return aDue.compareTo(bDue);
-      });
-      topPriorityItem = candidateItems.first;
-    }
-
     final allEvents = <AcademicEvent>[];
     AcademicEventType mapEntity(String entity) {
       switch (entity.toUpperCase()) {
@@ -712,16 +896,13 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     });
 
-    AcademicEvent? topPriorityEvent;
     final active = allEvents.where((e) => e.isActive).toList();
     if (active.isNotEmpty) {
       active.sort((a, b) => b.academicScore.compareTo(a.academicScore));
-      topPriorityEvent = active.first;
     } else {
       final upcoming = allEvents.where((e) => e.isUpcoming).toList();
       if (upcoming.isNotEmpty) {
         upcoming.sort((a, b) => b.academicScore.compareTo(a.academicScore));
-        topPriorityEvent = upcoming.first;
       }
     }
 
@@ -997,20 +1178,20 @@ class _HomeScreenState extends State<HomeScreen> {
                       );
                     }
 
-                    if (_syncBootstrapInProgress && dashboardSnapshot == null) {
-                      return _buildSyncBootstrapState(context);
+                    if (_dashboardError != null && dashboardSnapshot == null) {
+                      return SingleChildScrollView(
+                        child: _buildDashboardError(context, _dashboardError!),
+                      );
+                    }
+
+                    if (_syncUiState != null && dashboardSnapshot == null) {
+                      return _buildSyncBootstrapState(context, _syncUiState!);
                     }
 
                     if (_dashboardLoading &&
                         profileSnapshot.data != null &&
                         dashboardSnapshot == null) {
-                      return _buildSyncBootstrapState(context);
-                    }
-
-                    if (_dashboardError != null && dashboardSnapshot == null) {
-                      return SingleChildScrollView(
-                        child: _buildDashboardError(context, _dashboardError!),
-                      );
+                      return _buildLoadingState(context);
                     }
 
                     final raw = dashboardSnapshot?.raw;

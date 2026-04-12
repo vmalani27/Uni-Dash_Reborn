@@ -242,7 +242,7 @@ def google_callback(
             finally:
                 supabase_db.close()
 
-        background_tasks.add_task(sync_task, uid, 100)
+        background_tasks.add_task(sync_task, uid, 500)
         print(f"Oauth logs: Background task added for user {uid}")
 
     # Finalize OAuth in the browser by redirecting to the target URI captured in state.

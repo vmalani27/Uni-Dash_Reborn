@@ -4,6 +4,15 @@ import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:trial1/services/api_services.dart';
 
+class SyncStreamUnavailableException implements Exception {
+  final String message;
+
+  const SyncStreamUnavailableException(this.message);
+
+  @override
+  String toString() => message;
+}
+
 class SyncEventService {
   /// Subscribe to sync status updates via Server-Sent Events
   /// Returns a stream of sync status updates
@@ -29,7 +38,19 @@ class SyncEventService {
       final response = await client.send(request);
 
       if (response.statusCode != 200) {
-        throw Exception('SSE connection failed: ${response.statusCode}');
+        if (response.statusCode == 503) {
+          throw const SyncStreamUnavailableException(
+            'Realtime sync service is unavailable right now. Please try again shortly.',
+          );
+        }
+        if (response.statusCode == 401 || response.statusCode == 403) {
+          throw const SyncStreamUnavailableException(
+            'Your session has expired. Please sign in again.',
+          );
+        }
+        throw SyncStreamUnavailableException(
+          'SSE connection failed: ${response.statusCode}',
+        );
       }
 
       print('[SSE] Connected to sync status stream');
@@ -47,9 +68,9 @@ class SyncEventService {
               final data = jsonDecode(jsonStr) as Map<String, dynamic>;
               print('[SSE] Received: $data');
 
-              // Close stream if status is completed/failed or stream closed
+              // Close stream when backend marks stream closed, failed, or full pipeline complete.
               if (data['status'] == 'stream_closed' ||
-                  data['status'] == 'completed' ||
+                  data['pipeline_complete'] == true ||
                   data['status'] == 'failed') {
                 yield data;
                 client.close();
@@ -77,6 +98,7 @@ class SyncEventService {
     Duration timeout = const Duration(seconds: 30),
   }) async {
     String? lastTerminalStatus;
+    bool pipelineComplete = false;
     int newMessagesCount = 0;
 
     try {
@@ -95,12 +117,17 @@ class SyncEventService {
           newMessagesCount = status['new_messages_count'] ?? 0;
         }
 
-        if (status['status'] == 'completed') {
+        if (status['pipeline_complete'] == true) {
+          pipelineComplete = true;
           print(
-            '[SSE] Sync completed with $newMessagesCount new messages, resolving success',
+            '[SSE] Full pipeline complete with $newMessagesCount new messages, resolving success',
           );
-          lastTerminalStatus = 'completed';
           return {'success': true, 'newMessagesCount': newMessagesCount};
+        }
+
+        if (status['status'] == 'completed' || status['status'] == 'no_action') {
+          print('[SSE] Sync phase completed, waiting for AI queue to drain...');
+          lastTerminalStatus = 'completed';
         } else if (status['status'] == 'failed') {
           print('[SSE] Sync failed, resolving failure');
           lastTerminalStatus = 'failed';
@@ -110,10 +137,10 @@ class SyncEventService {
           return {'success': false, 'newMessagesCount': 0};
         } else if (status['status'] == 'stream_closed') {
           print('[SSE] Stream closed event received');
-          // Only resolve if a terminal status was seen before
-          if (lastTerminalStatus == 'completed') {
+          // Only resolve success if pipeline completion was observed.
+          if (pipelineComplete) {
             print(
-              '[SSE] Stream closed after completed, resolving success with $newMessagesCount new messages',
+              '[SSE] Stream closed after pipeline completion, resolving success with $newMessagesCount new messages',
             );
             return {'success': true, 'newMessagesCount': newMessagesCount};
           } else if (lastTerminalStatus == 'failed') {

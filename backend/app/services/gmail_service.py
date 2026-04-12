@@ -9,6 +9,10 @@ from app.utils.google_oauth import get_access_token, OAuthReauthRequiredError
 from app.utils.gmail_fetch import parse_gmail_payload, extract_headers_map
 from app.models.broadcast import Broadcast
 from app.utils.encryption import decrypt_token
+from app.services.sync_event_bus import (
+    invalidate_dashboard_snapshot,
+    publish_pipeline_event,
+)
 
 
 class GmailService:
@@ -36,7 +40,7 @@ class GmailService:
         print(f"[GMAIL SYNC] OAuth re-auth required for user {uid[:8]}…: {reason}")
 
     @staticmethod
-    def full_sync(uid: str, db, limit: int = 200):
+    def full_sync(uid: str, db, limit: int = 500):
         """
         Perform a full sync of Gmail messages for a user.
         Fetches recent emails and stores them in the database.
@@ -55,6 +59,7 @@ class GmailService:
         status.finished_at = None
         status.error_message = None
         db.commit()
+        publish_pipeline_event(db, uid, source="full_sync_started")
 
         try:
             # Get OAuth token
@@ -221,6 +226,8 @@ class GmailService:
             status.sync_type = "full"
             status.new_messages_count = inserted  # Track new messages in this session
             db.commit()
+            invalidate_dashboard_snapshot(uid)
+            publish_pipeline_event(db, uid, source="full_sync_completed")
 
             # Capture history ID for future incremental syncs
             print(f"[FULL SYNC] Capturing history ID for user {uid}")
@@ -235,6 +242,7 @@ class GmailService:
             status.finished_at = datetime.datetime.utcnow()
             status.error_message = str(e)
             db.commit()
+            publish_pipeline_event(db, uid, source="full_sync_failed")
             raise
 
     @staticmethod
@@ -250,13 +258,13 @@ class GmailService:
         if not status:
             # No previous sync, fall back to full sync
             print(f"[INCREMENTAL SYNC] No sync status found for user {uid}. Falling back to full sync.")
-            GmailService.full_sync(uid, db, limit=100)
+            GmailService.full_sync(uid, db, limit=500)
             return
 
         # Check if we have the required history ID
         if not status.last_history_id:
             print(f"[INCREMENTAL SYNC] No last_history_id found for user {uid}. Falling back to full sync.")
-            GmailService.full_sync(uid, db, limit=100)
+            GmailService.full_sync(uid, db, limit=500)
             return
 
         # Skip if recently synced (within last 60 seconds)
@@ -267,6 +275,7 @@ class GmailService:
             status.new_messages_count = 0
             status.error_message = None
             db.commit()
+            publish_pipeline_event(db, uid, source="incremental_no_action")
             return
 
         # Update status to in progress
@@ -275,6 +284,7 @@ class GmailService:
         status.finished_at = None
         status.error_message = None
         db.commit()
+        publish_pipeline_event(db, uid, source="incremental_started")
 
         try:
             # Get OAuth token
@@ -488,6 +498,8 @@ class GmailService:
             print(f"[INCREMENTAL SYNC] Database committed - status updated to completed")
             print(f"[INCREMENTAL SYNC] finished_at: {status.finished_at}")
             print(f"[INCREMENTAL SYNC] last_history_id: {status.last_history_id}")
+            invalidate_dashboard_snapshot(uid)
+            publish_pipeline_event(db, uid, source="incremental_completed")
 
         except Exception as e:
             print(f"[INCREMENTAL SYNC] ERROR: {e}")
@@ -496,6 +508,7 @@ class GmailService:
             status.finished_at = datetime.datetime.utcnow()
             status.error_message = str(e)
             db.commit()
+            publish_pipeline_event(db, uid, source="incremental_failed")
             raise
 
     @staticmethod

@@ -42,7 +42,7 @@ def trigger_gmail_sync(background_tasks: BackgroundTasks, db: Session = Depends(
         try:
             from app.core.database import SupabaseSessionLocal
             supabase_db = SupabaseSessionLocal()
-            GmailService.full_sync(uid, supabase_db)
+            GmailService.full_sync(uid, supabase_db, limit=500)
             # After full sync, capture latest historyId
             GmailService.capture_history_id(uid, supabase_db)
             # Mark sync as completed

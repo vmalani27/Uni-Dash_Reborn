@@ -21,26 +21,10 @@ jobs:
         run: |
           echo '${{ secrets.PROD_ENVIRONMENT }}' > backend/.env.prod
 
-
-      - name: Build Docker image
+      - name: Deploy backend stack with Redis
         working-directory: backend
-        run: docker build -t unidash-backend .
-
-      - name: Stop old container
         run: |
-          docker stop unidash-backend || true
-          docker rm unidash-backend || true
+          docker compose -p unidash-prod -f docker-compose.prod.yml up -d --build --remove-orphans
 
-      - name: Start new container
-        run: |
-          docker run -d \
-          --name unidash-backend \
-          --restart unless-stopped \
-          -p 8000:8000 \
-          --health-cmd "curl -f http://localhost:8000/health || exit 1" \
-          --health-interval 30s \
-          --health-timeout 10s \
-          --health-retries 3 \
-          -v ${{ github.workspace }}/backend/.env.prod:/backend/.env \
-          -v ${{ github.workspace }}/backend/credentials.json:/backend/app/core/credentials.json \
-          unidash-backend
+      - name: Prune unused images
+        run: docker image prune -f

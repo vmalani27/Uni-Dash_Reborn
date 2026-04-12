@@ -4,6 +4,12 @@ from app.utils.firebase_util import verify_firebase_token
 from sqlalchemy.orm import Session
 from app.models.gmail.gmail_message import GmailSyncStatus
 from app.services.gmail_service import GmailService
+from app.services.sync_event_bus import (
+    publish_pipeline_event,
+    is_sync_locked,
+    acquire_sync_lock,
+    release_sync_lock,
+)
 from app.core.database import get_supabase_db
 from app.utils.timezone_util import format_ist_datetime
 import datetime
@@ -15,8 +21,25 @@ def trigger_gmail_sync(background_tasks: BackgroundTasks, db: Session = Depends(
     """
     Trigger a full Gmail sync for the authenticated user.
     UID is derived from Firebase token, not from the URL.
+    
+    Returns HTTP 409 if sync is already in progress (prevents duplicate syncs).
     """
     uid = firebase_data["uid"]
+    
+    # Check if sync is already running (distributed lock)
+    if is_sync_locked(uid):
+        raise HTTPException(
+            status_code=409,
+            detail="Sync already in progress for this user. Please wait or try again later.",
+        )
+    
+    # Try to acquire lock
+    if not acquire_sync_lock(uid, ttl=600):
+        raise HTTPException(
+            status_code=409,
+            detail="Could not acquire sync lock. Another sync may be starting.",
+        )
+    
     # Set status to in_progress
     status = db.query(GmailSyncStatus).filter(GmailSyncStatus.uid == uid).first()
     now = datetime.datetime.utcnow()
@@ -29,6 +52,7 @@ def trigger_gmail_sync(background_tasks: BackgroundTasks, db: Session = Depends(
         status.finished_at = None
         status.error_message = None
     db.commit()
+    publish_pipeline_event(db, uid, source="route_full_sync_started")
 
     # Create database session for background task
     def run_sync():
@@ -36,7 +60,7 @@ def trigger_gmail_sync(background_tasks: BackgroundTasks, db: Session = Depends(
         try:
             from app.core.database import SupabaseSessionLocal
             supabase_db = SupabaseSessionLocal()
-            GmailService.full_sync(uid, supabase_db)
+            GmailService.full_sync(uid, supabase_db, limit=500)
             # After full sync, capture latest historyId
             GmailService.capture_history_id(uid, supabase_db)
             # Mark sync as completed
@@ -47,6 +71,7 @@ def trigger_gmail_sync(background_tasks: BackgroundTasks, db: Session = Depends(
                 status.finished_at = now
                 status.error_message = None
                 supabase_db.commit()
+                publish_pipeline_event(supabase_db, uid, source="route_full_sync_completed")
         except Exception as e:
             # Mark sync as failed
             status = supabase_db.query(GmailSyncStatus).filter(GmailSyncStatus.uid == uid).first() if supabase_db else None
@@ -56,10 +81,13 @@ def trigger_gmail_sync(background_tasks: BackgroundTasks, db: Session = Depends(
                 status.finished_at = now
                 status.error_message = str(e)
                 supabase_db.commit()
+                publish_pipeline_event(supabase_db, uid, source="route_full_sync_failed")
             raise
         finally:
             if supabase_db:
                 supabase_db.close()
+            # Always release lock (even on error)
+            release_sync_lock(uid)
 
     background_tasks.add_task(run_sync)
     return {"message": "Sync started"}

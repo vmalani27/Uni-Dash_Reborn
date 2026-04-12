@@ -9,6 +9,10 @@ from app.models.gmail.gmail_message import GmailMessage
 from app.models.gmail.follow_up import FollowUp
 from app.models.user import User
 from app.services.academic_context_engine import AcademicContextEngine
+from app.services.sync_event_bus import (
+    get_dashboard_snapshot,
+    set_dashboard_snapshot,
+)
 from app.utils.firebase_util import verify_firebase_token
 
 router = APIRouter(prefix="/api/dashboard", tags=["Dashboard"])
@@ -145,6 +149,10 @@ async def get_dashboard(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
+    cached_payload = get_dashboard_snapshot(uid)
+    if cached_payload is not None:
+        return cached_payload
+
     # Do not expose dashboard content until OAuth setup is complete.
     if not user.oauth_connected:
         return {
@@ -223,10 +231,13 @@ async def get_dashboard(
             gmail_map.get(focus_item.source_email_id) if focus_item.source_email_id else None,
         )
 
-    return {
+    payload = {
         "focus": focus_serialized,
         "groups": groups,
         "academic_items": academic_items,
         "timeline": timeline,
         "banner": banner,
     }
+
+    set_dashboard_snapshot(uid, payload)
+    return payload
