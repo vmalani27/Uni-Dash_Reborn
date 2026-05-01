@@ -136,3 +136,4 @@ const List<AcademicEventType> typeDisplayOrder = [
   AcademicEventType.information,
   AcademicEventType.other,
 ];
+

@@ -4,6 +4,7 @@ import 'package:app_links/app_links.dart';
 
 class OAuthCallbackHandler {
   final navigatorKey = GlobalKey<NavigatorState>();
+  final ValueNotifier<int> oauthSuccessTick = ValueNotifier<int>(0);
   final _appLinks = AppLinks();
   StreamSubscription<Uri>? _linkSubscription;
 
@@ -14,6 +15,7 @@ class OAuthCallbackHandler {
 
   void dispose() {
     _linkSubscription?.cancel();
+    oauthSuccessTick.dispose();
   }
 
   /// Handle deep link when app is cold-started
@@ -79,10 +81,7 @@ class OAuthCallbackHandler {
       // will detect this user's OAuth token and start fetching
       // emails automatically within the next 3 minutes.
       print('[OAUTH] Gmail connected. Backend will sync automatically.');
-
-      // Navigate to root and let AuthGate determine the correct screen
-      // This will refresh profile state and navigate appropriately
-      Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+      oauthSuccessTick.value = oauthSuccessTick.value + 1;
     } catch (e) {
       print('[OAUTH] Error handling OAuth success: $e');
       ScaffoldMessenger.of(context).showSnackBar(
@@ -94,3 +93,4 @@ class OAuthCallbackHandler {
     }
   }
 }
+

@@ -5,10 +5,10 @@ from sqlalchemy.exc import ProgrammingError
 from app.models.oauthToken import OAuthToken
 from app.models.user import User
 from app.services.gmail_sync import sync_gmail_for_user
-from app.core.database import SupabaseSessionLocal
+from app.core.database import supabase_session_scope
 
 # Initial sync for a single user
-def initial_gmail_sync(uid, supabase_db, limit=300):
+def initial_gmail_sync(uid, supabase_db, limit=20):
     try:
         sync_gmail_for_user(uid, supabase_db, limit=limit)
     except Exception as e:
@@ -32,14 +32,13 @@ def sync_all_gmail(supabase_db: Session):
         return
     for token in tokens:
         try:
-            sync_gmail_for_user(token.uid, supabase_db)
+            sync_gmail_for_user(token.uid, supabase_db, limit=20)
         except Exception as e:
             print(f"[GMAIL SYNC ERROR] uid={token.uid}: {e}")
 
 # Script entry point
 if __name__ == "__main__":
     print("[GMAIL SYNC JOB] Starting Gmail sync for all users...")
-    supabase_db = SupabaseSessionLocal()
-    sync_all_gmail(supabase_db)
-    supabase_db.close()
+    with supabase_session_scope("gmail_sync_job_main") as supabase_db:
+        sync_all_gmail(supabase_db)
     print("[GMAIL SYNC JOB] Done.")

@@ -11,6 +11,8 @@ class FocusCard extends StatefulWidget {
   final AcademicEvent? event;
   final VoidCallback? onActionCompleted;
   final VoidCallback? onActionDismissed;
+  final Future<void> Function(AcademicItem)? onMarkDoneAction;
+  final Future<void> Function(AcademicItem)? onDismissAction;
 
   const FocusCard({
     super.key,
@@ -18,6 +20,8 @@ class FocusCard extends StatefulWidget {
     this.event,
     this.onActionCompleted,
     this.onActionDismissed,
+    this.onMarkDoneAction,
+    this.onDismissAction,
   });
 
   @override
@@ -31,11 +35,15 @@ class _FocusCardState extends State<FocusCard> {
     if (widget.item == null) return;
     setState(() => _isLoading = true);
     try {
-      await BackendService.markAcademicItemDone(widget.item!.id);
+      if (widget.onMarkDoneAction != null) {
+        await widget.onMarkDoneAction!(widget.item!);
+      } else {
+        await BackendService.markAcademicItemDone(widget.item!.id);
+      }
       widget.onActionCompleted?.call();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Marked as completed ✓')),
+          const SnackBar(content: Text('Marked as completed')),
         );
       }
     } catch (e) {
@@ -53,7 +61,11 @@ class _FocusCardState extends State<FocusCard> {
     if (widget.item == null) return;
     setState(() => _isLoading = true);
     try {
-      await BackendService.dismissAcademicItem(widget.item!.id);
+      if (widget.onDismissAction != null) {
+        await widget.onDismissAction!(widget.item!);
+      } else {
+        await BackendService.dismissAcademicItem(widget.item!.id);
+      }
       widget.onActionDismissed?.call();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -71,105 +83,22 @@ class _FocusCardState extends State<FocusCard> {
     }
   }
 
-  void _showSnoozeOptions() {
-    if (widget.item == null || widget.item!.dueDate == null) return;
-    final now = DateTime.now();
-    final dueDate = widget.item!.dueDate!;
-    final hoursUntilDeadline = dueDate.difference(now).inHours;
-    if (hoursUntilDeadline <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Cannot snooze: deadline has passed')),
-      );
-      return;
-    }
-    final snoozeOptions = [
-      {'label': '1 hour', 'hours': 1},
-      {'label': '4 hours', 'hours': 4},
-      {'label': '8 hours', 'hours': 8},
-      {'label': '1 day', 'hours': 24},
-      if (hoursUntilDeadline > 48) {'label': '2 days', 'hours': 48},
-      if (hoursUntilDeadline > 72) {'label': '3 days', 'hours': 72},
-    ];
-    showModalBottomSheet(
-      context: context,
-      builder: (context) => Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Remind me later',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            Text(
-              'Available until ${_formatDate(dueDate)}',
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-              ),
-            ),
-            const SizedBox(height: 12),
-            ...snoozeOptions.map((opt) => _buildSnoozeOption(
-              opt['label'] as String,
-              opt['hours'] as int,
-            )),
-          ],
-        ),
+  Widget _buildActionButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    final theme = Theme.of(context);
+    return FilledButton.tonalIcon(
+      onPressed: onTap,
+      icon: Icon(icon, size: 18),
+      label: Text(label),
+      style: FilledButton.styleFrom(
+        backgroundColor: theme.colorScheme.surfaceContainerHighest,
+        foregroundColor: theme.colorScheme.onSurface,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       ),
     );
-  }
-
-  Widget _buildSnoozeOption(String label, int hours) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () => _snoozeFor(hours),
-          borderRadius: BorderRadius.circular(8),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 10.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(label),
-                Text(
-                  'at ${_formatTime(DateTime.now().add(Duration(hours: hours)))}',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _snoozeFor(int hours) async {
-    if (widget.item == null) return;
-    Navigator.pop(context);
-    setState(() => _isLoading = true);
-    try {
-      await BackendService.snoozeAcademicItem(widget.item!.id, hours: hours);
-      if (mounted) {
-        final snoozeTime = DateTime.now().add(Duration(hours: hours));
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Snoozed until ${_formatTime(snoozeTime)}')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
   }
 
   String _formatDate(DateTime date) => '${date.day}/${date.month}';
@@ -190,204 +119,266 @@ class _FocusCardState extends State<FocusCard> {
     final title = widget.event?.title ?? widget.item?.title ?? '';
     final due = widget.event?.deadline ?? widget.item?.dueDate;
     final status = StatusFormatter.getStatus(due);
+    final subtitle = widget.event?.summary ?? widget.item?.aiSummary ?? widget.item?.description;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16.0),
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(22),
         border: Border.all(
-          color: meta.color.withOpacity(0.4),  // More visible border
-          width: 1.5,  // Thicker border
+          color: meta.color.withValues(alpha: 0.16),
+        ),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            meta.color.withValues(alpha: 0.08),
+            Theme.of(context).colorScheme.surface.withValues(alpha: 0.96),
+          ],
         ),
         boxShadow: [
-          // Primary shadow for depth
           BoxShadow(
-            color: meta.color.withOpacity(0.18),  // Stronger shadow
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-          // Secondary shadow for softness
-          BoxShadow(
-            color: meta.color.withOpacity(0.08),
-            blurRadius: 32,
-            offset: const Offset(0, 12),
+            color: Colors.black.withValues(alpha: Theme.of(context).brightness == Brightness.dark ? 0.22 : 0.05),
+            blurRadius: 24,
+            offset: const Offset(0, 10),
           ),
         ],
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          CategoryBadge(
-            topic: meta.key,
-            label: meta.label,
-            icon: meta.icon,
-            compact: true,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    height: 1.1,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(22),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: null,
+            child: Padding(
+              padding: const EdgeInsets.all(18.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: meta.color.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Icon(meta.icon, color: meta.color),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    title,
+                                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                          fontWeight: FontWeight.w800,
+                                          height: 1.15,
+                                        ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                CategoryBadge(
+                                  topic: meta.key,
+                                  label: meta.label,
+                                  icon: meta.icon,
+                                  compact: true,
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                if (due != null)
+                                  _StatusPill(
+                                    label: 'Due ${StatusFormatter.getTimeDescription(due)}',
+                                    accent: status.isUrgent ? meta.color : Theme.of(context).colorScheme.onSurfaceVariant,
+                                  ),
+                                if (widget.item?.courseCode != null)
+                                  _StatusPill(
+                                    label: widget.item!.courseCode!,
+                                    accent: Theme.of(context).colorScheme.onSurfaceVariant,
+                                  ),
+                                if (widget.event?.type != null)
+                                  _StatusPill(
+                                    label: widget.event!.type.toString().split('.').last,
+                                    accent: Theme.of(context).colorScheme.onSurfaceVariant,
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Due ${StatusFormatter.getTimeDescription(due)}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: status.isUrgent
-                        ? meta.color
-                        : Theme.of(context).colorScheme.onSurface.withOpacity(0.64),
-                    fontWeight: FontWeight.w500,
+                  if ((subtitle ?? '').trim().isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    Text(
+                      subtitle!,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            height: 1.5,
+                          ),
+                      maxLines: 4,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                  const SizedBox(height: 18),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      if (widget.item != null)
+                        _buildActionButton(
+                          icon: Icons.check_circle_outline_rounded,
+                          label: 'Done',
+                          onTap: _markCompleted,
+                        ),
+                      if (widget.item != null)
+                        _buildActionButton(
+                          icon: Icons.remove_circle_outline_rounded,
+                          label: 'Dismiss',
+                          onTap: _dismiss,
+                        ),
+                    ],
                   ),
-                ),
-              ],
+                  if (_isLoading) ...[
+                    const SizedBox(height: 16),
+                    LinearProgressIndicator(
+                      minHeight: 2,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ],
+                ],
+              ),
             ),
           ),
-          const SizedBox(width: 12),
-          const SizedBox(width: 12),
-          if (_isLoading)
-            SizedBox(
-              width: 32,
-              height: 32,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation(meta.color),
-              ),
-            )
-          else
-            PopupMenuButton<String>(
-              onSelected: (value) {
-                switch (value) {
-                  case 'completed':
-                    _markCompleted();
-                  case 'dismiss':
-                    _dismiss();
-                  case 'snooze':
-                    _showSnoozeOptions();
-                }
-              },
-              itemBuilder: (context) => [
-                PopupMenuItem(
-                  value: 'completed',
-                  child: Row(
-                    children: [
-                      Icon(Icons.check_circle, size: 20, color: Colors.green),
-                      const SizedBox(width: 8),
-                      const Text('Completed'),
-                    ],
-                  ),
-                ),
-                PopupMenuItem(
-                  value: 'dismiss',
-                  child: Row(
-                    children: [
-                      Icon(Icons.clear, size: 20, color: Colors.orange),
-                      const SizedBox(width: 8),
-                      const Text('Dismiss'),
-                    ],
-                  ),
-                ),
-                PopupMenuItem(
-                  value: 'snooze',
-                  child: Row(
-                    children: [
-                      Icon(Icons.schedule, size: 20, color: Colors.blue),
-                      const SizedBox(width: 8),
-                      const Text('Snooze...'),
-                    ],
-                  ),
-                ),
-              ],
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surface.withOpacity(0.5),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Icon(
-                    Icons.more_vert,
-                    size: 20,
-                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.56),
-                  ),
-                ),
-              ),
-            ),
-        ],
+        ),
       ),
     );
   }
 
-
-
   Widget _buildEmptyState(BuildContext context) {
-    final neutral = Theme.of(context).colorScheme.onSurface.withOpacity(0.62);
+    final neutral = Theme.of(context).colorScheme.onSurfaceVariant;
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16.0),
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
+      padding: const EdgeInsets.all(18.0),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface.withAlpha(
-          (255 * 0.96).toInt(),
-        ),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.14)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 20,
-            offset: const Offset(0, 6),
+        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: Theme.of(context).dividerColor.withValues(alpha: 0.6)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: neutral.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Icon(Icons.radio_button_checked_outlined, color: neutral, size: 22),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'No focus item',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'The dashboard will promote the most urgent item here.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: neutral,
+                        height: 1.4,
+                      ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: neutral.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(10),
+    );
+  }
+}
+
+class _StatusPill extends StatelessWidget {
+  final String label;
+  final Color accent;
+
+  const _StatusPill({
+    required this.label,
+    required this.accent,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: accent.withValues(alpha: 0.18)),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: accent,
+              fontWeight: FontWeight.w700,
             ),
-            child: Icon(Icons.radio_button_checked_outlined, 
-              color: neutral, 
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              'No focus item',
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                fontWeight: FontWeight.w600,
+      ),
+    );
+  }
+}
+
+class _ActionRow extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _ActionRow({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        child: Row(
+          children: [
+            Icon(icon, size: 18, color: Theme.of(context).colorScheme.onSurfaceVariant),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                label,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
               ),
             ),
-          ),
-          const SizedBox(width: 12),
-          Text(
-            'Focus',
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: Theme.of(context)
-                  .colorScheme
-                  .onSurface
-                  .withOpacity(0.56),
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

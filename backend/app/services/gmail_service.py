@@ -4,11 +4,32 @@ from sqlalchemy.orm import Session
 
 from app.models.oauthToken import OAuthToken
 from app.models.user import User
-from app.models.gmail.gmail_message import GmailMessage, GmailSyncStatus
+from app.models.gmail.gmail_message import GmailMessage
+from app.models.gmail.gmail_sync_status import GmailSyncStatus
 from app.utils.google_oauth import get_access_token, OAuthReauthRequiredError
 from app.utils.gmail_fetch import parse_gmail_payload, extract_headers_map
 from app.models.broadcast import Broadcast
 from app.utils.encryption import decrypt_token
+from app.utils.pipeline_csv_logger import append_csv_row, utc_timestamp
+from app.services.sync_event_bus import (
+    invalidate_dashboard_snapshot,
+    publish_pipeline_event,
+)
+
+
+SYNC_CSV_FIELDS = [
+    "timestamp",
+    "uid",
+    "sync_type",
+    "stage",
+    "gmail_id",
+    "subject",
+    "sender",
+    "broadcast_id",
+    "ai_status",
+    "inserted",
+    "error",
+]
 
 
 class GmailService:
@@ -36,7 +57,38 @@ class GmailService:
         print(f"[GMAIL SYNC] OAuth re-auth required for user {uid[:8]}…: {reason}")
 
     @staticmethod
-    def full_sync(uid: str, db, limit: int = 200):
+    def _log_sync_event(
+        uid: str,
+        sync_type: str,
+        stage: str,
+        gmail_id: str | None = None,
+        subject: str | None = None,
+        sender: str | None = None,
+        broadcast_id: str | None = None,
+        ai_status: str | None = None,
+        inserted: bool = False,
+        error: str | None = None,
+    ) -> None:
+        append_csv_row(
+            "gmail_sync_log.csv",
+            {
+                "timestamp": utc_timestamp(),
+                "uid": uid,
+                "sync_type": sync_type,
+                "stage": stage,
+                "gmail_id": gmail_id or "",
+                "subject": subject or "",
+                "sender": sender or "",
+                "broadcast_id": broadcast_id or "",
+                "ai_status": ai_status or "",
+                "inserted": inserted,
+                "error": error or "",
+            },
+            SYNC_CSV_FIELDS,
+        )
+
+    @staticmethod
+    def full_sync(uid: str, db, limit: int = 100):
         """
         Perform a full sync of Gmail messages for a user.
         Fetches recent emails and stores them in the database.
@@ -55,6 +107,8 @@ class GmailService:
         status.finished_at = None
         status.error_message = None
         db.commit()
+        publish_pipeline_event(db, uid, source="full_sync_started")
+        GmailService._log_sync_event(uid, "full", "start")
 
         try:
             # Get OAuth token
@@ -140,7 +194,6 @@ class GmailService:
                 ai_label_urgency = None
                 deadline_iso = None
                 deadline_confidence = "None"
-                academic_score = 0
                 ai_processed = False
                 
                 if broadcast_id:
@@ -158,7 +211,6 @@ class GmailService:
                         ai_label_urgency = broadcast_entry.ai_label_urgency
                         deadline_iso = broadcast_entry.deadline_iso
                         deadline_confidence = broadcast_entry.deadline_confidence
-                        academic_score = broadcast_entry.academic_score or 0
                         ai_processed = True
                         print(f"[FULL SYNC] Applied Broadcast AI for {broadcast_id} from Broadcast table")
                     else:
@@ -176,7 +228,6 @@ class GmailService:
                             ai_label_urgency = cached_msg.ai_label_urgency
                             deadline_iso = cached_msg.deadline_iso
                             deadline_confidence = cached_msg.deadline_confidence
-                            academic_score = cached_msg.academic_score
                             ai_processed = True
                             print(f"[FULL SYNC] Instant Cache Hit for broadcast {broadcast_id}!")
 
@@ -200,9 +251,19 @@ class GmailService:
                         ai_label_urgency=ai_label_urgency,
                         deadline_iso=deadline_iso,
                         deadline_confidence=deadline_confidence,
-                        academic_score=academic_score,
                         ai_processed=ai_processed
                     )
+                )
+                GmailService._log_sync_event(
+                    uid=uid,
+                    sync_type="full",
+                    stage="insert",
+                    gmail_id=gmail_id,
+                    subject=subject,
+                    sender=sender,
+                    broadcast_id=broadcast_id,
+                    ai_status=ai_status,
+                    inserted=True,
                 )
 
                 inserted += 1
@@ -221,6 +282,15 @@ class GmailService:
             status.sync_type = "full"
             status.new_messages_count = inserted  # Track new messages in this session
             db.commit()
+            invalidate_dashboard_snapshot(uid)
+            publish_pipeline_event(db, uid, source="full_sync_completed")
+            GmailService._log_sync_event(
+                uid,
+                "full",
+                "completed",
+                inserted=bool(inserted),
+                error="",
+            )
 
             # Capture history ID for future incremental syncs
             print(f"[FULL SYNC] Capturing history ID for user {uid}")
@@ -235,10 +305,12 @@ class GmailService:
             status.finished_at = datetime.datetime.utcnow()
             status.error_message = str(e)
             db.commit()
+            publish_pipeline_event(db, uid, source="full_sync_failed")
+            GmailService._log_sync_event(uid, "full", "failed", error=str(e))
             raise
 
     @staticmethod
-    def incremental_sync(uid: str, db, limit: int = 50):
+    def incremental_sync(uid: str, db, limit: int = 50, source: str = None):
         """
         Perform an incremental sync using Gmail history API.
         Only fetches new emails since last sync.
@@ -250,24 +322,28 @@ class GmailService:
         if not status:
             # No previous sync, fall back to full sync
             print(f"[INCREMENTAL SYNC] No sync status found for user {uid}. Falling back to full sync.")
-            GmailService.full_sync(uid, db, limit=100)
+            GmailService.full_sync(uid, db, limit=500)
             return
 
         # Check if we have the required history ID
         if not status.last_history_id:
             print(f"[INCREMENTAL SYNC] No last_history_id found for user {uid}. Falling back to full sync.")
-            GmailService.full_sync(uid, db, limit=100)
+            GmailService.full_sync(uid, db, limit=500)
             return
 
-        # Skip if recently synced (within last 60 seconds)
+        # Skip if recently synced (within last 60 seconds), unless source is webhook
         if status.last_sync_date and (now - status.last_sync_date).seconds < 60:
-            print(f"[INCREMENTAL SYNC] Skipping - recently synced {uid} at {status.last_sync_date}")
-            status.status = "no_action"
-            status.finished_at = now
-            status.new_messages_count = 0
-            status.error_message = None
-            db.commit()
-            return
+            if source != "webhook":
+                print(f"[INCREMENTAL SYNC] Skipping - recently synced {uid} at {status.last_sync_date}")
+                status.status = "no_action"
+                status.finished_at = now
+                status.new_messages_count = 0
+                status.error_message = None
+                db.commit()
+                publish_pipeline_event(db, uid, source="incremental_no_action")
+                return
+            else:
+                print(f"[INCREMENTAL SYNC] Webhook bypassing debounce for {uid}")
 
         # Update status to in progress
         status.status = "in_progress"
@@ -275,6 +351,8 @@ class GmailService:
         status.finished_at = None
         status.error_message = None
         db.commit()
+        publish_pipeline_event(db, uid, source="incremental_started")
+        GmailService._log_sync_event(uid, "incremental", "start")
 
         try:
             # Get OAuth token
@@ -393,7 +471,6 @@ class GmailService:
                     ai_label_urgency = None
                     deadline_iso = None
                     deadline_confidence = "None"
-                    academic_score = 0
                     ai_processed = False
                     
                     if broadcast_id:
@@ -411,7 +488,6 @@ class GmailService:
                             ai_label_urgency = broadcast_entry.ai_label_urgency
                             deadline_iso = broadcast_entry.deadline_iso
                             deadline_confidence = broadcast_entry.deadline_confidence
-                            academic_score = broadcast_entry.academic_score or 0
                             ai_processed = True
                             print(f"[INCREMENTAL SYNC] Applied Broadcast AI for {broadcast_id} from Broadcast table")
                         else:
@@ -429,7 +505,6 @@ class GmailService:
                                 ai_label_urgency = cached_msg.ai_label_urgency
                                 deadline_iso = cached_msg.deadline_iso
                                 deadline_confidence = cached_msg.deadline_confidence
-                                academic_score = cached_msg.academic_score
                                 ai_processed = True
                                 print(f"[INCREMENTAL SYNC] Instant Cache Hit for broadcast {broadcast_id}!")
 
@@ -452,9 +527,19 @@ class GmailService:
                             ai_label_urgency=ai_label_urgency,
                             deadline_iso=deadline_iso,
                             deadline_confidence=deadline_confidence,
-                            academic_score=academic_score,
                             ai_processed=ai_processed
                         )
+                    )
+                    GmailService._log_sync_event(
+                        uid=uid,
+                        sync_type="incremental",
+                        stage="insert",
+                        gmail_id=gmail_id,
+                        subject=subject,
+                        sender=sender,
+                        broadcast_id=broadcast_id,
+                        ai_status=ai_status,
+                        inserted=True,
                     )
 
                     inserted += 1
@@ -488,6 +573,15 @@ class GmailService:
             print(f"[INCREMENTAL SYNC] Database committed - status updated to completed")
             print(f"[INCREMENTAL SYNC] finished_at: {status.finished_at}")
             print(f"[INCREMENTAL SYNC] last_history_id: {status.last_history_id}")
+            invalidate_dashboard_snapshot(uid)
+            publish_pipeline_event(db, uid, source="incremental_completed")
+            GmailService._log_sync_event(
+                uid,
+                "incremental",
+                "completed",
+                inserted=bool(inserted),
+                error="",
+            )
 
         except Exception as e:
             print(f"[INCREMENTAL SYNC] ERROR: {e}")
@@ -496,6 +590,8 @@ class GmailService:
             status.finished_at = datetime.datetime.utcnow()
             status.error_message = str(e)
             db.commit()
+            publish_pipeline_event(db, uid, source="incremental_failed")
+            GmailService._log_sync_event(uid, "incremental", "failed", error=str(e))
             raise
 
     @staticmethod
@@ -537,6 +633,64 @@ class GmailService:
                 print(f"[CAPTURE HISTORY ID] No historyId in response")
         else:
             print(f"[CAPTURE HISTORY ID] Failed to fetch profile: {resp.text}")
+
+    @staticmethod
+    def start_gmail_watch(uid: str, db, topic_name: str):
+        """
+        Tells Gmail to start sending push notifications for this user to Pub/Sub topic.
+        
+        Args:
+            uid: User ID
+            db: Database session
+            topic_name: Full topic path (e.g., 'projects/my-project/topics/gmail-notifications')
+        
+        Returns:
+            watch_response dict with historyId and expiration (in milliseconds)
+        """
+        status = db.query(GmailSyncStatus).filter_by(uid=uid).first()
+        token = db.query(OAuthToken).filter_by(uid=uid).first()
+
+        if not status or not token:
+            raise Exception(f"Missing status or token for user {uid}")
+
+        try:
+            access_token = get_access_token(decrypt_token(token.refresh_token))
+        except OAuthReauthRequiredError as e:
+            GmailService._mark_oauth_reauth_required(uid, db, status, str(e))
+            raise
+
+        headers = {"Authorization": f"Bearer {access_token}"}
+
+        body = {
+            'topicName': topic_name,
+            'labelIds': ['INBOX']  # Watch only INBOX
+        }
+
+        print(f"[GMAIL WATCH] Starting watch for user {uid[:8]}… on topic {topic_name}")
+        
+        resp = requests.post(
+            "https://gmail.googleapis.com/gmail/v1/users/me/watch",
+            headers=headers,
+            json=body,
+            timeout=10
+        )
+        resp.raise_for_status()
+
+        watch_response = resp.json()
+        
+        # Convert expiration from milliseconds to datetime
+        expiration_ms = int(watch_response.get('expiration', 0))
+        expiration_dt = datetime.datetime.utcfromtimestamp(expiration_ms / 1000.0)
+        
+        # Update sync status with watch expiration and history ID
+        status.watch_expiration = expiration_dt
+        status.last_history_id = watch_response.get('historyId')
+        db.commit()
+        
+        print(f"[GMAIL WATCH] Watch started for user {uid[:8]}. HistoryId: {watch_response.get('historyId')}, Expiration: {expiration_dt}")
+        
+        return watch_response
+
 
 
 # Utility functions for message retrieval

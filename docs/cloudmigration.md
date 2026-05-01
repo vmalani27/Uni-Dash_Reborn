@@ -1,194 +1,236 @@
-# AWS Serverless Migration Plan for Uni-Dash Backend
+# Uni-Dash AWS Migration Plan
 
----
+This document describes how to move Uni-Dash from the current working Raspberry Pi deployment to an AWS-based production setup without rewriting the product into microservices.
 
-## 1. System Understanding
+The existing Raspberry Pi CI/CD pipeline, multi-stage Docker build, nginx, and ngrok setup are considered the current baseline and are working satisfactorily.
 
-### Current Backend Architecture
-- **API Layer:** FastAPI routes for Gmail sync, classification, OAuth, notifications.
-- **Background Jobs:** Asyncio loops for email ingestion and AI processing (run inside FastAPI lifespan).
-- **Data Layer:** SQLAlchemy models, PostgreSQL (Supabase).
-- **External Integrations:**
-  - Gmail API (OAuth, message sync)
-  - Firebase (auth)
-  - ML/AI (local or remote inference)
+## 1. Current State
 
-### Core Components
-- **API Layer:** FastAPI routers in `app/routers/`
-- **Background Jobs:** `background_scheduler.py`, jobs in routers, `jobs/`
-- **Data Layer:** SQLAlchemy models in `app/models/`, DB session logic in `app/core/database.py`
-- **External Integrations:** Gmail API, Firebase, ML/AI services
+Uni-Dash is already a modular distributed system:
 
----
+- Flutter web frontend
+- FastAPI backend
+- PostgreSQL database
+- AI processing pipeline
+- Raspberry Pi deployment target for the backend
 
-## 2. Decomposition Strategy
+Current production characteristics:
 
-### Lambda Functions
-- **API Handlers:** Each route (sync, classify, OAuth, notifications) → individual Lambda handler
-- **Dispatcher Lambdas:**
-  - Scheduled by EventBridge (e.g., every 3 min)
-  - Query users/emails, enqueue SQS jobs
-- **Worker Lambdas:**
-  - Triggered by SQS
-  - Perform Gmail sync, classification, etc.
+- Backend is deployed as a Docker container on a Raspberry Pi
+- GitHub Actions handles CI/CD
+- Multi-stage Docker build produces a small runtime image
+- nginx and ngrok provide external access
+- Supabase/PostgreSQL stores application state
+- AI processing runs as part of the backend system and background workers
 
-### Shared Modules
-- **DB Connection/Models:** Connection logic, SQLAlchemy models
-- **Auth:** Firebase token verification, OAuth helpers
-- **Gmail Integration:** Gmail API logic
-- **ML Logic:** Classification, inference
+This means the current problem is not architecture chaos. The problem is that the deployment target is local/edge, while the career goal is AWS DevOps.
 
-### Event-Driven Components
-- **EventBridge:** Triggers dispatcher Lambdas
-- **SQS:** Queues async jobs for workers
+## 2. What AWS Migration Should Mean
 
----
+The goal is to migrate the deployment and operations layer to AWS, not to redesign the product into dozens of services.
 
-## 3. AWS Service Mapping
+The correct AWS target is a **modular container-based system**:
 
-API Routes              ---> API Gateway + Lambda
-Background Loops         ---> EventBridge + Lambda
-Async Jobs              ---> SQS + Lambda
-Database                ---> RDS PostgreSQL
-Secrets                 ---> Secrets Manager
-Auth                    ---> Lambda (Firebase token validation)
+- one backend container for the FastAPI API
+- one worker container for background sync and AI jobs if needed
+- managed PostgreSQL
+- managed secrets
+- managed logs and alarms
 
-**Rationale:**
-- API Gateway/Lambda: Stateless, easy scaling, pay-per-use
-- EventBridge: Native scheduling, triggers dispatcher Lambdas
-- SQS: Decouples job dispatch from processing, handles retries
-- RDS: Managed Postgres, connection pooling support
-- Secrets Manager: Centralized, secure secret management
+This keeps the codebase understandable and gives you a realistic AWS DevOps portfolio.
 
----
+## 3. Recommended AWS Target Architecture
 
-## 4. Migration Phases
+### Primary path
 
-### Phase 1: Minimal Working System
-- Deploy a single API route (e.g., `/gmail/sync`) as Lambda via API Gateway
-- Connect to RDS PostgreSQL
-- Test end-to-end (auth, DB, Gmail sync)
+- **Frontend hosting:** S3 + CloudFront, or keep Flutter web hosting separate if needed
+- **API backend:** ECS Fargate service behind an Application Load Balancer
+- **Database:** RDS PostgreSQL
+- **Secrets:** AWS Secrets Manager
+- **Logs and metrics:** CloudWatch Logs and CloudWatch Alarms
+- **Container registry:** ECR
+- **Background jobs:** ECS worker service or scheduled tasks
+- **Scheduled sync:** EventBridge scheduled task
 
-### Phase 2: Event-Driven Background Jobs
-- Move ingestion and AI processing loops to EventBridge + dispatcher Lambda
-- Dispatcher Lambda enqueues SQS jobs
-- Worker Lambda processes SQS jobs
-- Remove background loops from FastAPI
+### Optional later additions
 
-### Phase 3: Expand API Endpoints
-- Migrate remaining API routes to Lambda handlers
-- Refactor shared logic (DB, auth, Gmail, ML) for Lambda reuse
-- Add monitoring/logging (CloudWatch)
+- **SQS** for decoupling background job bursts
+- **Lambda** only for very small utility tasks or webhooks if useful
+- **RDS Proxy** if connection pressure becomes a real issue
+- **S3** for CSV logs, artifacts, or exports
 
-### Phase 4: Optimize Scaling & Cost
-- Implement DB connection pooling (e.g., RDS Proxy)
-- Tune Lambda memory/timeouts
-- Batch SQS jobs for efficiency
-- Review cold start impact, optimize package size
+## 4. Why ECS First Instead Of Serverless First
 
-**Each phase is deployable and testable.**
+Serverless is not wrong, but it is not the best first migration for this project.
 
----
+Reasons:
 
-## 5. Folder Structure Refactor
+- the backend already behaves like a long-running service
+- background processing and SSE-style updates fit containerized services better than Lambda
+- the current code has DB sessions, workers, and pipeline state that benefit from an always-on process
+- ECS/Fargate teaches real AWS DevOps skills without forcing an unnecessary rewrite
 
-```
-backend-lambda/
-│
-├── handlers/           # API Gateway Lambda handlers
-│   ├── gmail_sync.py
-│   ├── classify.py
-│   ├── oauth.py
-│   └── notifications.py
-│
-├── workers/            # SQS-triggered worker Lambdas
-│   ├── gmail_worker.py
-│   └── classify_worker.py
-│
-├── dispatchers/        # EventBridge-triggered dispatcher Lambdas
-│   ├── ingestion_dispatcher.py
-│   └── ai_dispatcher.py
-│
-├── shared/             # Common code
-│   ├── db.py
-│   ├── auth.py
-│   ├── gmail.py
-│   ├── ml.py
-│   └── models.py
-│
-├── config/             # Config, secrets loading
-│   └── settings.py
-│
-└── requirements.txt
-```
+Use Lambda only where it is a clear fit, not as the default answer.
 
-**Mapping:**
-- `app/routers/` → `handlers/`
-- `app/services/` → `shared/`
-- `app/models/` → `shared/models.py`
-- `app/core/database.py` → `shared/db.py`
-- `background_scheduler.py`, `jobs/` → `dispatchers/`, `workers/`
+## 5. Migration Phases
 
----
+### Phase 1 - Lift and shift the backend container
 
-## 6. Data & Auth Handling
+Goal: run the existing FastAPI container on AWS with minimal code change.
 
-- **OAuth Tokens:**
-  - Store in RDS (encrypted if possible)
-  - Use Secrets Manager for client secrets
-- **DB Sessions in Lambda:**
-  - Use short-lived SQLAlchemy sessions per invocation
-  - Use RDS Proxy for connection pooling
-- **Connection Pooling:**
-  - RDS Proxy recommended to avoid Lambda connection storm
-- **Code Changes:**
-  - Refactor DB/session logic for stateless, per-invocation use
-  - Remove global/session-scoped DB connections
-  - Ensure all secrets/config are loaded from environment/Secrets Manager
+Tasks:
 
----
+- build and push the backend image to ECR
+- deploy the API container to ECS Fargate
+- attach an ALB
+- configure health checks
+- validate that auth, dashboard, Gmail sync, and AI pipeline endpoints still work
 
-## 7. Risks & Pitfalls
+Success criteria:
 
-- **What will break:**
-  - Long-lived connections (DB, Gmail) must be refactored
-  - Streaming endpoints (SSE) not natively supported in Lambda
-  - Background loops must be event-driven
-- **Lambda Limitations:**
-  - Max 15 min execution time
-  - DB connection limits (use RDS Proxy)
-  - Package size/cold start
-- **Gmail API Rate Limits:**
-  - Must batch jobs, handle 429s, exponential backoff
-- **Cold Start Issues:**
-  - Minimize dependencies, use provisioned concurrency if needed
+- API works on AWS
+- no feature regression compared to the Pi deployment
+- logs are visible in CloudWatch
 
----
+### Phase 2 - Move the database to AWS
 
-## 8. Final Output: Roadmap & Priorities
+Goal: switch the backend from the current database host to RDS PostgreSQL or equivalent managed AWS Postgres.
 
-### Roadmap
-1. Extract shared modules (DB, auth, Gmail, ML)
-2. Deploy minimal Lambda handler (e.g., `/gmail/sync`)
-3. Set up RDS, Secrets Manager, test DB connection
-4. Implement dispatcher/worker Lambdas for background jobs
-5. Migrate remaining API routes
-6. Optimize (RDS Proxy, batching, monitoring)
+Tasks:
 
-### Prioritized Implementation Order
-- **THIS WEEKEND:**
-  1. Extract shared modules
-  2. Deploy/test one Lambda handler (API Gateway → Lambda → RDS)
-  3. Set up RDS and Secrets Manager
-- **NEXT:**
-  4. Move background jobs to dispatcher/worker Lambdas
-  5. Expand API coverage
-  6. Optimize and monitor
+- provision RDS PostgreSQL
+- migrate schema and data
+- update environment variables and secrets
+- confirm the backend still reads and writes correctly
 
----
+Success criteria:
 
-**Focus on one pipeline end-to-end first.**
+- backend starts cleanly against AWS Postgres
+- no connection storms or session leaks
+- migrations are repeatable
 
----
+### Phase 3 - Move worker behavior into AWS-native runtime
 
-*This plan is practical, incremental, and minimizes risk. No full rewrite required.*
+Goal: run background sync and AI processing in a managed AWS runtime.
+
+Options:
+
+- keep workers inside the same ECS service if the load is small
+- split workers into a second ECS service if needed
+- use EventBridge for scheduled syncs
+
+Success criteria:
+
+- sync jobs run automatically
+- AI processing runs without manual intervention
+- dashboard data continues updating correctly
+
+### Phase 4 - Add observability and safe operations
+
+Goal: make the system production-grade from an ops perspective.
+
+Tasks:
+
+- structured logging
+- CloudWatch alarms for backend health and worker failures
+- deployment rollback strategy
+- secret rotation policy
+- dashboard for operational health
+
+Success criteria:
+
+- failures are visible quickly
+- deploys are reversible
+- you can reason about the system during incidents
+
+### Phase 5 - Optional queue-based decoupling
+
+Only do this if the workload justifies it.
+
+Tasks:
+
+- introduce SQS for AI jobs or sync tasks
+- keep the API responsive while workers process backlog
+- add retry handling and dead-letter queues
+
+Success criteria:
+
+- burst handling improves
+- the API is less sensitive to worker spikes
+
+## 6. Suggested AWS Service Mapping
+
+| Current Role | AWS Equivalent |
+| --- | --- |
+| FastAPI backend container | ECS Fargate service |
+| Reverse proxy / ingress | ALB |
+| Container image build | GitHub Actions or CodeBuild |
+| Container registry | ECR |
+| PostgreSQL | RDS PostgreSQL |
+| Secrets / credentials | Secrets Manager |
+| Logs | CloudWatch Logs |
+| Metrics / alerts | CloudWatch Alarms |
+| Scheduled sync | EventBridge |
+| Background tasks | ECS worker service |
+| Optional queueing | SQS |
+| Optional object storage | S3 |
+
+## 7. What Should Stay In The Codebase
+
+Keep the code modular, but do not over-fragment it.
+
+Keep:
+
+- `app/routers/`
+- `app/services/`
+- `app/models/`
+- `app/core/database.py`
+- worker/scheduler code if it still runs in the backend container
+
+Do not rush to split into separate repositories or microservices unless there is a concrete scaling reason.
+
+## 8. What Should Be Cleaned Up Before Migration
+
+Before migrating to AWS, reduce confusion in the current codebase:
+
+- keep one canonical academic pipeline
+- keep one dashboard source of truth
+- remove or deprecate legacy score-heavy paths
+- keep compatibility shims only where the Flutter app still needs them
+- make sure documentation matches the real runtime
+
+## 9. What To Learn From This For AWS DevOps
+
+This project is good AWS DevOps practice because it exercises:
+
+- Docker image design
+- CI/CD
+- environment and secret management
+- managed database migration
+- load balancer and health check setup
+- logs and alarms
+- worker scheduling
+- rollback discipline
+
+That is a better portfolio story than "I decomposed one app into ten Lambda functions."
+
+## 10. Concrete Next Steps
+
+1. Keep the Raspberry Pi deployment as the live baseline until AWS parity exists.
+2. Mirror the backend container to ECR.
+3. Deploy the backend container to ECS Fargate.
+4. Move the database to RDS PostgreSQL.
+5. Add CloudWatch logs and alarms.
+6. Migrate the worker/sync flow next.
+7. Only then consider queue decoupling or Lambda for small jobs.
+
+## 11. Final Recommendation
+
+For this project, AWS migration should be:
+
+- **container-first**
+- **ops-first**
+- **incremental**
+- **monolith-friendly**
+
+That is the fastest path to becoming credible as an AWS DevOps engineer while keeping Uni-Dash stable.

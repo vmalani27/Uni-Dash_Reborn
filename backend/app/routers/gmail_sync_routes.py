@@ -1,22 +1,73 @@
-
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from app.utils.firebase_util import verify_firebase_token
 from sqlalchemy.orm import Session
-from app.models.gmail.gmail_message import GmailSyncStatus
+from app.models.gmail.gmail_sync_status import GmailSyncStatus
 from app.services.gmail_service import GmailService
-from app.core.database import get_supabase_db
+from app.services.sync_event_bus import (
+    publish_pipeline_event,
+    is_sync_locked,
+    acquire_sync_lock,
+    release_sync_lock,
+)
+from app.core.database import get_supabase_db, supabase_session_scope
 from app.utils.timezone_util import format_ist_datetime
 import datetime
 
 router = APIRouter()
+
+
+@router.get("/admin/gmail/watch-status")
+def admin_gmail_watch_status(db: Session = Depends(get_supabase_db), firebase_data=Depends(verify_firebase_token)):
+    """
+    Admin diagnostic: list Gmail watch state for all users.
+
+    Returns: list of {uid, email, watch_expiration, last_history_id, last_sync_date, status, error_message}
+    """
+    from app.models.oauthToken import OAuthToken
+
+    # NOTE: This endpoint requires authentication via Firebase token. In production
+    # you should restrict this to admin users by checking a flag on the User model.
+    statuses = db.query(GmailSyncStatus).all()
+    out = []
+    for s in statuses:
+        token = db.query(OAuthToken).filter(OAuthToken.uid == s.uid).first()
+        email = token.email if token else None
+        out.append({
+            "uid": s.uid,
+            "email": email,
+            "status": s.status,
+            "watch_expiration": s.watch_expiration.isoformat() if s.watch_expiration else None,
+            "last_history_id": s.last_history_id,
+            "last_sync_date": s.last_sync_date.isoformat() if s.last_sync_date else None,
+            "error_message": s.error_message,
+        })
+
+    return {"count": len(out), "results": out}
 
 @router.post("/gmail/sync")
 def trigger_gmail_sync(background_tasks: BackgroundTasks, db: Session = Depends(get_supabase_db), firebase_data=Depends(verify_firebase_token)):
     """
     Trigger a full Gmail sync for the authenticated user.
     UID is derived from Firebase token, not from the URL.
+    
+    Returns HTTP 409 if sync is already in progress (prevents duplicate syncs).
     """
     uid = firebase_data["uid"]
+    
+    # Check if sync is already running (distributed lock)
+    if is_sync_locked(uid):
+        raise HTTPException(
+            status_code=409,
+            detail="Sync already in progress for this user. Please wait or try again later.",
+        )
+    
+    # Try to acquire lock
+    if not acquire_sync_lock(uid, ttl=600):
+        raise HTTPException(
+            status_code=409,
+            detail="Could not acquire sync lock. Another sync may be starting.",
+        )
+    
     # Set status to in_progress
     status = db.query(GmailSyncStatus).filter(GmailSyncStatus.uid == uid).first()
     now = datetime.datetime.utcnow()
@@ -29,37 +80,39 @@ def trigger_gmail_sync(background_tasks: BackgroundTasks, db: Session = Depends(
         status.finished_at = None
         status.error_message = None
     db.commit()
+    publish_pipeline_event(db, uid, source="route_full_sync_started")
 
     # Create database session for background task
     def run_sync():
-        supabase_db = None
         try:
-            from app.core.database import SupabaseSessionLocal
-            supabase_db = SupabaseSessionLocal()
-            GmailService.full_sync(uid, supabase_db)
-            # After full sync, capture latest historyId
-            GmailService.capture_history_id(uid, supabase_db)
-            # Mark sync as completed
-            status = supabase_db.query(GmailSyncStatus).filter(GmailSyncStatus.uid == uid).first()
-            now = datetime.datetime.utcnow()
-            if status:
-                status.status = "completed"
-                status.finished_at = now
-                status.error_message = None
-                supabase_db.commit()
+            with supabase_session_scope("gmail_sync_routes_full_sync") as supabase_db:
+                GmailService.full_sync(uid, supabase_db, limit=200)
+                # After full sync, capture latest historyId
+                GmailService.capture_history_id(uid, supabase_db)
+                # Mark sync as completed
+                status = supabase_db.query(GmailSyncStatus).filter(GmailSyncStatus.uid == uid).first()
+                now = datetime.datetime.utcnow()
+                if status:
+                    status.status = "completed"
+                    status.finished_at = now
+                    status.error_message = None
+                    supabase_db.commit()
+                    publish_pipeline_event(supabase_db, uid, source="route_full_sync_completed")
         except Exception as e:
             # Mark sync as failed
-            status = supabase_db.query(GmailSyncStatus).filter(GmailSyncStatus.uid == uid).first() if supabase_db else None
-            now = datetime.datetime.utcnow()
-            if status:
-                status.status = "failed"
-                status.finished_at = now
-                status.error_message = str(e)
-                supabase_db.commit()
+            with supabase_session_scope("gmail_sync_routes_full_sync_failure") as supabase_db:
+                status = supabase_db.query(GmailSyncStatus).filter(GmailSyncStatus.uid == uid).first()
+                now = datetime.datetime.utcnow()
+                if status:
+                    status.status = "failed"
+                    status.finished_at = now
+                    status.error_message = str(e)
+                    supabase_db.commit()
+                    publish_pipeline_event(supabase_db, uid, source="route_full_sync_failed")
             raise
         finally:
-            if supabase_db:
-                supabase_db.close()
+            # Always release lock (even on error)
+            release_sync_lock(uid)
 
     background_tasks.add_task(run_sync)
     return {"message": "Sync started"}
@@ -95,17 +148,12 @@ def trigger_incremental_gmail_sync(background_tasks: BackgroundTasks, db: Sessio
     uid = firebase_data["uid"]
 
     def run_incremental_sync():
-        supabase_db = None
         try:
-            from app.core.database import SupabaseSessionLocal
-            supabase_db = SupabaseSessionLocal()
-            GmailService.incremental_sync(uid, supabase_db, 50)
+            with supabase_session_scope("gmail_sync_routes_incremental_sync") as supabase_db:
+                GmailService.incremental_sync(uid, supabase_db, 50)
         except Exception as e:
             print(f"[INCREMENTAL SYNC ROUTE] Error: {e}")
             # incremental_sync already marks status as failed internally
-        finally:
-            if supabase_db:
-                supabase_db.close()
 
     background_tasks.add_task(run_incremental_sync)
     return {"message": "Incremental sync started"}
@@ -172,7 +220,104 @@ def get_gmail_messages(db: Session = Depends(get_supabase_db), firebase_data=Dep
             "ai_processed": m.ai_processed,
             "deadline_iso": m.deadline_iso.isoformat() if m.deadline_iso else None,
             "deadline_confidence": m.deadline_confidence,
-            "academic_score": m.academic_score,
         }
         for m in messages
     ]
+
+@router.post("/webhook/gmail/pubsub")
+async def gmail_pubsub_webhook(request: Request, background_tasks: BackgroundTasks):
+    """
+    Gmail Pub/Sub webhook receiver for push notifications.
+    
+    Handles:
+    1. Google's verification challenge (returns 200 with message ID)
+    2. Actual message delivery (base64-decoded, triggers incremental sync)
+    
+    Message format from Google Pub/Sub:
+    {
+        "message": {
+            "data": "<base64-encoded-payload>",
+            "messageId": "<message-id>",
+            "publishTime": "<timestamp>"
+        },
+        "subscription": "projects/xxx/subscriptions/xxx"
+    }
+    """
+    import base64
+    import json
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    
+    try:
+        body = await request.json()
+    except Exception as e:
+        logger.error(f"[PUBSUB WEBHOOK] Failed to parse JSON: {e}")
+        return {"status": "error", "message": "Invalid JSON"}
+    
+    # Handle Google's verification challenge
+    # Google sends a verification message to confirm the webhook is alive
+    if not body.get("message"):
+        logger.info(f"[PUBSUB WEBHOOK] Verification request or keepalive")
+        return {"status": "ok"}
+    
+    try:
+        message = body["message"]
+        data_base64 = message.get("data", "")
+        message_id = message.get("messageId", "unknown")
+
+        # Decode base64 payload
+        if data_base64:
+            try:
+                decoded_data = base64.b64decode(data_base64).decode("utf-8")
+                payload = json.loads(decoded_data)
+            except Exception as e:
+                logger.error(f"[PUBSUB WEBHOOK] Failed to decode message {message_id}: {e}")
+                return {"status": "ok"}  # ACK to prevent redelivery
+        else:
+            payload = {}
+
+        # Extract UID from attributes, payload, or resolve from emailAddress
+        attributes = message.get("attributes", {})
+        uid = attributes.get("uid") or payload.get("uid")
+        email_address = payload.get("emailAddress")
+
+        if not uid and email_address:
+            # Try to resolve UID from emailAddress using OAuthToken or User
+            from app.models.oauthToken import OAuthToken
+            from app.models.user import User
+            with supabase_session_scope("pubsub_webhook_uid_lookup") as db:
+                token = db.query(OAuthToken).filter(OAuthToken.email == email_address).first()
+                if token:
+                    uid = token.uid
+                else:
+                    user = db.query(User).filter(User.email == email_address).first()
+                    if user:
+                        uid = user.uid
+
+        if not uid:
+            logger.warning(f"[PUBSUB WEBHOOK] Message {message_id} has no UID or resolvable email, skipping")
+            return {"status": "ok"}
+
+        history_id = payload.get("historyId")
+        logger.info(
+            f"[PUBSUB WEBHOOK] Received notification for user {uid[:8]}… "
+            f"(historyId: {history_id}, messageId: {message_id})"
+        )
+
+        # Trigger incremental sync in the background, bypass debounce
+        def run_incremental_sync():
+            try:
+                with supabase_session_scope("pubsub_webhook_incremental") as supabase_db:
+                    logger.info(f"[PUBSUB WEBHOOK] Starting incremental sync for user {uid[:8]}… (webhook bypass debounce)")
+                    GmailService.incremental_sync(uid, supabase_db, limit=50, source="webhook")
+                    logger.info(f"[PUBSUB WEBHOOK] Incremental sync completed for user {uid[:8]}…")
+            except Exception as e:
+                logger.error(f"[PUBSUB WEBHOOK] Error syncing user {uid[:8]}…: {e}")
+
+        background_tasks.add_task(run_incremental_sync)
+        return {"status": "ok", "message_id": message_id}
+
+    except Exception as e:
+        logger.error(f"[PUBSUB WEBHOOK] Unhandled error: {e}")
+        return {"status": "ok"}

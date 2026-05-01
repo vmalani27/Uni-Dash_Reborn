@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:trial1/models/academic_models.dart';
-import 'package:intl/intl.dart';
 import 'package:trial1/theme.dart';
 import 'package:trial1/widgets/common/semantic_badge.dart';
 
@@ -73,7 +72,7 @@ class VerticalSections extends StatelessWidget {
                       color: Theme.of(context)
                           .colorScheme
                           .onSurface
-                          .withOpacity(0.62),
+                          .withValues(alpha: 0.62),
                       fontWeight: FontWeight.w600,
                     ),
               ),
@@ -136,7 +135,7 @@ class VerticalSections extends StatelessWidget {
       decoration: BoxDecoration(
         color: meta.tint(0.08),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: accent.withOpacity(0.14)),
+        border: Border.all(color: accent.withValues(alpha: 0.14)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -151,21 +150,16 @@ class VerticalSections extends StatelessWidget {
               ),
               const Spacer(),
               if (item.aiLabelSource != null)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    item.aiLabelSource!,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w600,
-                        ),
-                  ),
+                Text(
+                  item.aiLabelSource!,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.5,
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.56),
+                      ),
                 ),
             ],
           ),
@@ -184,7 +178,7 @@ class VerticalSections extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.7),
+                  color: Theme.of(context).textTheme.bodySmall?.color?.withValues(alpha: 0.7),
                   fontSize: 11,
                 ),
               ),
@@ -237,3 +231,4 @@ class VerticalSections extends StatelessWidget {
     return date.toIso8601String();
   }
 }
+

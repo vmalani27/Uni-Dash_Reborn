@@ -17,3 +17,4 @@ class GmailSyncStatus(Base):
     next_page_token = Column(String, default=None)      # Gmail API pagination
     sync_type = Column(String, default='full')          # 'full' or 'incremental'
     last_history_id = Column(String, default=None)      # Gmail History API cursor
+    watch_expiration = Column(DateTime, default=None)   # When Gmail Pub/Sub watch expires (renew before this time)

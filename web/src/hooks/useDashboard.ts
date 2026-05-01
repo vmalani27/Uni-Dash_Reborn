@@ -1,13 +1,43 @@
 import { useState, useEffect, useCallback } from "react";
 import { getAcademicDashboard } from '@/lib/api';
 
+/* =========================
+   Types (aligned to backend)
+========================= */
+
 export interface DashboardPayload {
-  timeline?: unknown[];
-  academic_items?: unknown[];
-  [key: string]: unknown;
+  academic_items?: any[];
+  groups?: Record<string, any[]>;
+  timeline?: any[];
+  focus?: any;
+  banner?: any;
+  [key: string]: any;
 }
 
-// Global in-memory cache
+export interface UIDashboard {
+  focus: any | null;
+  sections: Record<string, any[]>;
+  timeline: any[];
+  banner: any | null;
+}
+
+/* =========================
+   Mapping Layer (CRITICAL)
+========================= */
+
+function mapBackendToUI(data: DashboardPayload): UIDashboard {
+  return {
+    focus: data.focus ?? null,
+    sections: data.groups ?? {},
+    timeline: data.timeline ?? [],
+    banner: data.banner ?? null,
+  };
+}
+
+/* =========================
+   Cache Layer (unchanged)
+========================= */
+
 const dashboardCache = new Map<string, DashboardPayload>();
 const inFlightRequests = new Map<string, Promise<DashboardPayload>>();
 const LOCAL_STORAGE_KEY = "academic_dashboard_cache";
@@ -24,9 +54,7 @@ function readCachedDashboard(): DashboardPayload | null {
 
   try {
     const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
-    if (!stored) {
-      return null;
-    }
+    if (!stored) return null;
 
     const parsed = JSON.parse(stored) as DashboardPayload;
     dashboardCache.set(CACHE_KEY, parsed);
@@ -37,6 +65,10 @@ function readCachedDashboard(): DashboardPayload | null {
   }
 }
 
+/* =========================
+   Core Hook
+========================= */
+
 function useSharedDashboardData() {
   const initialData = readCachedDashboard();
   const [data, setData] = useState<DashboardPayload | null>(initialData);
@@ -44,9 +76,7 @@ function useSharedDashboardData() {
   const [error, setError] = useState<Error | null>(null);
 
   const mutate = useCallback(async (background = false) => {
-    if (!background) {
-      setIsLoading(true);
-    }
+    if (!background) setIsLoading(true);
 
     try {
       let promise = inFlightRequests.get(CACHE_KEY);
@@ -57,7 +87,6 @@ function useSharedDashboardData() {
 
       const result = await promise;
 
-      // Update caches
       dashboardCache.set(CACHE_KEY, result);
       if (typeof window !== "undefined") {
         localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(result));
@@ -66,7 +95,6 @@ function useSharedDashboardData() {
       setData(result);
       setError(null);
     } catch (err) {
-      // If we have cached data, suppress UI disruption but log the error
       if (!dashboardCache.has(CACHE_KEY)) {
         setError(err as Error);
       }
@@ -78,35 +106,49 @@ function useSharedDashboardData() {
   }, []);
 
   useEffect(() => {
-    // Always background revalidate (Stale-While-Revalidate pattern) on mount.
-    void mutate(true);
+    void mutate(true); // SWR pattern
   }, [mutate]);
 
   return { data, isLoading, error, mutate };
 }
 
-// In the future, these can fetch separate endpoints. For now, they share the academic dashboard endpoint
-// but give us the component-level separation we want.
-export function useTimelineData() {
+/* =========================
+   UI Hook (USE THIS)
+========================= */
+
+export function useDashboardData() {
   const { data, isLoading, error, mutate } = useSharedDashboardData();
+
+  const uiData = data ? mapBackendToUI(data) : null;
+
+  return {
+    data: uiData,
+    isLoading,
+    error,
+    mutate,
+  };
+}
+
+/* =========================
+   Optional (if still needed)
+========================= */
+
+export function useTimelineData() {
+  const { data, isLoading, error, mutate } = useDashboardData();
   return {
     data: data?.timeline || [],
     isLoading,
     error,
-    mutate
+    mutate,
   };
 }
 
 export function useFeedData() {
-  const { data, isLoading, error, mutate } = useSharedDashboardData();
+  const { data, isLoading, error, mutate } = useDashboardData();
   return {
-    data: data?.academic_items || [],
+    data: data?.sections || {},
     isLoading,
     error,
-    mutate
+    mutate,
   };
-}
-
-export function useDashboardData() {
-  return useSharedDashboardData();
 }

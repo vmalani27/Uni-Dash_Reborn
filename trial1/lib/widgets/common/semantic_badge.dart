@@ -27,13 +27,16 @@ class CategoryBadge extends StatelessWidget {
     final resolvedLabel = label ?? meta.label;
     final resolvedIcon = icon ?? meta.icon;
 
-    return Container(
+    final labelStyle = Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: compact
+              ? resolvedColor
+              : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.74),
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.08,
+        );
+
+    return Padding(
       padding: padding,
-      decoration: BoxDecoration(
-        color: resolvedColor.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: resolvedColor.withOpacity(0.18)),
-      ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -41,11 +44,8 @@ class CategoryBadge extends StatelessWidget {
           if (!compact) const SizedBox(width: 6),
           if (!compact)
             Text(
-              resolvedLabel,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: resolvedColor,
-                    fontWeight: FontWeight.w700,
-                  ),
+              resolvedLabel.toUpperCase(),
+              style: labelStyle,
             ),
         ],
       ),

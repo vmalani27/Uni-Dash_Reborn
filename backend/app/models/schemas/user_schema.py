@@ -8,27 +8,50 @@ class UserCreate(BaseModel):
 
 from typing import Optional
 
+
 class UserOut(BaseModel):
     uid: str
     email: str
-    name: str
-    semester: Optional[int] = None
-    branch: Optional[str] = None
+    full_name: str
+    degree: str
+    branch: str
+    admission_year: int
     sid: Optional[str] = None
     profile_completed: bool
     oauth_connected: bool
-    admin_connected: bool  # indicates whether the user connected an admin (send) capable Gmail account
+    admin_connected: bool
     reauth_required: bool = False
     reauth_reason: Optional[str] = None
 
     class Config:
         from_attributes = True
 
+
 class UserProfileSetup(BaseModel):
-    name: str
+    full_name: str
+    degree: str
     branch: str
-    semester: int
+    admission_year: int
     sid: str
+
+
+class ProfileCreate(BaseModel):
+    """Schema for creating a new user profile (POST /user/profile-setup)."""
+    full_name: str
+    degree: str
+    branch: str
+    admission_year: int
+    sid: str
+
+
+class ProfileUpdate(BaseModel):
+    """Schema for updating an existing user profile (PATCH /user/profile-setup).
+    
+    All fields are optional. Only provided fields will be updated.
+    This allows partial updates without requiring the full profile payload.
+    """
+    branch: Optional[str] = None
+    admission_year: Optional[int] = None
 
 
 class UserOAuthStatusOut(BaseModel):

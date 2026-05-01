@@ -23,7 +23,7 @@ class TimelineCompact extends StatelessWidget {
         child: Text(
           'No upcoming items',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
+            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
           ),
         ),
       );
@@ -89,7 +89,6 @@ class TimelineCompact extends StatelessWidget {
     }
 
     final color = topicColor(type);
-    final icon = _iconForType(type);
 
     return InkWell(
       onTap: onItemTap == null ? null : () => onItemTap!(item),
@@ -132,7 +131,7 @@ class TimelineCompact extends StatelessWidget {
                         color: Theme.of(context)
                             .colorScheme
                             .onSurface
-                            .withOpacity(0.5),
+                            .withValues(alpha: 0.5),
                         fontSize: 10,
                       ),
                     ),
@@ -145,20 +144,5 @@ class TimelineCompact extends StatelessWidget {
     );
   }
 
-  IconData _iconForType(String type) {
-    switch (type.toUpperCase()) {
-      case 'ASSIGNMENT':
-        return Icons.assignment;
-      case 'EXAM':
-        return Icons.event_note;
-      case 'ACADEMIC_ADMIN':
-        return Icons.info;
-      case 'OPPORTUNITY':
-        return Icons.lightbulb;
-      case 'INFORMATION':
-        return Icons.notifications;
-      default:
-        return Icons.event;
-    }
-  }
 }
+

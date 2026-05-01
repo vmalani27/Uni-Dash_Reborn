@@ -9,9 +9,10 @@ class User(Base):
 
     uid = Column(String, primary_key=True, index=True)
     email = Column(String, unique=True)
-    name = Column(String)
-    branch = Column(String, nullable=True)
-    semester = Column(Integer, nullable=True)
+    full_name = Column(String, nullable=False)
+    degree = Column(String, nullable=False)
+    branch = Column(String, nullable=False)
+    admission_year = Column(Integer, nullable=False)
     sid = Column(String, nullable=True)
     profile_completed = Column(Boolean, default=False)
     oauth_connected = Column(Boolean, default=False)

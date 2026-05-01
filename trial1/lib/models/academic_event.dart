@@ -79,3 +79,4 @@ class AcademicEvent {
   @override
   String toString() => 'AcademicEvent(id: $id, type: $type, title: $title, urgency: $urgency, score: $academicScore)';
 }
+

@@ -166,3 +166,4 @@ class StatusFormatter {
     return urgency == UrgencyLevel.urgent ? 2.0 : 1.0;
   }
 }
+

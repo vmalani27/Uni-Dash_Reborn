@@ -27,3 +27,4 @@ class SmartGmailService {
     return await BackendService.fetchGmailNotificationPreviewsSmart();
   }
 }
+

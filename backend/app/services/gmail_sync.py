@@ -3,7 +3,8 @@ import requests
 
 from app.models.oauthToken import OAuthToken
 from app.models.user import User
-from app.models.gmail.gmail_message import GmailMessage, GmailSyncStatus
+from app.models.gmail.gmail_message import GmailMessage
+from app.models.gmail.gmail_sync_status import GmailSyncStatus
 from app.utils.google_oauth import get_access_token, OAuthReauthRequiredError
 from app.utils.gmail_fetch import extract_body
 from app.utils.encryption import decrypt_token

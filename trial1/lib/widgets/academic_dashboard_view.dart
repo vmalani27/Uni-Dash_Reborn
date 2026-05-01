@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:trial1/models/academic_models.dart';
 import 'package:trial1/models/dashboard_models.dart';
+import 'package:trial1/screens/item_details_screen.dart';
 import 'package:trial1/services/api_services.dart';
 import 'package:trial1/widgets/academic_item_card.dart';
 import 'package:trial1/widgets/skeleton_loader.dart';
@@ -56,9 +57,7 @@ class _AcademicDashboardViewState extends State<AcademicDashboardView> {
         };
         final key = labelToKey[widget.initialFilter!];
         if (key != null) {
-          flattened.retainWhere(
-            (it) => (it.entityType ?? 'INFORMATION') == key,
-          );
+          flattened.retainWhere((it) => it.entityType == key);
         }
       }
       if (mounted) {
@@ -115,36 +114,41 @@ class _AcademicDashboardViewState extends State<AcademicDashboardView> {
 
     return RefreshIndicator(
       onRefresh: _onRefresh,
-      child: _items.isEmpty
-          ? _buildEmptyState()
-          : Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 800),
-                child: ListView.builder(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: _items.isEmpty
+            ? _buildEmptyState()
+            : Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 800),
+                  child: ListView.builder(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    itemCount: _items.length,
+                    itemBuilder: (context, index) {
+                      final item = _items[index];
+                      return AcademicItemCard(
+                        item: item,
+                        onActionCompleted: _fetchDashboard,
+                        onTap: () async {
+                          final res = await Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => ItemDetailsScreen(item: item),
+                            ),
+                          );
+                          if (res == true) {
+                            // Action performed in details screen; refresh dashboard
+                            _fetchDashboard();
+                          }
+                        },
+                      );
+                    },
                   ),
-                  itemCount: _items.length,
-                  itemBuilder: (context, index) {
-                    final item = _items[index];
-                    return AcademicItemCard(
-                      item: item,
-                      onActionCompleted: _fetchDashboard,
-                      onTap: () async {
-                        final res = await Navigator.of(
-                          context,
-                        ).pushNamed('/item', arguments: item);
-                        if (res == true) {
-                          // Action performed in details screen; refresh dashboard
-                          _fetchDashboard();
-                        }
-                      },
-                    );
-                  },
                 ),
               ),
-            ),
+      ),
     );
   }
 
@@ -198,3 +202,4 @@ class _AcademicDashboardViewState extends State<AcademicDashboardView> {
 
   // Navigation to full-screen details is handled by the onTap callback above.
 }
+

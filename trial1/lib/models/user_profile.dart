@@ -1,9 +1,10 @@
 class UserProfile {
   final String uid;
   final String email;
-  final String name;
+  final String fullName;
+  final String degree;
   final String branch;
-  final int semester;
+  final int admissionYear;
   final String sid;
   final bool profileCompleted;
   final bool oauthConnected;
@@ -14,9 +15,10 @@ class UserProfile {
   UserProfile({
     required this.uid,
     required this.email,
-    required this.name,
+    required this.fullName,
+    required this.degree,
     required this.branch,
-    required this.semester,
+    required this.admissionYear,
     required this.sid,
     required this.profileCompleted,
     required this.oauthConnected,
@@ -26,17 +28,15 @@ class UserProfile {
   });
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
-    int parseSemester(dynamic value) {
-      if (value is int) return value;
-      if (value is String) return int.tryParse(value) ?? 0;
-      return 0;
-    }
     return UserProfile(
       uid: json['uid'] as String? ?? '',
       email: json['email'] as String? ?? '',
-      name: json['name'] as String? ?? '',
+      fullName: json['full_name'] as String? ?? '',
+      degree: json['degree'] as String? ?? '',
       branch: json['branch'] as String? ?? '',
-      semester: parseSemester(json['semester']),
+      admissionYear: json['admission_year'] is int
+          ? json['admission_year'] as int
+          : int.tryParse(json['admission_year']?.toString() ?? '') ?? 0,
       sid: json['sid'] as String? ?? '',
       profileCompleted: json['profile_completed'] == true || json['profile_completed'] == 1,
       oauthConnected: json['oauth_connected'] == true || json['oauth_connected'] == 1,
@@ -50,9 +50,10 @@ class UserProfile {
     return {
       'uid': uid,
       'email': email,
-      'name': name,
+      'full_name': fullName,
+      'degree': degree,
       'branch': branch,
-      'semester': semester,
+      'admission_year': admissionYear,
       'sid': sid,
       'profile_completed': profileCompleted,
       'oauth_connected': oauthConnected,
@@ -62,3 +63,4 @@ class UserProfile {
     };
   }
 }
+

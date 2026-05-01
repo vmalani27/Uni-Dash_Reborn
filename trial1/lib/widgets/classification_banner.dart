@@ -31,9 +31,9 @@ class ClassificationBanner extends StatelessWidget {
               child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primary.withOpacity(0.06),
+                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.06),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Theme.of(context).colorScheme.primary.withOpacity(0.12)),
+                border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12)),
               ),
               child: Row(
                 children: [
@@ -91,3 +91,4 @@ class ClassificationBanner extends StatelessWidget {
     );
   }
 }
+

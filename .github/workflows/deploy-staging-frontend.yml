@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - staging
+    paths:
+      - 'trial1/**'
+      - '.github/workflows/deploy-staging-frontend.yml'
+  workflow_dispatch:
 
 jobs:
   build-frontend:
@@ -39,7 +43,7 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
       - name: Build web
-        run: flutter build web --release
+        run: flutter build web --release --pwa-strategy=none
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:

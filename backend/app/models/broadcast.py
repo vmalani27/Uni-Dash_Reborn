@@ -1,5 +1,5 @@
 import datetime
-from sqlalchemy import Column, Integer, String, Text, DateTime, Float
+from sqlalchemy import Column, Integer, String, Text, DateTime
 from app.core.database import Base
 
 
@@ -17,7 +17,6 @@ class Broadcast(Base):
     ai_label_source = Column(String, nullable=True)
     deadline_iso = Column(DateTime, nullable=True)
     deadline_confidence = Column(String, nullable=True)
-    academic_score = Column(Float, default=0.0)
 
     # Optional: store raw payload or notes
     notes = Column(Text, nullable=True)

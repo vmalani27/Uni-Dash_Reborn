@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import '../../../services/authentication_service.dart';
 
 class AuthForm extends StatefulWidget {
-  const AuthForm({super.key});
+  final VoidCallback? onAuthSuccess;
+
+  const AuthForm({super.key, this.onAuthSuccess});
 
   @override
   State<AuthForm> createState() => _AuthFormState();
@@ -39,7 +41,7 @@ class _AuthFormState extends State<AuthForm> {
     return InputDecoration(
       labelText: label,
       labelStyle: TextStyle(
-        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
       ),
       filled: true,
       fillColor: isDark ? const Color(0xFF1E222B) : Theme.of(context).colorScheme.surfaceContainerHighest,
@@ -48,7 +50,7 @@ class _AuthFormState extends State<AuthForm> {
         borderSide: BorderSide(
           color: isDark
               ? const Color(0xFF2E3340)
-              : Theme.of(context).colorScheme.onSurface.withOpacity(0.15),
+              : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.15),
           width: 1.2,
         ),
       ),
@@ -57,7 +59,7 @@ class _AuthFormState extends State<AuthForm> {
         borderSide: BorderSide(
           color: isDark
               ? const Color(0xFF2E3340)
-              : Theme.of(context).colorScheme.onSurface.withOpacity(0.15),
+              : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.15),
           width: 1.2,
         ),
       ),
@@ -91,9 +93,9 @@ class _AuthFormState extends State<AuthForm> {
         if (!isSmall) ...[
           const SizedBox(height: 4),
           Text(
-            _isRegister ? 'Join UniDash to get started' : 'Welcome back to UniDash',
+            _isRegister ? 'Join to get started' : 'Welcome back',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.75),
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.75),
               fontSize: 13,
             ),
           )
@@ -102,15 +104,25 @@ class _AuthFormState extends State<AuthForm> {
         TextField(
           controller: _emailController,
           keyboardType: TextInputType.emailAddress,
+          textInputAction: TextInputAction.next,
+            onSubmitted: (_) {
+            FocusScope.of(context).nextFocus();
+            },
           autofillHints: const [AutofillHints.email],
           style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).colorScheme.onSurface),
           decoration: _fieldDecoration(context, 'Email'),
         ),
         const SizedBox(height: 12),
         TextField(
-          controller: _passwordController,
-          obscureText: true,
-          autofillHints: const [AutofillHints.password],
+  controller: _passwordController,
+  obscureText: true,
+  autofillHints: const [AutofillHints.password],
+  textInputAction: TextInputAction.done,
+  onSubmitted: (_) {
+    if (!_isLoading) {
+      _isRegister ? _onRegister() : _onSignIn();
+    }
+  },
           style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).colorScheme.onSurface),
           decoration: _fieldDecoration(context, 'Password'),
         ),
@@ -120,6 +132,13 @@ class _AuthFormState extends State<AuthForm> {
             controller: _confirmController,
             obscureText: true,
             autofillHints: const [AutofillHints.newPassword],
+            textInputAction: TextInputAction.done,
+onSubmitted: (_) {
+  if (!_isLoading) {
+    _onRegister();
+  }
+},
+
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Theme.of(context).colorScheme.onSurface),
             decoration: _fieldDecoration(context, 'Confirm Password'),
           ),
@@ -129,9 +148,9 @@ class _AuthFormState extends State<AuthForm> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.error.withOpacity(0.08),
+              color: Theme.of(context).colorScheme.error.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Theme.of(context).colorScheme.error.withOpacity(0.2), width: 0.5),
+              border: Border.all(color: Theme.of(context).colorScheme.error.withValues(alpha: 0.2), width: 0.5),
             ),
             child: Text(
               _errorText!,
@@ -171,7 +190,7 @@ class _AuthFormState extends State<AuthForm> {
               Text(
                 _isRegister ? 'Already have an account? ' : 'No account yet? ',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurface.withOpacity(0.75),
+                  color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.75),
                   fontSize: 13,
                 ),
               ),
@@ -229,10 +248,11 @@ class _AuthFormState extends State<AuthForm> {
     try {
       final user = await _authService.signInWithEmail(email, password);
       if (user != null && mounted) {
-        // Success - AuthGate will handle navigation automatically
+        // Success - call callback
         _emailController.clear();
         _passwordController.clear();
         setState(() => _isLoading = false);
+        widget.onAuthSuccess?.call();
       }
     } catch (e) {
       if (mounted) {
@@ -277,11 +297,12 @@ class _AuthFormState extends State<AuthForm> {
     try {
       final user = await _authService.registerWithEmail(email, password);
       if (user != null && mounted) {
-        // Success - AuthGate will handle navigation automatically
+        // Success - call callback
         _emailController.clear();
         _passwordController.clear();
         _confirmController.clear();
         setState(() => _isLoading = false);
+        widget.onAuthSuccess?.call();
       }
     } catch (e) {
       if (mounted) {
@@ -316,3 +337,4 @@ class _AuthFormState extends State<AuthForm> {
     return errorCode;
   }
 }
+

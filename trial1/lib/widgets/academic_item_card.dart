@@ -2,16 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:trial1/models/academic_models.dart';
 import 'package:trial1/services/api_services.dart';
+import 'package:trial1/widgets/academic_item_actions.dart';
 import 'package:trial1/theme.dart';
-import 'package:trial1/utils/status_formatter.dart';
+
+enum _SecondaryItemAction { calendar, dismiss }
 
 class AcademicItemCard extends StatelessWidget {
   final AcademicItem item;
   final VoidCallback onTap;
   final Future<void> Function()? onActionCompleted;
-  // When true, tapping opens preview dialog instead of immediately calling onTap
+  final Future<void> Function(AcademicItem)? onMarkDoneAction;
+  final Future<void> Function(AcademicItem)? onAddToCalendarAction;
+  final Future<void> Function(AcademicItem)? onDismissAction;
   final bool previewOnTap;
-  // When true, hides the category label (entity type badge)
   final bool hideLabel;
 
   const AcademicItemCard({
@@ -19,23 +22,58 @@ class AcademicItemCard extends StatelessWidget {
     required this.item,
     required this.onTap,
     this.onActionCompleted,
+    this.onMarkDoneAction,
+    this.onAddToCalendarAction,
+    this.onDismissAction,
     this.previewOnTap = true,
     this.hideLabel = false,
   });
 
+  Future<void> _handleMarkDone() async {
+    if (onMarkDoneAction != null) {
+      await onMarkDoneAction!(item);
+      return;
+    }
+    await BackendService.markAcademicItemDone(item.id);
+  }
+
+  Future<void> _handleAddToCalendar() async {
+    if (onAddToCalendarAction != null) {
+      await onAddToCalendarAction!(item);
+      return;
+    }
+    await BackendService.addAcademicItemToCalendar(item.id);
+  }
+
+  Future<void> _handleDismiss() async {
+    if (onDismissAction != null) {
+      await onDismissAction!(item);
+      return;
+    }
+    await BackendService.dismissAcademicItem(item.id);
+  }
+
+  String _deadlineLabel(DateTime? date) {
+    if (date == null) return 'No deadline';
+    return DateFormat.yMMMd().add_jm().format(date);
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(
-          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.08),
-          width: 1,
-        ),
-      ),
-      child: InkWell(
+    final meta = academicCategoryMeta(item.entityType);
+    final accent = meta.color;
+    final summary = (item.summary?.trim().isNotEmpty ?? false)
+        ? item.summary!
+        : (item.aiSummary?.trim().isNotEmpty ?? false)
+            ? item.aiSummary!
+        : item.description;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(22),
           onTap: () {
             if (previewOnTap) {
               _showPreview(context);
@@ -43,50 +81,168 @@ class AcademicItemCard extends StatelessWidget {
               onTap();
             }
           },
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (!hideLabel) ...[
-                  _buildHeader(context),
-                  const SizedBox(height: 8),
-                ],
-                Text(
-                  item.title,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  height: 1.18,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 8),
-              // Collapsed chips row: show only AI topic (if any)
-              Wrap(
-                spacing: 8,
-                runSpacing: 6,
-                children: [
-                  if (item.aiLabelTopic != null) _chip(context, item.aiLabelTopic!),
-                ],
-              ),
-              if ((item.aiSummary ?? item.description).isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Text(
-                  item.aiSummary ?? item.description,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.onSurface.withValues(alpha: 0.7),
-                    height: 1.4,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOut,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: accent.withValues(alpha: 0.16)),
+              color: Theme.of(context).colorScheme.surface,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(
+                    alpha: Theme.of(context).brightness == Brightness.dark ? 0.22 : 0.05,
                   ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+                  blurRadius: 20,
+                  offset: const Offset(0, 8),
                 ),
               ],
-              const SizedBox(height: 12),
-              _buildFooter(context),
-            ],
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: accent.withValues(alpha: 0.11),
+                          borderRadius: BorderRadius.circular(15),
+                        ),
+                        child: Icon(meta.icon, color: accent, size: 22),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    item.title,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                          fontWeight: FontWeight.w800,
+                                          height: 1.2,
+                                        ),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                PopupMenuButton<_SecondaryItemAction>(
+                                  tooltip: 'More actions',
+                                  icon: const Icon(Icons.more_horiz, size: 20),
+                                  onSelected: (action) async {
+                                    switch (action) {
+                                      case _SecondaryItemAction.calendar:
+                                        await _handleAddToCalendar();
+                                        break;
+                                      case _SecondaryItemAction.dismiss:
+                                        await _handleDismiss();
+                                        break;
+                                    }
+                                    await onActionCompleted?.call();
+                                  },
+                                  itemBuilder: (context) => const [
+                                    PopupMenuItem<_SecondaryItemAction>(
+                                      value: _SecondaryItemAction.calendar,
+                                      child: ListTile(
+                                        dense: true,
+                                        leading: Icon(Icons.calendar_today_outlined, size: 18),
+                                        title: Text('Add to calendar'),
+                                      ),
+                                    ),
+                                    PopupMenuItem<_SecondaryItemAction>(
+                                      value: _SecondaryItemAction.dismiss,
+                                      child: ListTile(
+                                        dense: true,
+                                        leading: Icon(Icons.delete_outline, size: 18),
+                                        title: Text('Dismiss'),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                _MetaPill(label: meta.label, accent: accent),
+                                if (item.courseCode != null)
+                                  _MetaPill(label: item.courseCode!, accent: Theme.of(context).colorScheme.onSurfaceVariant),
+                                if (item.aiLabelSource != null)
+                                  _MetaPill(label: item.aiLabelSource!, accent: Theme.of(context).colorScheme.onSurfaceVariant),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (!hideLabel) ...[
+                    const SizedBox(height: 14),
+                    Divider(height: 1, color: Theme.of(context).dividerColor.withValues(alpha: 0.6)),
+                  ],
+                  if (!hideLabel) ...[
+                    const SizedBox(height: 14),
+                    Text(
+                      topicLabel(item.aiLabelTopic ?? item.entityType).toUpperCase(),
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            letterSpacing: 0.12,
+                            fontWeight: FontWeight.w700,
+                            color: accent,
+                          ),
+                    ),
+                  ],
+                  if (summary.trim().isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      summary,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            height: 1.5,
+                          ),
+                    ),
+                  ],
+                  const SizedBox(height: 14),
+                  Text(
+                    _deadlineLabel(item.dueDate ?? item.eventDate),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      const Spacer(),
+                      IconButton.filledTonal(
+                        onPressed: () async {
+                          try {
+                            await _handleMarkDone();
+                            await onActionCompleted?.call();
+                          } catch (_) {}
+                        },
+                        icon: const Icon(Icons.check_rounded),
+                        tooltip: 'Mark done',
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),
@@ -98,7 +254,7 @@ class AcademicItemCard extends StatelessWidget {
       context: context,
       barrierDismissible: true,
       builder: (dialogContext) {
-        Future<void> _runAction(
+        Future<void> runAction(
           Future<void> Function() action,
           String successMessage,
         ) async {
@@ -113,19 +269,21 @@ class AcademicItemCard extends StatelessWidget {
           await onActionCompleted?.call();
         }
 
+        final meta = academicCategoryMeta(item.entityType);
+        final summary = (item.summary?.trim().isNotEmpty ?? false)
+            ? item.summary!
+            : (item.aiSummary?.trim().isNotEmpty ?? false)
+                ? item.aiSummary!
+            : item.description;
+
         return Dialog(
-          insetPadding: const EdgeInsets.symmetric(
-            horizontal: 24,
-            vertical: 24,
-          ),
-          backgroundColor: Theme.of(context).cardTheme.color,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
+          insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          backgroundColor: Theme.of(context).colorScheme.surface,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 760),
-            child: Padding(
-              padding: const EdgeInsets.all(20.0),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -133,228 +291,128 @@ class AcademicItemCard extends StatelessWidget {
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      Container(
+                        width: 52,
+                        height: 52,
+                        decoration: BoxDecoration(
+                          color: meta.color.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Icon(meta.icon, color: meta.color, size: 24),
+                      ),
+                      const SizedBox(width: 14),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
                               item.title,
-                              style: Theme.of(context).textTheme.headlineSmall
-                                  ?.copyWith(fontWeight: FontWeight.w700),
+                              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                    height: 1.15,
+                                  ),
                             ),
-                            const SizedBox(height: 8),
-                            // due date + chips
-                            if (item.dueDate != null) ...[
-                              Text(
-                                _shortDateWithContext(item.dueDate!),
-                                style: Theme.of(context).textTheme.bodySmall
-                                    ?.copyWith(
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.onSurface.withOpacity(0.7),
-                                    ),
-                              ),
-                              const SizedBox(height: 8),
-                            ],
+                            const SizedBox(height: 10),
                             Wrap(
                               spacing: 8,
                               runSpacing: 8,
                               children: [
-                                if (item.aiLabelTopic != null) _chip(context, item.aiLabelTopic!),
-                                if (item.courseCode != null) _chip(context, item.courseCode!),
+                                _MetaPill(label: meta.label, accent: meta.color),
+                                if (item.courseCode != null)
+                                  _MetaPill(label: item.courseCode!, accent: Theme.of(context).colorScheme.onSurfaceVariant),
+                                if (item.aiLabelSource != null)
+                                  _MetaPill(label: item.aiLabelSource!, accent: Theme.of(context).colorScheme.onSurfaceVariant),
+                                if (item.dueDate != null)
+                                  _MetaPill(label: _deadlineLabel(item.dueDate), accent: Theme.of(context).colorScheme.onSurfaceVariant),
                               ],
                             ),
                           ],
                         ),
                       ),
                       IconButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        icon: Icon(
-                          Icons.close,
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.onSurface.withOpacity(0.7),
-                        ),
+                        onPressed: () => Navigator.of(dialogContext).pop(),
+                        icon: const Icon(Icons.close_rounded),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
-                  // Summary / description
-                  Card(
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(14.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Summary',
-                            style: Theme.of(context).textTheme.titleSmall
-                                ?.copyWith(fontWeight: FontWeight.w700),
+                  const SizedBox(height: 18),
+                  _SectionCard(
+                    title: 'Summary',
+                    child: Text(
+                      summary,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            height: 1.55,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
                           ),
-                          const SizedBox(height: 8),
-                          // Allow summary to expand inside the dialog. Wrap with
-                          // a scrollable in case the text is long.
-                          ConstrainedBox(
-                            constraints: const BoxConstraints(maxHeight: 360),
-                            child: SingleChildScrollView(
-                              child: Text(
-                                (item.aiSummary ?? item.description),
-                                style: Theme.of(context).textTheme.bodyMedium,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
                     ),
                   ),
                   const SizedBox(height: 12),
-                  Card(
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(14.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Actions',
-                            style: Theme.of(context).textTheme.titleSmall
-                                ?.copyWith(fontWeight: FontWeight.w700),
-                          ),
-                          const SizedBox(height: 10),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              ElevatedButton.icon(
-                                onPressed: () => _runAction(
-                                  () => BackendService.markAcademicItemDone(
-                                    item.id,
-                                  ),
-                                  'Marked as done',
-                                ),
-                                icon: const Icon(Icons.check_circle_outline),
-                                label: const Text('Mark Done'),
-                              ),
-                              OutlinedButton.icon(
-                                onPressed: () => _runAction(
-                                  () => BackendService.snoozeAcademicItem(
-                                    item.id,
-                                  ),
-                                  'Snoozed for later',
-                                ),
-                                icon: const Icon(Icons.schedule),
-                                label: const Text('Snooze'),
-                              ),
-                              OutlinedButton.icon(
-                                onPressed: () => _runAction(
-                                  () => BackendService.addAcademicItemToCalendar(
-                                    item.id,
-                                  ),
-                                  'Added to calendar',
-                                ),
-                                icon: const Icon(Icons.calendar_today),
-                                label: const Text('Add to Calendar'),
-                              ),
-                              TextButton.icon(
-                                onPressed: () => _runAction(
-                                  () => BackendService.dismissAcademicItem(
-                                    item.id,
-                                  ),
-                                  'Dismissed',
-                                ),
-                                icon: const Icon(Icons.delete_outline),
-                                label: const Text('Dismiss'),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  // Follow-ups / actions
-                  if (item.followUps != null && item.followUps!.isNotEmpty) ...[
-                    Card(
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(14.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Follow-ups',
-                              style: Theme.of(context).textTheme.titleSmall
-                                  ?.copyWith(fontWeight: FontWeight.w700),
-                            ),
-                            const SizedBox(height: 8),
-                            ...item.followUps!.map(
-                              (f) => Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 6.0,
-                                ),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        f.message,
-                                        style: Theme.of(
-                                          context,
-                                        ).textTheme.bodyMedium,
-                                      ),
-                                    ),
-                                    if (f.triggerAt != null) ...[
-                                      const SizedBox(width: 12),
-                                      Text(
-                                        _shortDate(f.triggerAt!),
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodySmall
-                                            ?.copyWith(
-                                              color: Theme.of(context)
-                                                  .colorScheme
-                                                  .onSurface
-                                                  .withOpacity(0.6),
-                                            ),
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
+                  _SectionCard(
+                    title: 'Full email',
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.72),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: Theme.of(context).dividerColor.withValues(alpha: 0.45),
                         ),
+                      ),
+                      child: Text(
+                        item.description,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              height: 1.55,
+                              fontSize: 12.5,
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  if (item.followUps != null && item.followUps!.isNotEmpty) ...[
+                    _SectionCard(
+                      title: 'Follow-ups',
+                      child: Column(
+                        children: [
+                          for (final followUp in item.followUps!)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Icon(Icons.arrow_right_rounded, size: 18),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      followUp.message,
+                                      style: Theme.of(context).textTheme.bodyMedium,
+                                    ),
+                                  ),
+                                  if (followUp.triggerAt != null) ...[
+                                    const SizedBox(width: 10),
+                                    Text(
+                                      DateFormat.yMMMd().format(followUp.triggerAt!),
+                                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                          ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                     const SizedBox(height: 12),
                   ],
-                  // Actions
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        child: const Text('Close'),
-                      ),
-                      const SizedBox(width: 8),
-                      ElevatedButton(
-                        onPressed: () {
-                          Navigator.of(context).pop();
-                          // delegate to onTap to view full email / details
-                          onTap();
-                        },
-                        child: const Text('View Full Email'),
-                      ),
-                    ],
+                  _SectionCard(
+                    title: 'Actions',
+                    child: AcademicItemActionBar(
+                      onMarkDone: () => runAction(_handleMarkDone, 'Marked as done'),
+                      onAddToCalendar: () => runAction(_handleAddToCalendar, 'Added to calendar'),
+                      onDismiss: () => runAction(_handleDismiss, 'Dismissed'),
+                    ),
                   ),
                 ],
               ),
@@ -364,215 +422,68 @@ class AcademicItemCard extends StatelessWidget {
       },
     );
   }
+}
 
-  String _shortDate(DateTime d) {
-    try {
-      return DateFormat('MMM d').format(d);
-    } catch (_) {
-      return d.toIso8601String();
-    }
-  }
+class _MetaPill extends StatelessWidget {
+  final String label;
+  final Color accent;
 
-  String _shortDateWithContext(DateTime d) {
-    try {
-      final now = DateTime.now();
-      final diff = d.difference(now).inDays;
-      if (diff == 0 && d.day == now.day) return 'Today';
-      if (diff == 1) return 'Tomorrow';
-      return DateFormat('MMM d').format(d);
-    } catch (_) {
-      return d.toIso8601String();
-    }
-  }
+  const _MetaPill({
+    required this.label,
+    required this.accent,
+  });
 
-  Widget _chip(BuildContext context, String label) {
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.primary.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(8),
+        color: accent.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: accent.withValues(alpha: 0.16)),
       ),
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: Theme.of(context).colorScheme.primary,
-        ),
+              fontWeight: FontWeight.w700,
+              color: accent,
+            ),
       ),
     );
   }
+}
 
-  Widget _buildHeader(BuildContext context) {
-    Color entityColor;
-    IconData entityIcon;
-    switch (item.entityType.toLowerCase()) {
-      case 'assignment':
-        entityColor = kTopicAssignment;
-        entityIcon = Icons.assignment_outlined;
-        break;
-      case 'exam':
-        entityColor = kTopicExam;
-        entityIcon = Icons.quiz_outlined;
-        break;
-      case 'opportunity':
-        entityColor = kTopicOpportunity;
-        entityIcon = Icons.rocket_launch_outlined;
-        break;
-      case 'announcement':
-        entityColor = kTopicInformation;
-        entityIcon = Icons.campaign_outlined;
-        break;
-      case 'event':
-        entityColor = kTopicAcademic;
-        entityIcon = Icons.event_outlined;
-        break;
-      default:
-        entityColor = kTopicOther;
-        entityIcon = Icons.category_outlined;
-    }
+class _SectionCard extends StatelessWidget {
+  final String title;
+  final Widget child;
 
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: entityColor.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: entityColor.withValues(alpha: 0.2)),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(entityIcon, size: 14, color: entityColor),
-              const SizedBox(width: 6),
-              Text(
-                item.entityType.toUpperCase(),
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: entityColor,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.5,
+  const _SectionCard({
+    required this.title,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Theme.of(context).dividerColor.withValues(alpha: 0.5)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
                 ),
-              ),
-            ],
           ),
-        ),
-        const Spacer(),
-        if (item.dueDate != null)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(
-              _shortDateWithContext(item.dueDate!),
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                fontWeight: FontWeight.w600,
-                color: Theme.of(context).colorScheme.onSurface,
-              ),
-            ),
-          ),
-      ],
+          const SizedBox(height: 10),
+          child,
+        ],
+      ),
     );
-  }
-
-  Widget _buildFooter(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Row(
-            children: [
-              if (item.dueDate != null) ...[
-                Icon(
-                  Icons.event_available_outlined,
-                  size: 16,
-                  color: _getDueDateColor(item.dueDate!, context),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  _formatDate(item.dueDate!),
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: _getDueDateColor(item.dueDate!, context),
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text('•', style: Theme.of(context).textTheme.bodySmall),
-                const SizedBox(width: 8),
-                TextButton.icon(
-                  onPressed: () {},
-                  icon: Icon(Icons.add_alert_outlined, size: 16, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.8)),
-                  label: Text('Remind', style: Theme.of(context).textTheme.bodySmall),
-                  style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(40, 24)),
-                ),
-                const SizedBox(width: 8),
-                TextButton.icon(
-                  onPressed: () {},
-                  icon: Icon(Icons.calendar_month_outlined, size: 16, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.8)),
-                  label: Text('Add', style: Theme.of(context).textTheme.bodySmall),
-                  style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(40, 24)),
-                ),
-              ] else if (item.location != null) ...[
-                Icon(
-                  Icons.location_on_outlined,
-                  size: 16,
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.onSurface.withValues(alpha: 0.6),
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    item.location!,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.onSurface.withValues(alpha: 0.7),
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  String _formatDate(DateTime date) {
-    final now = DateTime.now();
-    final difference = date.difference(now).inDays;
-
-    if (difference == 0 && date.day == now.day) {
-      return 'Today';
-    } else if (difference == 1 ||
-        (difference == 0 && date.day == now.day + 1)) {
-      return 'Tomorrow';
-    } else if (difference < 0 && difference > -7) {
-      return '${-difference}d ago';
-    } else {
-      return DateFormat('MMM d, yyyy').format(date);
-    }
-  }
-
-  Color _getDueDateColor(DateTime date, BuildContext context) {
-    if (item.completed) {
-      return Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4);
-    }
-
-    final now = DateTime.now();
-    final difference = date.difference(now).inDays;
-
-    if (difference < 0) {
-      return Theme.of(context).colorScheme.error; // overdue
-    }
-    if (difference <= 2) {
-      return kUrgencyCritical;
-    }
-    if (difference <= 7) {
-      return kUrgencyHigh;
-    }
-    return Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7);
   }
 }

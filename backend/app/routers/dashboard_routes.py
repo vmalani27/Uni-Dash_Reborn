@@ -1,136 +1,244 @@
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional
+
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
-from typing import List, Dict, Any, Optional
 
 from app.core.database import get_supabase_db
-from app.models.academic_objects import AcademicItem
+from app.models.ai_layer import AcademicEntity, EntityActionState, EntitySourceMap, ExtractedSignal
 from app.models.gmail.gmail_message import GmailMessage
-from app.models.gmail.follow_up import FollowUp
 from app.models.user import User
-from app.services.academic_context_engine import AcademicContextEngine
+from app.services.sync_event_bus import get_dashboard_snapshot, set_dashboard_snapshot
 from app.utils.firebase_util import verify_firebase_token
 
 router = APIRouter(prefix="/api/dashboard", tags=["Dashboard"])
 
+GRACE_WINDOW_DAYS = 2
+RECENT_WINDOW_DAYS = 14
+MAX_ITEMS = 50
 
-def _serialize_item(item: AcademicItem) -> Dict[str, Any]:
-    # Basic serialization for an AcademicItem. Enhanced fields (AI metadata,
-    # source email id, description) are added in the main handler where the
-    # related GmailMessage rows are available.
+
+class DashboardItemThin(BaseModel):
+    id: int
+    title: str
+    category: str | None = None
+    priority: int | None = None
+    due_at: str | None = None
+    status: str | None = None
+
+
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _ensure_aware(value: Optional[datetime]) -> Optional[datetime]:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _parse_iso_datetime(value: Any) -> Optional[datetime]:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except Exception:
+        return None
+    return _ensure_aware(parsed)
+
+
+def _recency_score(now: datetime, created_at: Optional[datetime], best_deadline: Optional[datetime]) -> float:
+    score = 0.0
+    created = _ensure_aware(created_at)
+    deadline = _ensure_aware(best_deadline)
+
+    if deadline:
+        delta_days = (deadline - now).total_seconds() / 86400.0
+        if delta_days >= -GRACE_WINDOW_DAYS:
+            if delta_days < 0:
+                score += 75.0
+            else:
+                score += max(20.0, 100.0 - (delta_days * 20.0))
+    if created:
+        age_days = max(0.0, (now - created).total_seconds() / 86400.0)
+        if age_days <= RECENT_WINDOW_DAYS:
+            score += max(10.0, 40.0 - age_days * 2.5)
+    return min(score, 100.0)
+
+
+def _short_description(latest_signal: Optional[ExtractedSignal], entity: AcademicEntity) -> str | None:
+    if latest_signal and isinstance(latest_signal.raw_llm_output, dict):
+        summary = latest_signal.raw_llm_output.get("summary")
+        if summary:
+            return str(summary)
+    if getattr(entity, "summary", None):
+        return str(entity.summary)
+    if latest_signal and latest_signal.extracted_entities:
+        return ", ".join(str(item) for item in latest_signal.extracted_entities[:3])
+    return None
+
+
+def _serialize_item(
+    entity: AcademicEntity,
+    latest_signal: Optional[ExtractedSignal],
+    action_state: Optional[EntityActionState],
+) -> Dict[str, Any]:
+    urgency = _recency_score(_utc_now(), entity.created_at, entity.best_deadline)
+    entity_type = (entity.entity_type or "INFORMATION").upper()
+    description = _short_description(latest_signal, entity)
+    completed = bool(action_state.completed) if action_state else False
+    dismissed = bool(action_state.dismissed) if action_state else False
+    snoozed_until = (
+        action_state.snoozed_until.isoformat()
+        if action_state and action_state.snoozed_until
+        else None
+    )
+    status = "completed" if completed else "dismissed" if dismissed else "snoozed" if snoozed_until else "active"
     return {
-        "id": item.id,
-        "title": item.title,
-        "entity_type": item.entity_type,
-        "due_date": item.due_date.isoformat() if item.due_date else None,
-        "course_code": item.course_code,
-        "location": item.location,
+        "id": entity.id,
+        "title": entity.canonical_title,
+        "type": entity_type,
+        "category": entity_type,
+        "origin": getattr(entity, "origin", "system") or "system",
+        "deadline": entity.best_deadline.isoformat() if entity.best_deadline else None,
+        "due_at": entity.best_deadline.isoformat() if entity.best_deadline else None,
+        "description": description,
+        "short_description": description,
+        "relative_urgency": round(urgency, 2),
+        "priority": int(round(urgency)),
+        "status": status,
+        "completed": completed,
+        "dismissed": dismissed,
+        "snoozed_until": snoozed_until,
     }
 
 
-def get_focus_item(items: List[AcademicItem]) -> Optional[AcademicItem]:
-    now = datetime.utcnow()
-    within_24 = [i for i in items if i.due_date is not None and 0 <= (i.due_date - now).total_seconds() <= 24 * 3600]
-    if within_24:
-        # pick the one with soonest due_date, tie-breaker by academic_score
-        within_24.sort(key=lambda x: (x.due_date, -x.academic_score))
-        return within_24[0]
-    # fallback highest academic_score
-    items_sorted = sorted(items, key=lambda x: (-x.academic_score, x.due_date or datetime.max))
-    return items_sorted[0] if items_sorted else None
+def _collect_latest_signals(db: Session, uid: str, entity_ids: List[int]) -> Dict[int, ExtractedSignal]:
+    if not entity_ids:
+        return {}
 
-
-def group_items(items: List[AcademicItem]) -> Dict[str, List[Dict[str, Any]]]:
-    keys = ["ASSIGNMENT", "EXAM", "ACADEMIC_ADMIN", "OPPORTUNITY", "INFORMATION"]
-    grouped: Dict[str, List[Dict[str, Any]]] = {k: [] for k in keys}
-    for it in items:
-        et = (it.entity_type or "INFORMATION").upper()
-        if et not in grouped:
-            # place unknown types under INFORMATION
-            et = "INFORMATION"
-        grouped[et].append(_serialize_item(it))
-    return grouped
-
-
-def build_timeline(db: Session, uid: str, items: List[AcademicItem]) -> List[Dict[str, Any]]:
-    now = datetime.utcnow()
-    timeline_events: List[Dict[str, Any]] = []
-
-    # Academic item due dates
-    for it in items:
-        if it.due_date:
-            timeline_events.append({
-                "id": f"item-{it.id}",
-                "title": it.title,
-                "time": it.due_date.isoformat(),
-                "type": it.entity_type,
-            })
-
-    # FollowUps joined with GmailMessage to ensure uid
-    followups_raw = (
-        db.query(FollowUp, GmailMessage.subject, GmailMessage.normalized_topic)
-        .join(GmailMessage, FollowUp.source_email_id == GmailMessage.gmail_id)
-        .filter(GmailMessage.uid == uid, FollowUp.dismissed == False)
-        .order_by(FollowUp.trigger_at.asc())
+    rows = (
+        db.query(EntitySourceMap.entity_id, ExtractedSignal)
+        .join(ExtractedSignal, ExtractedSignal.source_email_id == EntitySourceMap.source_email_id)
+        .join(GmailMessage, GmailMessage.gmail_id == ExtractedSignal.source_email_id)
+        .filter(GmailMessage.uid == uid, EntitySourceMap.entity_id.in_(entity_ids))
+        .order_by(ExtractedSignal.created_at.desc())
         .all()
     )
 
-    for f, subject, normalized_topic in followups_raw:
-        if f.trigger_at:
-            timeline_events.append({
-                "id": f"followup-{f.id}",
-                "title": subject or f.message,
-                "time": f.trigger_at.isoformat(),
-                "type": (normalized_topic or "INFORMATION"),
-            })
+    latest: Dict[int, ExtractedSignal] = {}
+    for entity_id, signal in rows:
+        if entity_id not in latest:
+            latest[entity_id] = signal
+    return latest
 
-    # Group events into Today, Tomorrow, This Week
+
+def _collect_action_states(db: Session, uid: str, entity_ids: List[int]) -> Dict[int, EntityActionState]:
+    if not entity_ids:
+        return {}
+    rows = (
+        db.query(EntityActionState)
+        .filter(EntityActionState.uid == uid, EntityActionState.entity_id.in_(entity_ids))
+        .all()
+    )
+    return {row.entity_id: row for row in rows}
+
+
+def _entity_visible(
+    entity: AcademicEntity,
+    latest_signal: Optional[ExtractedSignal],
+    action_state: Optional[EntityActionState],
+) -> bool:
+    now = _utc_now()
+    deadline = _ensure_aware(entity.best_deadline)
+    created = _ensure_aware(entity.created_at)
+
+    if action_state:
+        if action_state.completed or action_state.dismissed:
+            return False
+        if action_state.snoozed_until and _ensure_aware(action_state.snoozed_until) > now:
+            return False
+
+    if deadline and deadline >= now - timedelta(days=GRACE_WINDOW_DAYS):
+        return True
+    if created and created >= now - timedelta(days=RECENT_WINDOW_DAYS):
+        return True
+    if latest_signal and _ensure_aware(latest_signal.created_at) and _ensure_aware(latest_signal.created_at) >= now - timedelta(days=RECENT_WINDOW_DAYS):
+        return True
+    return False
+
+
+def _build_groups(items: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
+    groups: Dict[str, List[Dict[str, Any]]] = {
+        "ASSIGNMENT": [],
+        "EXAM": [],
+        "OPPORTUNITY": [],
+        "ACADEMIC_ADMIN": [],
+        "INFORMATION": [],
+    }
+    for item in items:
+        bucket = str(item.get("type") or "").upper()
+        if bucket in groups:
+            groups[bucket].append(item)
+
+    return groups
+
+
+def _build_focus(items: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    if not items:
+        return None
+    focus = sorted(
+        items,
+        key=lambda item: (
+            -float(item.get("relative_urgency") or 0),
+            item.get("deadline") or "",
+            item.get("id") or 0,
+        ),
+    )[0]
+    return focus
+
+
+def _build_timeline(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    now = _utc_now()
     buckets = {"Today": [], "Tomorrow": [], "This Week": []}
-    for ev in sorted(timeline_events, key=lambda x: x["time"]):
-        try:
-            dt = datetime.fromisoformat(ev["time"])
-        except Exception:
+    for item in sorted(items, key=lambda row: row.get("deadline") or ""):
+        dt = _parse_iso_datetime(item.get("deadline"))
+        if dt is None:
             continue
         delta = (dt.date() - now.date()).days
         if delta == 0:
-            buckets["Today"].append(ev)
+            buckets["Today"].append(item)
         elif delta == 1:
-            buckets["Tomorrow"].append(ev)
+            buckets["Tomorrow"].append(item)
         elif 1 < delta <= 7:
-            buckets["This Week"].append(ev)
-
-    result = []
-    for key in ["Today", "Tomorrow", "This Week"]:
-        result.append({"date": key, "items": buckets[key]})
-    return result
+            buckets["This Week"].append(item)
+    return [{"date": key, "items": buckets[key]} for key in ["Today", "Tomorrow", "This Week"]]
 
 
-def build_banner(items: List[AcademicItem]) -> Optional[Dict[str, Any]]:
-    now = datetime.utcnow()
-    soon = []
-    for it in items:
-        if it.due_date:
-            hours = (it.due_date - now).total_seconds() / 3600.0
-            if hours < 0:
-                continue
-            soon.append((hours, it))
-    if not soon:
+def _build_banner(items: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    if not items:
         return None
-    soon.sort(key=lambda x: x[0])
-    closest_hours, closest_item = soon[0]
-    if closest_hours <= 6:
-        hrs = max(0, int(round(closest_hours)))
-        return {
-            "message": f"{closest_item.title} due in {hrs} hours",
-            "type": "urgent",
-            "item_id": str(closest_item.id),
-        }
-    if closest_hours <= 24:
-        return {
-            "message": f"Upcoming: {closest_item.title}",
-            "type": "upcoming",
-            "item_id": str(closest_item.id),
-        }
+    now = _utc_now()
+    upcoming = []
+    for item in items:
+        dt = _parse_iso_datetime(item.get("deadline"))
+        if dt is None:
+            continue
+        hours = (dt - now).total_seconds() / 3600.0
+        if hours < -48:
+            continue
+        upcoming.append((hours, item))
+    if not upcoming:
+        return None
+    upcoming.sort(key=lambda pair: pair[0])
+    hours, item = upcoming[0]
+    if hours <= 6:
+        return {"message": f"{item['title']} due in {max(0, int(round(hours)))} hours", "type": "urgent", "item_id": str(item["id"])}
+    if hours <= 24:
+        return {"message": f"Upcoming: {item['title']}", "type": "upcoming", "item_id": str(item["id"])}
     return None
 
 
@@ -145,15 +253,18 @@ async def get_dashboard(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Do not expose dashboard content until OAuth setup is complete.
+    cached_payload = get_dashboard_snapshot(uid)
+    if cached_payload is not None:
+        return cached_payload
+
     if not user.oauth_connected:
-        return {
+        payload = {
             "focus": None,
             "groups": {
                 "ASSIGNMENT": [],
                 "EXAM": [],
-                "ACADEMIC_ADMIN": [],
                 "OPPORTUNITY": [],
+                "ACADEMIC_ADMIN": [],
                 "INFORMATION": [],
             },
             "timeline": [
@@ -162,71 +273,61 @@ async def get_dashboard(
                 {"date": "This Week", "items": []},
             ],
             "banner": None,
+            "academic_items": [],
             "blocked_reason": "oauth_not_connected",
         }
+        return payload
 
-    raw_items: List[AcademicItem] = db.query(AcademicItem).filter(AcademicItem.uid == uid).all()
+    entities: List[AcademicEntity] = (
+        db.query(AcademicEntity)
+        .filter(AcademicEntity.uid == uid)
+        .order_by(AcademicEntity.updated_at.desc())
+        .all()
+    )
 
-    source_ids = [i.source_email_id for i in raw_items if i.source_email_id]
-    gmail_map: Dict[str, GmailMessage] = {}
-    if source_ids:
-        msgs = (
-            db.query(GmailMessage)
-            .filter(GmailMessage.gmail_id.in_(source_ids), GmailMessage.uid == uid)
-            .all()
-        )
-        gmail_map = {m.gmail_id: m for m in msgs}
+    latest_signal_map = _collect_latest_signals(db, uid, [entity.id for entity in entities])
+    action_state_map = _collect_action_states(db, uid, [entity.id for entity in entities])
 
-    ranked_items = AcademicContextEngine.rank_academic_items(raw_items)
-    filtered = [(item, metrics) for item, metrics in ranked_items if metrics["effective_score"] >= 20]
+    visible_entities: List[AcademicEntity] = []
+    for entity in entities:
+        latest_signal = latest_signal_map.get(entity.id)
+        action_state = action_state_map.get(entity.id)
+        if _entity_visible(entity, latest_signal, action_state):
+            visible_entities.append(entity)
 
-    focus_item = None
-    focus_candidates = [
-        (item, metrics)
-        for item, metrics in filtered
-        if item.due_date is not None and 0 <= (AcademicContextEngine._ensure_aware(item.due_date) - AcademicContextEngine._utc_now()).total_seconds() <= 24 * 3600
+    thin_items = [
+        _serialize_item(entity, latest_signal_map.get(entity.id), action_state_map.get(entity.id))
+        for entity in visible_entities[:MAX_ITEMS]
     ]
-    if focus_candidates:
-        focus_candidates.sort(key=lambda pair: (pair[0].due_date or datetime.max, -pair[1]["effective_score"]))
-        focus_item = focus_candidates[0][0]
-    elif filtered:
-        focus_item = filtered[0][0]
-
-    # Groups — serialize each AcademicItem and include linked GmailMessage metadata
-    keys = ["ASSIGNMENT", "EXAM", "ACADEMIC_ADMIN", "OPPORTUNITY", "INFORMATION"]
-    groups: Dict[str, List[Dict[str, Any]]] = {k: [] for k in keys}
-    academic_items: List[Dict[str, Any]] = []
-    for it, metrics in filtered:
-        et = (it.entity_type or "INFORMATION").upper()
-        if et not in groups:
-            et = "INFORMATION"
-
-        serialized = AcademicContextEngine.serialize_academic_item(
-            it,
-            gmail_map.get(it.source_email_id) if it.source_email_id else None,
-            metrics,
+    thin_items.sort(
+        key=lambda item: (
+            -float(item.get("relative_urgency") or 0),
+            item.get("deadline") or "",
+            item.get("id") or 0,
         )
-        groups[et].append(serialized)
-        academic_items.append(serialized)
+    )
 
-    # Timeline
-    timeline = build_timeline(db, uid, [item for item, _metrics in filtered])
-
-    # Banner
-    banner = build_banner([item for item, _metrics in filtered])
-
-    # Enrich focus item with GmailMessage fields if available
-    focus_serialized = None
-    if focus_item:
-        focus_serialized = AcademicContextEngine.serialize_academic_item(
-            focus_item,
-            gmail_map.get(focus_item.source_email_id) if focus_item.source_email_id else None,
-        )
-
-    return {
-        "focus": focus_serialized,
-        "groups": groups,
-        "academic_items": academic_items,
-        "timeline": timeline,
-        "banner": banner,
+    payload = {
+        "academic_items": thin_items,
+        "focus": _build_focus(thin_items),
+        "groups": _build_groups(thin_items),
+        "timeline": _build_timeline(thin_items),
+        "banner": _build_banner(thin_items),
     }
+
+    if not payload["academic_items"]:
+        fallback_entities = entities[:MAX_ITEMS]
+        payload["academic_items"] = [
+            _serialize_item(entity, latest_signal_map.get(entity.id), action_state_map.get(entity.id))
+            for entity in fallback_entities
+        ]
+        payload["focus"] = _build_focus(payload["academic_items"])
+        payload["groups"] = _build_groups(payload["academic_items"])
+        payload["timeline"] = _build_timeline(payload["academic_items"])
+        payload["banner"] = _build_banner(payload["academic_items"])
+
+    item_count = len(payload.get("academic_items", []))
+    print(f"[DASHBOARD] items={item_count} uid={uid[:8]}")
+
+    set_dashboard_snapshot(uid, payload)
+    return payload

@@ -76,10 +76,10 @@ class _ExpandableTileState extends State<ExpandableTile> {
           decoration: BoxDecoration(
             color: meta.tint(0.08),
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: meta.color.withOpacity(0.14)),
+            border: Border.all(color: meta.color.withValues(alpha: 0.14)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.03),
+                color: Colors.black.withValues(alpha: 0.03),
                 blurRadius: 12,
                 offset: const Offset(0, 4),
               ),
@@ -95,7 +95,7 @@ class _ExpandableTileState extends State<ExpandableTile> {
                     width: 44,
                     height: 44,
                     decoration: BoxDecoration(
-                      color: meta.color.withOpacity(0.12),
+                      color: meta.color.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(14),
                     ),
                     child: Icon(meta.icon, color: meta.color, size: 22),
@@ -148,7 +148,7 @@ class _ExpandableTileState extends State<ExpandableTile> {
                                       color: Theme.of(context)
                                           .colorScheme
                                           .onSurface
-                                          .withOpacity(0.66),
+                                          .withValues(alpha: 0.66),
                                       fontWeight: FontWeight.w600,
                                     ),
                               )
@@ -159,7 +159,7 @@ class _ExpandableTileState extends State<ExpandableTile> {
                                       color: Theme.of(context)
                                           .colorScheme
                                           .onSurface
-                                          .withOpacity(0.58),
+                                          .withValues(alpha: 0.58),
                                     ),
                               ),
                           ],
@@ -177,7 +177,7 @@ class _ExpandableTileState extends State<ExpandableTile> {
                         color: Theme.of(context)
                             .colorScheme
                             .onSurface
-                            .withOpacity(0.82),
+                            .withValues(alpha: 0.82),
                         height: 1.45,
                       ),
                   maxLines: 4,
@@ -194,7 +194,7 @@ class _ExpandableTileState extends State<ExpandableTile> {
                       color: Theme.of(context)
                           .colorScheme
                           .onSurface
-                          .withOpacity(0.62),
+                          .withValues(alpha: 0.62),
                     ),
                     const SizedBox(width: 4),
                     Expanded(
@@ -205,7 +205,7 @@ class _ExpandableTileState extends State<ExpandableTile> {
                               color: Theme.of(context)
                                   .colorScheme
                                   .onSurface
-                                  .withOpacity(0.72),
+                                  .withValues(alpha: 0.72),
                             ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -269,31 +269,24 @@ class _TimelineActionChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(999),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: color.withOpacity(0.2)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 14, color: color),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: color,
-                    fontWeight: FontWeight.w700,
-                  ),
+    return TextButton.icon(
+      onPressed: onTap,
+      style: TextButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+        foregroundColor: color,
+        alignment: Alignment.centerLeft,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      icon: Icon(icon, size: 14, color: color),
+      label: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.2,
             ),
-          ],
-        ),
       ),
     );
   }
 }
+

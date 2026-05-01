@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:trial1/models/academic_models.dart';
+import 'package:trial1/theme.dart';
 
-/// Individual search result card with category indicator, title, and summary.
 class SearchResultCard extends StatelessWidget {
   final AcademicItem item;
   final VoidCallback onTap;
@@ -12,85 +12,48 @@ class SearchResultCard extends StatelessWidget {
     required this.onTap,
   });
 
-  Color _getCategoryColor(String? category) {
-    switch (category?.toUpperCase()) {
-      case 'ASSIGNMENT':
-        return Colors.blue;
-      case 'EXAM':
-        return Colors.red;
-      case 'OPPORTUNITY':
-        return Colors.green;
-      case 'ACADEMIC_ADMIN':
-        return Colors.orange;
-      case 'INFORMATION':
-        return Colors.purple;
-      default:
-        return Colors.grey;
-    }
-  }
-
   String _formatDueDate(DateTime? dueDate) {
     if (dueDate == null) return '';
-    
+
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final dueDateOnly = DateTime(dueDate.year, dueDate.month, dueDate.day);
     final tomorrow = today.add(const Duration(days: 1));
-    
-    if (dueDateOnly == today) {
-      return 'Today';
-    } else if (dueDateOnly == tomorrow) {
-      return 'Tomorrow';
-    } else if (dueDateOnly.isBefore(today)) {
-      return 'Overdue';
-    } else {
-      return dueDateOnly.toString().split(' ')[0];
-    }
+
+    if (dueDateOnly == today) return 'Today';
+    if (dueDateOnly == tomorrow) return 'Tomorrow';
+    if (dueDateOnly.isBefore(today)) return 'Overdue';
+    return '${dueDateOnly.year}-${dueDateOnly.month.toString().padLeft(2, '0')}-${dueDateOnly.day.toString().padLeft(2, '0')}';
   }
 
   @override
   Widget build(BuildContext context) {
-    final categoryColor = _getCategoryColor(item.entityType);
+    final meta = academicCategoryMeta(item.entityType);
     final dueDateText = _formatDueDate(item.dueDate);
-    
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            // Light mode: visible borders for card separation
-            border: Theme.of(context).brightness == Brightness.light
-                ? Border(
-                    left: BorderSide(
-                      color: categoryColor,
-                      width: 4,
-                    ),
-                    right: BorderSide(
-                      color: Colors.grey.shade300,
-                      width: 1,
-                    ),
-                    top: BorderSide(
-                      color: Colors.grey.shade300,
-                      width: 1,
-                    ),
-                    bottom: BorderSide(
-                      color: Colors.grey.shade300,
-                      width: 1,
-                    ),
-                  )
-                : Border(
-                    left: BorderSide(
-                      color: categoryColor,
-                      width: 4,
-                    ),
-                  ),
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: meta.color.withValues(alpha: 0.14)),
           ),
           child: Row(
             children: [
-              const SizedBox(width: 4),
-              // Title + Summary column
+              Container(
+                width: 10,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: meta.color,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -99,44 +62,38 @@ class SearchResultCard extends StatelessWidget {
                       item.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                    ),
-                    if (item.aiSummary != null && item.aiSummary!.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Text(
-                          item.aiSummary!,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                            fontWeight: FontWeight.w700,
                           ),
-                        ),
+                    ),
+                    if (item.aiSummary?.trim().isNotEmpty ?? false) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        item.aiSummary!,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
                       ),
+                    ],
                   ],
                 ),
               ),
               const SizedBox(width: 12),
-              // Due date badge
               if (dueDateText.isNotEmpty)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
                   decoration: BoxDecoration(
-                    color: categoryColor.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(6),
+                    color: meta.color.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(999),
                   ),
                   child: Text(
                     dueDateText,
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w500,
-                      color: categoryColor,
-                    ),
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: meta.color,
+                          fontWeight: FontWeight.w700,
+                        ),
                   ),
                 ),
             ],

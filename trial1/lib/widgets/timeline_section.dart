@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import 'package:trial1/theme.dart';
 import 'package:trial1/widgets/expandable_tile.dart';
 
 class TimelineSection extends StatelessWidget {
@@ -21,150 +19,113 @@ class TimelineSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (groups.isEmpty) return _buildStaticTimeline(context);
+    if (groups.isEmpty) {
+      return _buildEmptyState(context);
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: groups.map((g) => _buildGroup(context, g)).toList(),
+      children: groups
+          .map((group) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _TimelineGroupCard(
+                  group: group,
+                  onItemTap: onItemTap,
+                  onMarkCompleted: onMarkCompleted,
+                  onAddToCalendar: onAddToCalendar,
+                  onDismiss: onDismiss,
+                ),
+              ))
+          .toList(),
     );
   }
 
-  Widget _buildStaticTimeline(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Timeline',
-          style: Theme.of(
-            context,
-          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-        ),
-        const SizedBox(height: 8),
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [Text('No upcoming items')],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildGroup(BuildContext context, Map<String, dynamic> group) {
-    final dateLabel = group['date'] as String? ?? 'Upcoming';
-    final items = (group['items'] as List<dynamic>? ?? [])
-        .cast<Map<String, dynamic>>();
-
-    // Skip empty groups
-    if (items.isEmpty) return const SizedBox.shrink();
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            dateLabel,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: Theme.of(context).colorScheme.primary,
-              fontWeight: FontWeight.w700,
+  Widget _buildEmptyState(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.36),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Theme.of(context).dividerColor.withValues(alpha: 0.45)),
+      ),
+      child: Text(
+        'No upcoming items',
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
-          ),
-          const SizedBox(height: 6),
-          ...items.map(
-            (it) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6.0),
-              child: ExpandableTile(
-                event: it,
-                onTap: () => onItemTap(it),
-                onMarkCompleted: onMarkCompleted == null
-                    ? null
-                    : () {
-                        onMarkCompleted!(it);
-                      },
-                onAddToCalendar: onAddToCalendar == null
-                    ? null
-                    : () {
-                        onAddToCalendar!(it);
-                      },
-                onDismiss: onDismiss == null
-                    ? null
-                    : () {
-                        onDismiss!(it);
-                      },
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
 }
 
-class _TimelineEventTile extends StatelessWidget {
-  final Map<String, dynamic> event;
-  final VoidCallback onTap;
+class _TimelineGroupCard extends StatelessWidget {
+  final Map<String, dynamic> group;
+  final void Function(Map<String, dynamic>) onItemTap;
+  final Future<void> Function(Map<String, dynamic>)? onMarkCompleted;
+  final Future<void> Function(Map<String, dynamic>)? onAddToCalendar;
+  final Future<void> Function(Map<String, dynamic>)? onDismiss;
 
-  const _TimelineEventTile({required this.event, required this.onTap});
+  const _TimelineGroupCard({
+    required this.group,
+    required this.onItemTap,
+    this.onMarkCompleted,
+    this.onAddToCalendar,
+    this.onDismiss,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final type = event['type'] as String? ?? 'INFORMATION';
-    final title = event['title'] as String? ?? '';
-    final timeIso = event['time'] as String?;
-    String subtitle = '';
-    if (timeIso != null) {
-      try {
-        final dt = DateTime.parse(timeIso).toLocal();
-        subtitle = DateFormat.jm().format(dt);
-      } catch (_) {
-        subtitle = timeIso;
-      }
-    }
-    final color = topicColor(type);
+    final dateLabel = group['date'] as String? ?? 'Upcoming';
+    final items = (group['items'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
 
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6.0),
-        child: Row(
-          children: [
-            Container(
-              width: 4,
-              height: 32,
-              decoration: BoxDecoration(
-                color: color,
-                borderRadius: BorderRadius.circular(2),
+    if (items.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.42),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Theme.of(context).dividerColor.withValues(alpha: 0.5)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.8),
+                  shape: BoxShape.circle,
+                ),
               ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
+              const SizedBox(width: 8),
+              Text(
+                dateLabel,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.12,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  Text(
-                    subtitle,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.onSurface.withOpacity(0.6),
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
               ),
-            ),
-          ],
-        ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ...items.asMap().entries.map((entry) {
+            final isLast = entry.key == items.length - 1;
+            return Padding(
+              padding: EdgeInsets.only(bottom: isLast ? 0 : 10),
+              child: ExpandableTile(
+                event: entry.value,
+                onTap: () => onItemTap(entry.value),
+                onMarkCompleted: onMarkCompleted == null ? null : () => onMarkCompleted!(entry.value),
+                onAddToCalendar: onAddToCalendar == null ? null : () => onAddToCalendar!(entry.value),
+                onDismiss: onDismiss == null ? null : () => onDismiss!(entry.value),
+              ),
+            );
+          }),
+        ],
       ),
     );
   }

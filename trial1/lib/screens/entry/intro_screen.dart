@@ -3,7 +3,9 @@ import 'widgets/branding_section.dart';
 import 'widgets/auth_card.dart';
 
 class IntroScreen extends StatelessWidget {
-  const IntroScreen({super.key});
+  final VoidCallback? onAuthSuccess;
+
+  const IntroScreen({super.key, this.onAuthSuccess});
 
   @override
   Widget build(BuildContext context) {
@@ -34,9 +36,9 @@ class IntroScreen extends StatelessWidget {
                         const SizedBox(width: 60),
                         ConstrainedBox(
                           constraints: const BoxConstraints(maxWidth: 420),
-                          child: const Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 48),
-                            child: AuthCard(),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 48),
+                            child: AuthCard(onAuthSuccess: onAuthSuccess),
                           ),
                         ),
                       ],
@@ -63,7 +65,7 @@ class IntroScreen extends StatelessWidget {
                       const SizedBox(height: 20),
                       ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 520),
-                        child: const AuthCard(),
+                        child: AuthCard(onAuthSuccess: onAuthSuccess),
                       ),
                     ],
                   ),
@@ -86,7 +88,7 @@ class _IntroFooter extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Text(
-        '© 2026 Uni-Dash. All rights reserved.',
+        '© 2026 Notify-Sphere. All rights reserved.',
         style: Theme.of(context).textTheme.bodySmall,
         textAlign: TextAlign.center,
       ),

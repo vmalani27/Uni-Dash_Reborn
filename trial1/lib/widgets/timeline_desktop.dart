@@ -2,9 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:trial1/theme.dart';
 
-/// Enhanced timeline widget for desktop/tablet side-panel display.
-/// More visually prominent than TimelineCompact while maintaining density.
-/// Features: type icons, color indicators, time labels, better spacing & typography.
 class TimelineDesktop extends StatelessWidget {
   final List<Map<String, dynamic>> groups;
   final void Function(Map<String, dynamic>)? onItemTap;
@@ -19,80 +16,78 @@ class TimelineDesktop extends StatelessWidget {
   Widget build(BuildContext context) {
     if (groups.isEmpty) {
       return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12.0),
+        padding: const EdgeInsets.symmetric(vertical: 8.0),
         child: Text(
           'No upcoming items',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
-          ),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
         ),
       );
     }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: groups
-          .map((group) => _buildDesktopGroup(context, group))
-          .toList(),
+      children: groups.map((group) => _buildGroup(context, group)).toList(),
     );
   }
 
-  Widget _buildDesktopGroup(
-    BuildContext context,
-    Map<String, dynamic> group,
-  ) {
+  Widget _buildGroup(BuildContext context, Map<String, dynamic> group) {
     final dateLabel = group['date'] as String? ?? 'Upcoming';
-    final items = (group['items'] as List<dynamic>? ?? [])
-        .cast<Map<String, dynamic>>();
-
+    final items = (group['items'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
     if (items.isEmpty) return const SizedBox.shrink();
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Date header with subtle accent
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4.0),
-            child: Row(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.32),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: Theme.of(context).dividerColor.withValues(alpha: 0.45)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
                 Container(
-                  width: 2,
-                  height: 14,
+                  width: 8,
+                  height: 8,
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(1),
+                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.75),
+                    shape: BoxShape.circle,
                   ),
                 ),
-                const SizedBox(width: 6),
+                const SizedBox(width: 8),
                 Text(
                   dateLabel,
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                    fontWeight: FontWeight.w600,
-                    fontSize: 11,
-                    letterSpacing: 0.2,
-                  ),
+                        fontWeight: FontWeight.w800,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                 ),
               ],
             ),
-          ),
-          const SizedBox(height: 6),
-          ...items.asMap().entries.map((entry) {
-            final isLast = entry.key == items.length - 1;
-            return _buildDesktopItem(context, entry.value, isLast);
-          }).toList(),
-        ],
+            const SizedBox(height: 10),
+            ...items.take(3).map((item) => _buildItem(context, item)),
+            if (items.length > 3)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  '+${items.length - 3} more',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildDesktopItem(
-    BuildContext context,
-    Map<String, dynamic> item,
-    bool isLast,
-  ) {
+  Widget _buildItem(BuildContext context, Map<String, dynamic> item) {
     final title = item['title'] as String? ?? '';
     final timeIso = item['time'] as String?;
     final type = item['type'] as String? ?? 'INFORMATION';
@@ -107,112 +102,68 @@ class TimelineDesktop extends StatelessWidget {
       }
     }
 
-    final meta = academicCategoryMeta(type);
-    final color = meta.color;
-    final icon = _iconForType(type);
+    final color = topicColor(type);
 
     return Padding(
-      padding: EdgeInsets.only(
-        left: 10.0,
-        bottom: isLast ? 0 : 4.0,
-      ),
+      padding: const EdgeInsets.only(bottom: 8),
       child: InkWell(
+        borderRadius: BorderRadius.circular(14),
         onTap: onItemTap == null ? null : () => onItemTap!(item),
-        borderRadius: BorderRadius.circular(6),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 6.0),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.58),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: color.withValues(alpha: 0.14)),
+          ),
           child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // Timeline connector circle
-              Column(
-                children: [
-                  Container(
-                    width: 20,
-                    height: 20,
-                    decoration: BoxDecoration(
-                      color: color.withOpacity(0.1),
-                      border: Border.all(
-                        color: color.withOpacity(0.4),
-                        width: 1.5,
-                      ),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(
-                      icon,
-                      size: 10,
-                      color: color,
-                    ),
-                  ),
-                  if (!isLast)
-                    Container(
-                      width: 1.5,
-                      height: 12,
-                      color: color.withOpacity(0.15),
-                    ),
-                ],
+              Container(
+                width: 9,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius: BorderRadius.circular(999),
+                ),
               ),
-              const SizedBox(width: 8),
-              // Content: title and time on same line
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Title + Time combined
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            title,
-                            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                              fontWeight: FontWeight.w500,
-                              fontSize: 12,
-                              color: Theme.of(context).colorScheme.onSurface,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
                           ),
-                        ),
-                        if (timeLabel.isNotEmpty) ...[
-                          const SizedBox(width: 3),
-                          Text(
-                            timeLabel,
-                            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
-                              fontSize: 9,
-                            ),
-                          ),
-                        ],
-                      ],  // Closes Row children array
                     ),
-                    // Type badge (subtle)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 2.0),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 5,
-                          vertical: 1,
-                        ),
-                        decoration: BoxDecoration(
-                          color: color.withOpacity(0.08),
-                          borderRadius: BorderRadius.circular(3),
-                          border: Border.all(
-                            color: color.withOpacity(0.15),
-                            width: 0.5,
-                          ),
-                        ),
-                        child: Text(
-                          type.replaceAll('_', ' ').toUpperCase(),
-                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: color,
-                            fontSize: 8,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.2,
-                          ),
-                        ),
+                    if (timeLabel.isNotEmpty) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        timeLabel,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
                       ),
-                    ),
+                    ],
                   ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  type.replaceAll('_', ' '),
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: color,
+                        fontWeight: FontWeight.w700,
+                      ),
                 ),
               ),
             ],
@@ -220,22 +171,5 @@ class TimelineDesktop extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  IconData _iconForType(String type) {
-    switch (type.toUpperCase()) {
-      case 'ASSIGNMENT':
-        return Icons.assignment;
-      case 'EXAM':
-        return Icons.event_note;
-      case 'ACADEMIC_ADMIN':
-        return Icons.info;
-      case 'OPPORTUNITY':
-        return Icons.lightbulb;
-      case 'INFORMATION':
-        return Icons.notifications;
-      default:
-        return Icons.event;
-    }
   }
 }

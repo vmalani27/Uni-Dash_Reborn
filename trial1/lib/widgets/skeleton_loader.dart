@@ -50,7 +50,7 @@ class SkeletonProfileHeader extends StatelessWidget {
           height: 100,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
-            color: Colors.white.withOpacity(0.05),
+            color: Colors.white.withValues(alpha: 0.05),
           ),
           child: const Padding(
             padding: EdgeInsets.all(20.0),
@@ -140,3 +140,4 @@ class SkeletonNotificationList extends StatelessWidget {
     );
   }
 }
+

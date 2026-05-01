@@ -76,7 +76,6 @@ def send_admin_broadcast(
                 ai_label_source=getattr(temp, 'ai_label_source', None) or (ai_result.get('source') if ai_result else None),
                 deadline_iso=getattr(temp, 'deadline_iso', None),
                 deadline_confidence=getattr(temp, 'deadline_confidence', None) or (ai_result.get('deadline_confidence') if ai_result else None),
-                academic_score=getattr(temp, 'academic_score', None) or (ai_result.get('academic_score') if ai_result else 0),
                 notes=None
             )
             db.add(b)

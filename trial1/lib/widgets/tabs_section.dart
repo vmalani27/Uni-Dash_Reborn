@@ -49,7 +49,7 @@ class _TabsSectionState extends State<TabsSection>
                     color: selected
                         ? Theme.of(
                             context,
-                          ).colorScheme.primary.withOpacity(0.12)
+                          ).colorScheme.primary.withValues(alpha: 0.12)
                         : Colors.transparent,
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -99,7 +99,7 @@ class _TabsSectionState extends State<TabsSection>
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: Theme.of(
                     context,
-                  ).colorScheme.onSurface.withOpacity(0.6),
+                  ).colorScheme.onSurface.withValues(alpha: 0.6),
                 ),
               ),
             )
@@ -121,12 +121,12 @@ class _TabsSectionState extends State<TabsSection>
                       borderRadius: BorderRadius.circular(14),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.04),
+                          color: Colors.black.withValues(alpha: 0.04),
                           blurRadius: 8,
                           offset: const Offset(0, 4),
                         ),
                       ],
-                      border: Border.all(color: color.withOpacity(0.15)),
+                      border: Border.all(color: color.withValues(alpha: 0.15)),
                     ),
                     padding: const EdgeInsets.all(12),
                     child: Column(
@@ -173,7 +173,7 @@ class _TabsSectionState extends State<TabsSection>
                                 size: 14,
                                 color: Theme.of(
                                   context,
-                                ).colorScheme.onSurface.withOpacity(0.5),
+                                ).colorScheme.onSurface.withValues(alpha: 0.5),
                               ),
                               const SizedBox(width: 4),
                               Text(
@@ -182,7 +182,7 @@ class _TabsSectionState extends State<TabsSection>
                                     ?.copyWith(
                                       color: Theme.of(
                                         context,
-                                      ).colorScheme.onSurface.withOpacity(0.6),
+                                      ).colorScheme.onSurface.withValues(alpha: 0.6),
                                     ),
                               ),
                             ],
@@ -208,3 +208,4 @@ class _TabsSectionState extends State<TabsSection>
     return DateFormat('MMM d').format(date);
   }
 }
+

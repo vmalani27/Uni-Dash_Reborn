@@ -3,10 +3,10 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_supabase_db
 from app.models.user import User
-from app.models.schemas.user_schema import UserOut, UserProfileSetup, UserOAuthStatusOut
+from app.models.schemas.user_schema import UserOut, UserProfileSetup, UserOAuthStatusOut, ProfileCreate, ProfileUpdate
 from app.utils.firebase_util import verify_firebase_token
 from app.models.oauthToken import OAuthToken
-from app.models.gmail.gmail_message import GmailSyncStatus
+from app.models.gmail.gmail_sync_status import GmailSyncStatus
 
 """
 User-related routes.
@@ -54,7 +54,11 @@ def get_or_create_user(
 
     # Optional fields depending on Firebase auth provider
     email = firebase_data.get("email", "")
-    name = firebase_data.get("name", "")
+    full_name = firebase_data.get("name", "") or firebase_data.get("full_name", "")
+    # Provide sensible defaults for required fields if not present
+    degree = "BTech"
+    branch = "CSE"
+    admission_year = 2023
 
     # User records are always queried by UID to enforce ownership
     user = db.query(User).filter(User.uid == uid).first()
@@ -64,7 +68,10 @@ def get_or_create_user(
         user = User(
             uid=uid,
             email=email,
-            name=name,
+            full_name=full_name,
+            degree=degree,
+            branch=branch,
+            admission_year=admission_year,
             profile_completed=False,
         )
         db.add(user)
@@ -98,9 +105,10 @@ def get_or_create_user(
     return UserOut(
         uid=user.uid,
         email=user.email,
-        name=user.name,
-        semester=user.semester,
+        full_name=user.full_name,
+        degree=user.degree,
         branch=user.branch,
+        admission_year=user.admission_year,
         sid=user.sid,
         profile_completed=user.profile_completed,
         oauth_connected=oauth_connected,
@@ -161,9 +169,11 @@ def update_profile(
         raise HTTPException(status_code=404, detail="User not found")
 
     # Apply validated profile fields
-    user.name = data.name
+
+    user.full_name = data.full_name
+    user.degree = data.degree
     user.branch = data.branch
-    user.semester = data.semester
+    user.admission_year = data.admission_year
     user.sid = data.sid
 
     # Profile is considered completed once these fields are set
@@ -174,9 +184,56 @@ def update_profile(
     return user
 
 
+@router.patch("/profile-setup", response_model=UserOut)
+def update_profile_partial(
+    data: ProfileUpdate,
+    firebase_data=Depends(verify_firebase_token),
+    db: Session = Depends(get_supabase_db),
+):
+    """
+    Partially update an existing user's profile.
+
+    Behavior:
+    - Only fields explicitly provided in the request are updated
+    - Omitted fields remain unchanged
+    - At least one field must be provided
+
+    Security considerations:
+    - UID is derived from the Firebase token, not request input
+    - A user can only update their own profile
+    - Immutable fields (full_name, degree, sid) cannot be updated via this endpoint
+
+    Use case:
+    - User modifies branch or admission_year after profile creation
+    - Minimal payload sent to backend (only changed fields)
+    - No 422 validation errors due to missing immutable fields
+
+    Example payloads:
+    - {"branch": "ECE"}
+    - {"admission_year": 2023}
+    - {"branch": "ECE", "admission_year": 2023}
+    """
+
+    uid = firebase_data["uid"]
+
+    user = db.query(User).filter(User.uid == uid).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Only update fields that are explicitly provided (not None)
+    if data.branch is not None:
+        user.branch = data.branch
+    if data.admission_year is not None:
+        user.admission_year = data.admission_year
+
+    db.commit()
+    db.refresh(user)
+    return user
+
+
 @router.post("/profile-setup", response_model=UserOut)
 def create_profile(
-    data: UserProfileSetup,
+    data: ProfileCreate,
     firebase_data=Depends(verify_firebase_token),
     db: Session = Depends(get_supabase_db),
 ):
@@ -187,9 +244,8 @@ def create_profile(
     - Functionally similar to PUT /profile-setup
     - Exists to support frontend flows that distinguish
       between "first-time setup" and "edit profile"
-
-    This endpoint does NOT create a new user record.
-    User records are created during the first authenticated request.
+    - This endpoint does NOT create a new user record.
+      User records are created during the first authenticated request.
     """
 
     uid = firebase_data["uid"]
@@ -198,9 +254,10 @@ def create_profile(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    user.name = data.name
+    user.full_name = data.full_name
+    user.degree = data.degree
     user.branch = data.branch
-    user.semester = data.semester
+    user.admission_year = data.admission_year
     user.sid = data.sid
     user.profile_completed = True
 

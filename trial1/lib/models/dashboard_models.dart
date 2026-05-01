@@ -18,9 +18,10 @@ class UnifiedDashboardData {
   // Helper to convert minimal dashboard item JSON into AcademicItem
   static AcademicItem _toAcademicItem(Map<String, dynamic> json) {
     DateTime? due;
-    if (json['due_date'] != null) {
+    final rawDue = json['due_date'] ?? json['due_at'];
+    if (rawDue != null) {
       try {
-        due = DateTime.parse(json['due_date'] as String).toLocal();
+        due = DateTime.parse(rawDue as String).toLocal();
       } catch (_) {
         due = null;
       }
@@ -33,6 +34,7 @@ class UnifiedDashboardData {
       sourceEmailId: json['source_email_id'] as String? ?? '',
       entityType:
           (json['entity_type'] as String?) ??
+          (json['category'] as String?) ??
           (json['type'] as String?) ??
           'INFORMATION',
       title: json['title'] as String? ?? 'Untitled',
@@ -41,20 +43,21 @@ class UnifiedDashboardData {
       location: json['location'] as String?,
       courseCode: json['course_code'] as String?,
       professor: json['professor'] as String?,
-        academicScore:
+      academicScore:
           (json['effective_score'] as num?)?.toDouble() ??
           (json['academic_score'] as num?)?.toDouble() ??
+          (json['priority'] as num?)?.toDouble() ??
           0.0,
       completed: json['completed'] as bool? ?? false,
-        dismissed: json['dismissed'] as bool? ?? false,
-        status: json['status'] as String?,
-        rawAcademicScore: (json['raw_academic_score'] as num?)?.toDouble(),
-        effectiveScore: (json['effective_score'] as num?)?.toDouble(),
-        decayFactor: (json['decay_factor'] as num?)?.toDouble(),
-        lastUpdatedAt: json['last_updated_at'] != null
+      dismissed: json['dismissed'] as bool? ?? false,
+      status: json['status'] as String?,
+      rawAcademicScore: (json['raw_academic_score'] as num?)?.toDouble(),
+      effectiveScore: (json['effective_score'] as num?)?.toDouble(),
+      decayFactor: (json['decay_factor'] as num?)?.toDouble(),
+      lastUpdatedAt: json['last_updated_at'] != null
           ? DateTime.parse(json['last_updated_at'] as String).toLocal()
           : null,
-        snoozedUntil: json['snoozed_until'] != null
+      snoozedUntil: json['snoozed_until'] != null
           ? DateTime.parse(json['snoozed_until'] as String).toLocal()
           : null,
       aiSummary: json['ai_summary'] as String?,
@@ -70,6 +73,14 @@ class UnifiedDashboardData {
   }
 
   factory UnifiedDashboardData.fromJson(Map<String, dynamic> json) {
+    const dashboardKeys = [
+      'ASSIGNMENT',
+      'EXAM',
+      'ACADEMIC_ADMIN',
+      'OPPORTUNITY',
+      'INFORMATION',
+    ];
+
     // focus: may be an object or null
     final focusObj = json['focus'];
     final focusList = <AcademicItem>[];
@@ -84,29 +95,32 @@ class UnifiedDashboardData {
     }
 
     final academicItemsRaw = json['academic_items'] as List<dynamic>? ?? [];
+    final academicItems = <AcademicItem>[];
     for (final item in academicItemsRaw) {
       if (item is Map<String, dynamic>) {
-        // Ensure the legacy academic_items contract can still be consumed later.
-        // Parsed items are not merged into focus/grouped here yet.
-        _toAcademicItem(item);
+        academicItems.add(_toAcademicItem(item));
       }
     }
 
     // groups: map of arrays
     final groupedRaw = json['groups'] as Map<String, dynamic>? ?? {};
     final groupedMap = <String, List<AcademicItem>>{};
-    for (final key in [
-      'ASSIGNMENT',
-      'EXAM',
-      'ACADEMIC_ADMIN',
-      'OPPORTUNITY',
-      'INFORMATION',
-    ]) {
+    for (final key in dashboardKeys) {
       final listRaw = groupedRaw[key] as List<dynamic>? ?? [];
       groupedMap[key] = listRaw
           .whereType<Map<String, dynamic>>()
           .map(_toAcademicItem)
           .toList();
+    }
+
+    final hasGroupedItems = groupedMap.values.any((items) => items.isNotEmpty);
+    if (!hasGroupedItems && academicItems.isNotEmpty) {
+      for (final item in academicItems) {
+        final key = dashboardKeys.contains(item.entityType.toUpperCase())
+            ? item.entityType.toUpperCase()
+            : 'INFORMATION';
+        groupedMap[key]!.add(item);
+      }
     }
 
     // timeline: list of {date, items: [{id,title,time,type}]}
@@ -140,7 +154,51 @@ class UnifiedDashboardData {
       }
     }
 
+    if (timelineGroups.isEmpty && academicItems.isNotEmpty) {
+      final buckets = <String, List<Map<String, dynamic>>>{
+        'Today': [],
+        'Tomorrow': [],
+        'This Week': [],
+      };
+      final now = DateTime.now();
+
+      for (final item in academicItems) {
+        final dueDate = item.dueDate;
+        if (dueDate == null) continue;
+
+        final dueDay = DateTime(dueDate.year, dueDate.month, dueDate.day);
+        final today = DateTime(now.year, now.month, now.day);
+        final deltaDays = dueDay.difference(today).inDays;
+
+        String? bucket;
+        if (deltaDays == 0) {
+          bucket = 'Today';
+        } else if (deltaDays == 1) {
+          bucket = 'Tomorrow';
+        } else if (deltaDays > 1 && deltaDays <= 7) {
+          bucket = 'This Week';
+        }
+
+        if (bucket == null) continue;
+
+        timelineItems.add(item);
+        buckets[bucket]!.add({
+          'id': 'item-${item.id}',
+          'title': item.title,
+          'time': dueDate.toIso8601String(),
+          'type': item.entityType,
+        });
+      }
+
+      for (final key in ['Today', 'Tomorrow', 'This Week']) {
+        timelineGroups.add({'date': key, 'items': buckets[key]});
+      }
+    }
+
     final bannerObj = json['banner'] as Map<String, dynamic>?;
+    if (focusList.isEmpty && academicItems.isNotEmpty) {
+      focusList.add(academicItems.first);
+    }
 
     return UnifiedDashboardData(
       focus: focusList,
@@ -151,3 +209,4 @@ class UnifiedDashboardData {
     );
   }
 }
+

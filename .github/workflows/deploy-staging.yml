@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - staging
+    paths:
+      - 'backend/**'
+      - '.github/workflows/deploy-staging.yml'
+  workflow_dispatch:
 
 jobs:
   deploy-staging:
@@ -25,30 +29,10 @@ jobs:
          
           fi
 
-      - name: Build Docker image
+      - name: Deploy staging backend stack with Redis
         working-directory: backend
-        run: docker build -t unidash-backend-staging .
-
-      - name: Stop old container
         run: |
-          docker stop unidash-backend-staging || true
-          docker rm unidash-backend-staging || true
+          docker compose -p unidash-staging -f docker-compose.staging.yml up -d --build --remove-orphans
 
-      - name: Start new container
-        run: |
-          # Note: Staging bound to port 8001 on the host, 8000 in container
-          docker run -d \
-          --name unidash-backend-staging \
-          --restart unless-stopped \
-          -p 8001:8000 \
-          --health-cmd "curl -f http://localhost:8000/health || exit 1" \
-          --health-interval 30s \
-          --health-timeout 10s \
-          --health-retries 3 \
-          -v ${{ github.workspace }}/backend/.env.staging:/backend/.env \
-          -v ${{ github.workspace }}/backend/credentials.json:/backend/app/core/credentials.json \
-          unidash-backend-staging
-    
-
-      - name: Clean Unused Containers
+      - name: Clean unused images
         run: docker image prune -f

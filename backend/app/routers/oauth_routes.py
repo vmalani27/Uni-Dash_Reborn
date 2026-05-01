@@ -6,15 +6,16 @@ import secrets
 from cryptography.fernet import Fernet
 
 from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
-from fastapi.responses import RedirectResponse, JSONResponse
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.jobs.gmail_sync_job import initial_gmail_sync
-from app.core.database import get_supabase_db, SupabaseSessionLocal
+from app.core.database import get_supabase_db, supabase_session_scope
 from app.models.oauthToken import OAuthToken
 from app.models.user import User
 from app.utils.firebase_util import verify_firebase_token
 from app.utils.encryption import encrypt_token, decrypt_token
+from app.services.gmail_service import GmailService
 
 
 
@@ -31,6 +32,7 @@ GOOGLE_REVOKE_URL = "https://oauth2.googleapis.com/revoke"
 
 CLIENT_ID = os.getenv("CLIENT_ID")
 CLIENT_SECRET = os.getenv("CLIENT_SECRET")
+INITIAL_SYNC_LIMIT = int(os.getenv("INITIAL_GMAIL_SYNC_LIMIT", "20"))
 
 
 def _get_redirect_url() -> str:
@@ -223,35 +225,40 @@ def google_callback(
     db.commit()
 
 
-    # Trigger initial Gmail sync in the background
-    # Why: Ensures user's Gmail is synced immediately after OAuth, without blocking the HTTP response.
+    # Trigger initial Gmail sync and start Pub/Sub watch in the background
+    # Why: Ensures user's Gmail is synced immediately after OAuth and Pub/Sub is activated.
     
     
-    print(f"Oauth logs: Triggering initial Gmail sync for user {uid}")
+    print(f"Oauth logs: Triggering initial Gmail sync and Pub/Sub watch for user {uid}")
     if background_tasks is not None:
 
-        def sync_task(uid: str, limit: int):
-            # Background task to perform initial Gmail sync for the user.
-            # Why: Creates its own DB sessions for thread safety, syncs Gmail, and cleans up resources.
-            supabase_db = SupabaseSessionLocal()
-            try:
+        def sync_and_watch_task(uid: str, limit: int):
+            # Background task to perform initial Gmail sync and start Pub/Sub watch.
+            # Why: Creates its own DB sessions for thread safety, syncs Gmail, activates Pub/Sub, and cleans up resources.
+            with supabase_session_scope("oauth_callback_sync_watch_task") as supabase_db:
                 initial_gmail_sync(uid, supabase_db, limit)
-            except Exception:
-                supabase_db.rollback()
-                raise
-            finally:
-                supabase_db.close()
+                
+                # Get Pub/Sub topic from environment or use default
+                topic_name = os.getenv(
+                    "GMAIL_PUBSUB_TOPIC",
+                    "projects/f-r-i-d-a-y-vlelfh/topics/gmail-notifications"
+                )
+                
+                try:
+                    print(f"Oauth logs: Starting Gmail watch for user {uid} on topic {topic_name}")
+                    GmailService.start_gmail_watch(uid, supabase_db, topic_name)
+                    print(f"Oauth logs: Gmail watch started successfully for user {uid}")
+                except Exception as e:
+                    print(f"Oauth logs: WARNING - Failed to start Gmail watch for user {uid}: {e}")
+                    # Non-fatal error - sync already succeeded, watch can be retried daily
 
-        background_tasks.add_task(sync_task, uid, 100)
-        print(f"Oauth logs: Background task added for user {uid}")
+        background_tasks.add_task(sync_and_watch_task, uid, INITIAL_SYNC_LIMIT)
+        print(f"Oauth logs: Background task (sync + watch) added for user {uid}")
 
-    # Redirect to app using deep link or JSON for web
-    platform = request.headers.get("x-platform", "mobile")  # expected values: "web" or "mobile"
-    print(f"Oauth logs: Login succeeded, platform={platform}, redirect_to={redirect_to}")
-    if platform == "web":
-        return JSONResponse(content={"status": "success", "redirect_url": redirect_to})
-    else:
-        return RedirectResponse(url=redirect_to)
+    # Finalize OAuth in the browser by redirecting to the target URI captured in state.
+    # Google callback requests do not include custom headers like x-platform.
+    print(f"Oauth logs: Login succeeded, redirect_to={redirect_to}")
+    return RedirectResponse(url=redirect_to)
 
 
 @router.post("/disconnect")

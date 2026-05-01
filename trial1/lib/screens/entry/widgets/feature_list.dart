@@ -8,11 +8,11 @@ class FeatureList extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: const [
-        _FeatureRow(icon: Icons.filter_alt_outlined, text: 'AI-powered sorting'),
+        _FeatureRow(icon: Icons.folder_open_outlined, text: 'Organized course updates'),
         SizedBox(height: 8),
         _FeatureRow(icon: Icons.notifications_active_outlined, text: 'Deadline tracking'),
         SizedBox(height: 8),
-        _FeatureRow(icon: Icons.insights_outlined, text: 'Smart insights'),
+        _FeatureRow(icon: Icons.view_list_outlined, text: 'Clear priority view'),
       ],
     );
   }
@@ -28,8 +28,9 @@ class _FeatureRow extends StatelessWidget {
       children: [
         Icon(icon, color: Theme.of(context).colorScheme.primary, size: 20),
         const SizedBox(width: 10),
-        Text(text, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.75), fontSize: 15)),
+        Text(text, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.75), fontSize: 15)),
       ],
     );
   }
 }
+

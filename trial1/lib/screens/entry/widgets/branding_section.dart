@@ -23,14 +23,14 @@ class BrandingSection extends StatelessWidget {
             borderRadius: BorderRadius.circular(16),
           ),
           child: Center(
-            child: Icon(Icons.auto_awesome,
+            child: Icon(Icons.dashboard_outlined,
                 color: Theme.of(context).colorScheme.primary,
                 size: isMobile ? 28 : 36),
           ),
         ),
         SizedBox(height: isMobile ? 12 : 36),
         Text(
-          'UniDash',
+          'Notify-Sphere',
           style: theme.textTheme.displayLarge?.copyWith(
             color: Theme.of(context).colorScheme.onSurface,
             fontWeight: FontWeight.w900,
@@ -41,7 +41,7 @@ class BrandingSection extends StatelessWidget {
         ),
         SizedBox(height: isMobile ? 4 : 12),
         Text(
-          'AI Academic Assistant',
+          'Academic dashboard',
           style: theme.textTheme.titleMedium?.copyWith(
             color: Theme.of(context).colorScheme.primary,
             fontWeight: FontWeight.w600,
@@ -51,9 +51,9 @@ class BrandingSection extends StatelessWidget {
         ),
         SizedBox(height: isMobile ? 10 : 24),
         Text(
-          'Turn your university emails into organized, actionable insights. Stay focused, never miss a deadline.',
+          'Keep assignments, deadlines, and course updates in one clear workspace.',
           style: theme.textTheme.bodyLarge?.copyWith(
-            color: Theme.of(context).colorScheme.onSurface.withOpacity(0.85),
+            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.85),
             fontSize: isMobile ? 14 : 17,
             height: 1.5,
           ),
@@ -62,7 +62,7 @@ class BrandingSection extends StatelessWidget {
         if (!isMobile) ...[
           const SizedBox(height: 28),
           Divider(
-            color: Theme.of(context).colorScheme.surfaceContainerHighest.withOpacity(0.5),
+            color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
             thickness: 1,
             endIndent: isNarrow ? 0 : 120,
           ),
