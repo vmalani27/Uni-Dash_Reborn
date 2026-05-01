@@ -691,6 +691,30 @@ class GmailService:
         
         return watch_response
 
+    @staticmethod
+    def stop_gmail_watch(refresh_token: str, uid: str | None = None) -> bool:
+        """
+        Tell Gmail to stop sending push notifications for the current account.
+
+        Returns True when Gmail accepts the stop request, False otherwise.
+        """
+        access_token = get_access_token(decrypt_token(refresh_token))
+        headers = {"Authorization": f"Bearer {access_token}"}
+
+        print(f"[GMAIL WATCH] Stopping watch for user {uid[:8] if uid else 'unknown'}")
+        resp = requests.post(
+            "https://gmail.googleapis.com/gmail/v1/users/me/stop",
+            headers=headers,
+            timeout=10,
+        )
+
+        if resp.status_code not in (200, 204):
+            print(f"[GMAIL WATCH] Stop request failed for user {uid[:8] if uid else 'unknown'}: {resp.status_code} {resp.text}")
+            return False
+
+        print(f"[GMAIL WATCH] Watch stopped for user {uid[:8] if uid else 'unknown'}")
+        return True
+
 
 
 # Utility functions for message retrieval

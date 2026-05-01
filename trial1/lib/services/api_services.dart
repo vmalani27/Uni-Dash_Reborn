@@ -79,6 +79,19 @@ class BackendService {
 
   static final String webClientId = dotenv.env['oauth2_client_id_web']!;
 
+  static Future<dynamic> _getIdToken({bool forceRefresh = false}) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) throw Exception("No Firebase user");
+    return user.getIdToken(forceRefresh);
+  }
+
+  static bool _looksLikeTokenSkewError(String body) {
+    final lower = body.toLowerCase();
+    return lower.contains("token not yet valid") ||
+        lower.contains("used too early") ||
+        lower.contains("invalid or expired token");
+  }
+
   // Fetch Gmail notification previews (list-all)
   static Future<List<dynamic>> fetchGmailNotificationPreviews() async {
     final user = FirebaseAuth.instance.currentUser;
@@ -365,28 +378,35 @@ class BackendService {
      ======================= */
 
   static Future<Map<String, dynamic>> fetchUserProfile() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) throw Exception("No Firebase user");
-
-    final idToken = await user.getIdToken();
-
-    try {
-      final response = await http
+    Future<http.Response> doRequest({required bool forceRefresh}) async {
+      final idToken = await _getIdToken(forceRefresh: forceRefresh);
+      return http
           .get(
             Uri.parse("$baseUrl/user/profile"),
             headers: {"Authorization": "Bearer $idToken"},
           )
           .timeout(const Duration(seconds: 10));
+    }
 
+    try {
+      var response = await doRequest(forceRefresh: false);
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
-      } else if (response.statusCode == 401) {
-        throw Exception("Unauthorized. Please log in again.");
-      } else {
-        throw Exception(
-          "Backend error: ${response.statusCode} ${response.body}",
-        );
       }
+
+      if (response.statusCode == 401 && _looksLikeTokenSkewError(response.body)) {
+        await Future.delayed(const Duration(milliseconds: 600));
+        response = await doRequest(forceRefresh: true);
+        if (response.statusCode == 200) {
+          return jsonDecode(response.body);
+        }
+      }
+
+      if (response.statusCode == 401) {
+        throw Exception("Unauthorized. Please log in again.");
+      }
+
+      throw Exception("Backend error: ${response.statusCode} ${response.body}");
     } on TimeoutException {
       throw Exception("Request timed out.");
     }
@@ -411,10 +431,7 @@ class BackendService {
 
   // Fetch user-scoped OAuth + sync state (suitable for user profile UI)
   static Future<Map<String, dynamic>> fetchUserOAuthStatus() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) throw Exception("No Firebase user");
-
-    final idToken = await user.getIdToken();
+    final idToken = await _getIdToken();
     final response = await http
         .get(
           Uri.parse("$baseUrl/user/oauth/status"),
@@ -424,6 +441,18 @@ class BackendService {
 
     if (response.statusCode == 200) {
       return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+
+    if (response.statusCode == 401 && _looksLikeTokenSkewError(response.body)) {
+      final refreshed = await http
+          .get(
+            Uri.parse("$baseUrl/user/oauth/status"),
+            headers: {"Authorization": "Bearer ${await _getIdToken(forceRefresh: true)}"},
+          )
+          .timeout(const Duration(seconds: 8));
+      if (refreshed.statusCode == 200) {
+        return jsonDecode(refreshed.body) as Map<String, dynamic>;
+      }
     }
 
     throw Exception('Failed to fetch user oauth status: ${response.body}');

@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 
 # Load environment variables from .env and .env.local (prioritize .env.local for local dev)
 load_dotenv()
-load_dotenv(".env", override=True)
+load_dotenv(".env.staging", override=True)
 
 
 from app.routers import user_routers, oauth_routes, dashboard_routes

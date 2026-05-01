@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.jobs.gmail_sync_job import initial_gmail_sync
 from app.core.database import get_supabase_db, supabase_session_scope
 from app.models.oauthToken import OAuthToken
+from app.models.gmail.gmail_sync_status import GmailSyncStatus
 from app.models.user import User
 from app.utils.firebase_util import verify_firebase_token
 from app.utils.encryption import encrypt_token, decrypt_token
@@ -266,20 +267,27 @@ def disconnect_google_account(
     firebase_data=Depends(verify_firebase_token),
     db: Session = Depends(get_supabase_db),
 ):
-    """Hard disconnect: revoke Google token, remove local OAuth token, and reset OAuth flags."""
+    """Hard disconnect: stop Gmail watch, revoke Google token, remove local OAuth token, and reset OAuth flags."""
     uid = firebase_data["uid"]
 
     token = db.query(OAuthToken).filter(OAuthToken.uid == uid).first()
+    status = db.query(GmailSyncStatus).filter(GmailSyncStatus.uid == uid).first()
     user = db.query(User).filter(User.uid == uid).first()
 
+    watch_stopped = False
     revoked = False
     if token and token.refresh_token:
         try:
             plain_refresh_token = decrypt_token(token.refresh_token)
+            watch_stopped = GmailService.stop_gmail_watch(plain_refresh_token, uid=uid)
             revoked = _revoke_google_token(plain_refresh_token)
         except Exception as e:
-            # Do not block disconnect flow if Google revoke call fails.
-            print(f"[OAUTH] Token revoke failed for uid={uid[:8]}: {e}")
+            # Do not block disconnect flow if Gmail stop or Google revoke fails.
+            print(f"[OAUTH] Gmail disconnect cleanup failed for uid={uid[:8]}: {e}")
+
+    if status:
+        status.last_history_id = None
+        status.watch_expiration = None
 
     if token:
         db.delete(token)
@@ -294,5 +302,6 @@ def disconnect_google_account(
 
     return {
         "status": "disconnected",
+        "gmail_watch_stopped": watch_stopped,
         "google_revoked": revoked,
     }

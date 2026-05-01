@@ -7,7 +7,7 @@ from alembic import context
 from dotenv import load_dotenv
 
 # Load dotenv file by name if provided, otherwise fall back to ../.env
-dotenv_file = os.path.join(os.path.dirname(__file__), '..', '.env')
+dotenv_file = os.path.join(os.path.dirname(__file__), '..', '.env.staging')
 from pathlib import Path
 _dotenv_path = Path(dotenv_file)
 if _dotenv_path.exists():
@@ -89,14 +89,10 @@ def run_migrations_offline():
 
 
 def run_migrations_online():
-    db_url = URL.create(
-        drivername="postgresql+psycopg2",
-        username=os.getenv("DB_USER"),
-        password=os.getenv("DB_PASS"),
-        host=os.getenv("DB_HOST"),
-        port=int(os.getenv("DB_PORT")),
-        database=os.getenv("DB_NAME"),
-    )
+    db_url = os.getenv("USER_DATABASE_URL")
+
+    if not db_url:
+        raise Exception("DATABASE_URL not set")
 
     engine = create_engine(db_url)
 
@@ -109,7 +105,6 @@ def run_migrations_online():
 
         with context.begin_transaction():
             context.run_migrations()
-
 
 if context.is_offline_mode():
     run_migrations_offline()

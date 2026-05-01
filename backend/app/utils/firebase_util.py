@@ -19,9 +19,12 @@ async def verify_firebase_token(authorization: str | None = Header(None)):
     logging.info("Token extracted. Attempting to verify with Firebase Admin...")
 
     try:
-        decoded_token = auth.verify_id_token(id_token)
+        decoded_token = auth.verify_id_token(id_token, clock_skew_seconds=10)
         logging.info(f"Token verification succeeded. UID: {decoded_token.get('uid')}")
         return decoded_token
     except Exception as e:
         logging.error(f"Token verification failed: {e}")
+        message = str(e).lower()
+        if "used too early" in message or "not yet valid" in message:
+            raise HTTPException(status_code=401, detail="Token not yet valid. Retry shortly.")
         raise HTTPException(status_code=401, detail="Invalid or expired token")

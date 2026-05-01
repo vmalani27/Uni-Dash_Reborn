@@ -127,6 +127,9 @@ EMAIL BODY:
 SURFACE_EXTRACTION_PROMPT = """
 Return ONLY this JSON about the email intent view:
 {"action_required": true/false, "has_deadline": true/false, "deadline_text": "<YYYY-MM-DD or empty>", "is_exam": true/false, "is_submission": true/false, "is_mandatory": true/false, "is_opportunity": true/false}
+IMPORTANT:
+- "If interested", "apply", "register", "fill form", and "submit" should count as action_required when they imply a user action.
+- Optional does not mean ignorable if the email still requires the user to do something before a deadline.
 Return valid JSON only. Do not explain, do not include any other text.
 """
 
@@ -145,6 +148,7 @@ Your task:
 CRITICAL RULES:
 - TOPIC = PRIMARY INTENT, not keywords.
 - If action is required, prefer ACADEMIC_ADMIN over INFORMATION.
+- If the email says "if interested" but still asks the user to apply, register, fill a form, or submit something, treat it as actionable.
 - If the content is pure newsletter, advertisement, or spam, choose IGNORE.
 - If content is noisy but intent is clear, classify normally.
 - If content is missing or meaningless, choose IGNORE.
@@ -544,7 +548,7 @@ class AIService:
         if facts.get("is_submission") or any(word in text for word in ["assignment", "submit", "upload", "report", "project"]):
             return {"decision": "SUBMIT", "confidence": 0.9, "reasoning": "submission or assignment request", "label_topic": "ASSIGNMENT"}
 
-        if facts.get("is_opportunity") or any(word in text for word in ["internship", "hackathon", "workshop", "career", "placement", "opportunity"]):
+        if facts.get("is_opportunity") or any(word in text for word in ["internship", "hackathon", "workshop", "career", "placement", "opportunity", "apply", "register", "form"]):
             return {"decision": "OPPORTUNITY", "confidence": 0.85, "reasoning": "career or learning opportunity", "label_topic": "OPPORTUNITY"}
 
         if facts.get("is_mandatory") or any(word in text for word in ["mandatory", "registration", "fee", "policy", "attendance", "enrollment"]):
@@ -554,6 +558,24 @@ class AIService:
             return {"decision": "ACADEMIC_ADMIN", "confidence": 0.65, "reasoning": "action required from academic source", "label_topic": "ACADEMIC_ADMIN"}
 
         return {"decision": "IGNORE", "confidence": 0.55, "reasoning": "no meaningful academic action", "label_topic": "INFORMATION"}
+
+    @staticmethod
+    def _has_strong_signal(message: GmailMessage, cleaned_text: str) -> bool:
+        text = f"{message.subject or ''}\n{cleaned_text or ''}".lower()
+
+        if "deadline" in text or "due" in text:
+            return True
+
+        if re.search(r"\b(apply|register|fill|submit|respond|complete)\b", text):
+            return True
+
+        if re.search(r"\bform\b", text) and re.search(r"\b(deadline|due|apply|register|fill|submit)\b", text):
+            return True
+
+        if re.search(r"\b\d{1,2}(st|nd|rd|th)?\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)\b", text):
+            return True
+
+        return False
 
     @staticmethod
     def _surface_decision_to_entity_type(decision: str, fallback_text: str = "") -> str:
@@ -1041,7 +1063,7 @@ class AIService:
         surface_label_topic = str(surface_result.get("label_topic") or "").strip()
         logger.info("[AI] surface %s decision=%s topic=%s confidence=%s", ctx, surface_decision, surface_label_topic, surface_result.get("confidence"))
 
-        if surface_decision == "IGNORE":
+        if surface_decision == "IGNORE" and not AIService._has_strong_signal(message, cleaned_text):
             fallback = AIService._fallback_signal(message, domain_profile)
             fallback["summary"] = surface_result.get("summary") or fallback.get("summary")
             fallback["title"] = fallback.get("title") or _clean_text(message.subject) or "Academic email"
@@ -1101,6 +1123,9 @@ class AIService:
                     "confidence": fallback.get("confidence"),
                     "raw_llm_output": surface_result,
                 }
+
+        if surface_decision == "IGNORE":
+            logger.info("[AI] ignore overridden by strong signal %s subject=%s", ctx, message.subject or "")
 
         prompt = AIService._build_prompt(message, domain_profile, cleaned_text)
         logger.info("[AI] prompt_built %s prompt_chars=%s", ctx, len(prompt))
