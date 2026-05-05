@@ -15,6 +15,7 @@ __pycache__/
 # Environment Files & Secrets
 **/.env
 **/.env.*
+*.env
 **/credentials.json
 **/*_oauth_secret.json
 **/client_secret*.json
@@ -57,3 +58,5 @@ trial1/devtools_options.yaml
 # OS Files
 .DS_Store
 Thumbs.db
+/AWS_Migration_Codebase/backend_code/auth/lambda/lambda.env
+/AWS_Migration_Codebase/backend_code/auth/lambda/package/*
