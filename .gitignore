@@ -2,53 +2,58 @@
 __pycache__/
 *.pyc
 *.pyo
+*.pyd
+.Python
 
-# Temp / backup files
-*.backup
-*.odt
-*.odt#
-.~lock.*
+# Virtual Environments
+**/venv/
+**/Venv/
+**/virtualenv/
+**/backend_venv/
+**/ML_venv/
 
-# Environments
-backend/venv/
-backend/backend_venv
-Machine_Learning_Algo/ML_venv/
-Machine_Learning_Algo/venv
-
-# Secrets
-backend/.env
-backend/.env.dev
-backend/.env.prod
-backend/.env.staging
-backend/WEB_CLIENT_OAUTH_SECRET.json
-backend/app/core/credentials.json
-backend/credentials.json
-trial1/.env
-trial1/assets/env_config
-trial1/client_secret_551724754459-qa0mnvf692mj8s9gkmu6n7otjfslbtuo.apps.googleusercontent.com.json
+# Environment Files & Secrets
+**/.env
+**/.env.*
+**/credentials.json
+**/*_oauth_secret.json
+**/client_secret*.json
 secrets/
-secrets.rar
-secrets.tar
-secrets.tar.gz
-# IDE
+*.pem
+*.key
+
+# IDE / Editor
 .idea/
 .vscode/
 *.swp
+*.swo
+*~
 
-# Machine_Learning_Algo
+# Temp / Backup Files
+*.backup
+*.odt
+.~lock.*
+
+# Machine Learning Algo
 Machine_Learning_Algo/__pycache__/
 
-# Local env + dev tools
-/backend/.env.dev
-/backend/.env.prod
-/trial1/devtools_options.yaml
-/web/node_modules/
-/web/.next/
-/web/.env.local
-/web/out/
-/web/dist/
-/web/build/
-#we only need trial1 as reference so it shouldnt be present in source code, and it will be removed soon
-/trial1/* 
-/tutorials/*
-/data/*
+# Frontend Build Outputs
+web/node_modules/
+web/.next/
+web/.env.local
+web/out/
+web/dist/
+web/build/
+web/.turbo/
+
+# Local Dev Tools
+trial1/devtools_options.yaml
+
+# Directories to Ignore Completely (untracked only)
+/trial1/
+/tutorials/
+/data/
+
+# OS Files
+.DS_Store
+Thumbs.db
