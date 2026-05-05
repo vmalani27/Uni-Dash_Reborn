@@ -49,6 +49,6 @@ Machine_Learning_Algo/__pycache__/
 /web/dist/
 /web/build/
 #we only need trial1 as reference so it shouldnt be present in source code, and it will be removed soon
-trial1/* 
-tutorials/*
-data/*
+/trial1/* 
+/tutorials/*
+/data/*
