@@ -24,6 +24,9 @@ export interface ProfileFormProps {
 const FIELD_STYLE =
   "w-full rounded-[var(--radius-tile)] border border-[var(--color-outline)] bg-[var(--color-surface)] px-4 py-3 text-sm text-[var(--color-on-surface)] placeholder:text-[color:rgba(31,29,26,0.45)] shadow-[0_1px_0_rgba(0,0,0,0.02)] transition-colors focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[color:rgba(103,80,164,0.18)] dark:placeholder:text-[color:rgba(244,239,244,0.42)]";
 
+const DISABLED_FIELD_STYLE =
+  "opacity-60 bg-[color:rgba(31,29,26,0.04)] cursor-not-allowed dark:bg-[color:rgba(244,239,244,0.02)]";
+
 export default function ProfileForm({ mode, initialData = null, onSuccess }: ProfileFormProps) {
   const router = useRouter();
   const [formData, setFormData] = useState<ProfileData>({
@@ -114,10 +117,10 @@ export default function ProfileForm({ mode, initialData = null, onSuccess }: Pro
     try {
       if (mode === "setup") {
         await createUserProfile({
-          full_name: formData.full_name.trim(),
+          fullName: formData.full_name.trim(),
           degree: formData.degree.trim(),
           branch: formData.branch.trim(),
-          admission_year: year,
+          admissionYear: year,
           sid: formData.sid.trim(),
         });
 
@@ -127,14 +130,10 @@ export default function ProfileForm({ mode, initialData = null, onSuccess }: Pro
           router.replace("/dashboard");
         }
       } else {
-        // edit mode
-        // Use updateUserProfile API; if not available the caller should provide update logic
+        // edit mode - only branch and admission year are editable
         await updateUserProfile({
-          full_name: formData.full_name.trim(),
-          degree: formData.degree.trim(),
           branch: formData.branch.trim(),
-          admission_year: year,
-          sid: formData.sid.trim(),
+          admissionYear: year,
         });
 
         if (onSuccess) {
@@ -199,10 +198,10 @@ export default function ProfileForm({ mode, initialData = null, onSuccess }: Pro
                 name="full_name"
                 value={formData.full_name}
                 onChange={handleChange}
-                className={FIELD_STYLE}
+                className={`${FIELD_STYLE} ${mode === "edit" ? DISABLED_FIELD_STYLE : ""}`}
                 placeholder="Full name"
                 required
-                disabled={isLoadingProfile}
+                disabled={isLoadingProfile || mode === "edit"}
               />
             </div>
 
@@ -212,10 +211,10 @@ export default function ProfileForm({ mode, initialData = null, onSuccess }: Pro
                 name="sid"
                 value={formData.sid}
                 onChange={handleChange}
-                className={FIELD_STYLE}
+                className={`${FIELD_STYLE} ${mode === "edit" ? DISABLED_FIELD_STYLE : ""}`}
                 placeholder="Student ID"
                 required
-                disabled={isLoadingProfile}
+                disabled={isLoadingProfile || mode === "edit"}
               />
             </div>
 
@@ -225,10 +224,10 @@ export default function ProfileForm({ mode, initialData = null, onSuccess }: Pro
                 name="degree"
                 value={formData.degree}
                 onChange={handleChange}
-                className={FIELD_STYLE}
+                className={`${FIELD_STYLE} ${mode === "edit" ? DISABLED_FIELD_STYLE : ""}`}
                 placeholder="Degree"
                 required
-                disabled={isLoadingProfile}
+                disabled={isLoadingProfile || mode === "edit"}
               />
             </div>
 

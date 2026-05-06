@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Sparkles, ArrowRight, Eye, EyeOff, MoveRight } from "lucide-react";
 import { signUp, confirmSignUp, signIn } from "@/lib/cognito";
-import { getAuthToken } from "@/lib/api";
+import { getAuthToken, getUserProfile } from "@/lib/api";
+import { clearCachedUserProfile, isCompleteUserProfile, writeCachedUserProfile } from "@/lib/profileCache";
 
 export default function AuthPage() {
   const router = useRouter();
@@ -67,8 +68,23 @@ export default function AuthPage() {
       if (isLogin) {
         // Sign in with Cognito
         await signIn(email, password);
-        // Redirect to dashboard or home page after successful login
-        window.location.href = "/dashboard";
+        try {
+          const profile = await getUserProfile();
+          if (isCompleteUserProfile(profile)) {
+            writeCachedUserProfile(profile);
+            router.replace("/dashboard");
+          } else {
+            clearCachedUserProfile();
+            router.replace("/profile-setup?mode=setup");
+          }
+        } catch (profileError: any) {
+          if (profileError.status === 404) {
+            clearCachedUserProfile();
+            router.replace("/profile-setup?mode=setup");
+          } else {
+            throw profileError;
+          }
+        }
       } else {
         // Sign up with Cognito
         await signUp(email, password);

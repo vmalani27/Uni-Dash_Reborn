@@ -1,5 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
 import { getUserProfile } from "@/lib/api";
+import {
+  clearCachedUserProfile,
+  isCompleteUserProfile,
+  readCachedUserProfile,
+  writeCachedUserProfile,
+} from "@/lib/profileCache";
 
 export interface UserProfile {
   full_name: string;
@@ -11,18 +17,30 @@ export interface UserProfile {
 }
 
 export function useProfile() {
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const cachedProfile = readCachedUserProfile<UserProfile>();
+  const [profile, setProfile] = useState<UserProfile | null>(cachedProfile);
+  const [isLoading, setIsLoading] = useState(!cachedProfile);
   const [error, setError] = useState<Error | null>(null);
 
-  const checkProfile = useCallback(async () => {
+  const checkProfile = useCallback(async (silent = false) => {
+    if (!silent) {
+      setIsLoading(true);
+    }
+
     try {
       const data = await getUserProfile();
-      setProfile(data);
-      setError(null);
+      if (isCompleteUserProfile(data)) {
+        setProfile(data);
+        writeCachedUserProfile(data);
+        setError(null);
+      } else {
+        setProfile(null);
+        clearCachedUserProfile();
+      }
     } catch (err: any) {
       if (err.status === 404) {
         setProfile(null);
+        clearCachedUserProfile();
       } else {
         setError(err as Error);
       }
@@ -32,7 +50,7 @@ export function useProfile() {
   }, []);
 
   useEffect(() => {
-    void checkProfile();
+    void checkProfile(true);
   }, [checkProfile]);
 
   return { profile, isLoading, error, refetch: checkProfile };

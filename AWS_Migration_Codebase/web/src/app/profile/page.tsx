@@ -18,6 +18,7 @@ import {
 import { getAuthToken } from "@/lib/api";
 import { signOut } from "@/lib/cognito";
 import { useProfile } from "@/hooks/useProfile";
+import { isCompleteUserProfile } from "@/lib/profileCache";
 
 const CARD_STYLE =
   "rounded-[var(--radius-card)] border border-[var(--color-outline)] bg-[var(--color-surface)] p-5 shadow-[0_1px_0_rgba(0,0,0,0.02)]";
@@ -49,6 +50,12 @@ function ProfileStat({
 export default function ProfilePage() {
   const router = useRouter();
   const { profile, isLoading, error } = useProfile();
+
+  useEffect(() => {
+    if (!isLoading && !isCompleteUserProfile(profile)) {
+      router.replace("/profile-setup?mode=setup");
+    }
+  }, [isLoading, profile, router]);
 
   useEffect(() => {
     const verifyAuth = async () => {
@@ -87,26 +94,7 @@ export default function ProfilePage() {
   }
 
   if (!profile) {
-    return (
-      <main className="flex min-h-screen items-center justify-center px-4 py-8">
-        <div className="w-full max-w-lg rounded-[var(--radius-card)] border border-[var(--color-outline)] bg-[var(--color-surface)] p-6 text-center">
-          <BadgeCheck className="mx-auto h-10 w-10 text-[var(--color-primary)]" />
-          <h1 className="mt-4 text-2xl font-[var(--font-weight-title)] text-[var(--color-on-surface)]">
-            Profile not set up yet
-          </h1>
-          <p className="mt-2 text-sm text-[color:rgba(31,29,26,0.68)] dark:text-[color:rgba(244,239,244,0.68)]">
-            You need to complete your profile before it can be viewed here.
-          </p>
-          <Link
-            href="/profile-setup"
-            className="mt-6 inline-flex items-center justify-center gap-2 rounded-[var(--radius-button)] bg-[var(--color-primary)] px-4 py-3 text-sm font-[var(--font-weight-value)] text-[var(--color-on-primary)]"
-          >
-            <Pencil className="h-4 w-4" />
-            Complete profile
-          </Link>
-        </div>
-      </main>
-    );
+    return null;
   }
 
   // Calculate current semester based on admission year (simplified logic)
@@ -139,7 +127,7 @@ export default function ProfilePage() {
 
           <div className="flex items-center gap-2">
             <Link
-              href="/profile-setup"
+              href="/profile-setup?mode=edit"
               className="inline-flex items-center gap-2 rounded-[var(--radius-button)] border border-[var(--color-outline)] bg-[var(--color-surface)] px-4 py-2.5 text-sm font-[var(--font-weight-value)] text-[var(--color-on-surface)] hover:bg-[color:rgba(103,80,164,0.06)] transition-colors"
             >
               <Pencil className="h-4 w-4" />

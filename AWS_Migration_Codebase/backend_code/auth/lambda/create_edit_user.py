@@ -1,22 +1,26 @@
 import json
 import os
 import requests
+import traceback
+from typing import Dict, Any, Optional
 
 # ENV
 SUPABASE_URL = os.environ["SUPABASE_URL"]
 SUPABASE_KEY = os.environ["SUPABASE_SERVICE_KEY"]
+ALLOWED_ORIGINS = os.environ.get("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
 
-# --- CORS SETTINGS ---
-CORS_HEADERS = {
-    "Access-Control-Allow-Origin": "*", # Replace with http://localhost:3000 for better security
-    "Access-Control-Allow-Headers": "Content-Type,Authorization",
-    "Access-Control-Allow-Methods": "OPTIONS,POST,PUT,GET"
-}
+# --- CORS ---
+def get_cors_headers(origin: Optional[str]) -> Dict[str, str]:
+    allowed_origin = origin if origin in ALLOWED_ORIGINS else ALLOWED_ORIGINS[0]
+    return {
+        "Access-Control-Allow-Origin": allowed_origin,
+        "Access-Control-Allow-Headers": "Content-Type,Authorization",
+        "Access-Control-Allow-Methods": "OPTIONS,POST,PUT",
+        "Access-Control-Max-Age": "86400",
+    }
 
-# ---------------------------
-# SUPABASE
-# ---------------------------
-def supabase_request(method, path, data=None, query=None):
+# --- Supabase Client ---
+def supabase_request(method: str, path: str, data: Optional[Dict] = None, query: Optional[Dict] = None) -> Any:
     url = f"{SUPABASE_URL}/rest/v1/{path}"
     headers = {
         "apikey": SUPABASE_KEY,
@@ -24,131 +28,115 @@ def supabase_request(method, path, data=None, query=None):
         "Content-Type": "application/json",
         "Prefer": "return=representation",
     }
-    response = requests.request(method, url, headers=headers, json=data, params=query)
-    if response.status_code >= 400:
-        raise Exception(response.text)
-    return response.json()
+    resp = requests.request(method, url, headers=headers, json=data, params=query, timeout=30)
+    if resp.status_code >= 400:
+        raise Exception(f"Supabase {resp.status_code}: {resp.text}")
+    result = resp.json()
+    return result[0] if isinstance(result, list) and len(result) == 1 else result
 
+# --- Normalize camelCase → snake_case ---
+def normalize_input(body: Dict[str, Any]) -> Dict[str, Any]:
+    mapping = {"fullName": "full_name", "admissionYear": "admission_year"}
+    return {mapping.get(k, k): v for k, v in body.items()}
+
+# --- Lambda Handler ---
 def lambda_handler(event, context):
-    # 1. Handle CORS Preflight (OPTIONS)
+    origin = event.get("headers", {}).get("origin")
+    cors = get_cors_headers(origin)
+
+    # OPTIONS preflight
     if event.get("requestContext", {}).get("http", {}).get("method") == "OPTIONS":
-        return {
-            "statusCode": 204, # No Content is standard for OPTIONS
-            "headers": CORS_HEADERS,
-            "body": ""
-        }
+        return {"statusCode": 204, "headers": cors, "body": ""}
 
     try:
-        # HTTP API method extraction
-        method = (
-            event.get("httpMethod")
-            or event.get("requestContext", {}).get("http", {}).get("method")
-        )
-
-        # Get claims from API Gateway JWT authorizer
+        method = event.get("httpMethod") or event["requestContext"]["http"]["method"]
         claims = event["requestContext"]["authorizer"]["jwt"]["claims"]
         uid = claims["sub"]
         email = claims.get("email", "")
+        raw_body = json.loads(event.get("body", "{}") or "{}")
+        body = normalize_input(raw_body)
 
-        body = json.loads(event.get("body", "{}") or "{}")
+        # Fetch existing profile
+        existing_list = supabase_request("GET", "users", query={"uid": f"eq.{uid}"})
+        existing = existing_list[0] if isinstance(existing_list, list) and existing_list else None
 
-        # Field validation
-        if method == "POST":
-            required_fields = ["full_name", "degree", "branch", "admission_year", "sid"]
-        else:
-            required_fields = ["full_name", "degree", "branch", "admission_year"]
-
-        for field in required_fields:
-            if field not in body:
-                return {
-                    "statusCode": 400,
-                    "headers": CORS_HEADERS,
-                    "body": json.dumps({"error": f"Missing field: {field}"}),
-                }
-
-        # Check if user exists
-        existing = supabase_request("GET", "users", query={"uid": f"eq.{uid}"})
-
-        # ---------------------------
-        # POST → CREATE
-        # ---------------------------
+        # ================= POST: CREATE =================
         if method == "POST":
             if existing:
-                return {
-                    "statusCode": 409,
-                    "headers": CORS_HEADERS,
-                    "body": json.dumps({"error": "User already exists"}),
-                }
+                return {"statusCode": 409, "headers": cors, "body": json.dumps({"error": "User already exists"})}
 
-            if not body.get("sid"):
-                return {
-                    "statusCode": 400,
-                    "headers": CORS_HEADERS,
-                    "body": json.dumps({"error": "SID is required and cannot be empty"}),
-                }
+            # Required fields
+            for field in ["full_name", "degree", "branch", "admission_year", "sid"]:
+                if field not in body or not str(body[field]).strip():
+                    return {"statusCode": 400, "headers": cors, "body": json.dumps({"error": f"Missing field: {field}"})}
+
+            # SID uniqueness
+            sid_check = supabase_request("GET", "users", query={"sid": f"eq.{body['sid'].strip().lower()}"})
+            if sid_check and isinstance(sid_check, list) and sid_check:
+                return {"statusCode": 409, "headers": cors, "body": json.dumps({"error": "SID already registered"})}
 
             new_user = {
                 "uid": uid,
                 "email": email,
-                "full_name": body["full_name"],
-                "degree": body["degree"],
-                "branch": body["branch"],
-                "admission_year": body["admission_year"],
-                "sid": body["sid"],
+                "full_name": body["full_name"].strip(),
+                "degree": body["degree"].strip(),
+                "branch": body["branch"].strip(),
+                "admission_year": int(body["admission_year"]),
+                "sid": body["sid"].strip().lower(),
                 "profile_completed": True,
                 "oauth_connected": False,
-                "reauth_required": False
+                "reauth_required": False,
             }
-
             created = supabase_request("POST", "users", data=new_user)
-            return {
-                "statusCode": 201,
-                "headers": CORS_HEADERS,
-                "body": json.dumps(created[0]),
-            }
+            return {"statusCode": 201, "headers": cors, "body": json.dumps(created)}
 
-        # ---------------------------
-        # PUT → UPDATE
-        # ---------------------------
+        # ================= PUT: UPDATE =================
         elif method == "PUT":
             if not existing:
-                return {
-                    "statusCode": 404,
-                    "headers": CORS_HEADERS,
-                    "body": json.dumps({"error": "User not found"}),
-                }
+                return {"statusCode": 404, "headers": cors, "body": json.dumps({"error": "User not found"})}
 
-            if "sid" in body:
-                return {
-                    "statusCode": 400,
-                    "headers": CORS_HEADERS,
-                    "body": json.dumps({"error": "SID cannot be updated"}),
-                }
+            # Immutable fields: reject if changed
+            for field in ["sid", "uid", "email"]:
+                if field in body and body[field] is not None and body[field] != existing.get(field):
+                    return {"statusCode": 400, "headers": cors, "body": json.dumps({"error": f"Field '{field}' cannot be updated"})}
 
-            update_data = {
-                "full_name": body["full_name"],
-                "degree": body["degree"],
-                "branch": body["branch"],
-                "admission_year": body["admission_year"],
-            }
+            # Mutable fields only
+            allowed = ["full_name", "degree", "branch", "admission_year"]
+            update_data = {}
+            for field in allowed:
+                if field not in body:
+                    continue
 
-            updated = supabase_request("PATCH", "users", data=update_data, query={"uid": f"eq.{uid}"})
-            return {
-                "statusCode": 200,
-                "headers": CORS_HEADERS,
-                "body": json.dumps(updated[0]),
-            }
+                val = body[field]
+                if val is None:
+                    continue
+
+                if field == "admission_year":
+                    try:
+                        val = int(val)
+                        if not (1900 <= val <= 2100):
+                            raise ValueError
+                    except Exception:
+                        return {"statusCode": 400, "headers": cors, "body": json.dumps({"error": "Invalid admission_year"})}
+                elif isinstance(val, str):
+                    val = val.strip()
+                    if not val:
+                        return {"statusCode": 400, "headers": cors, "body": json.dumps({"error": f"{field} cannot be empty"})}
+
+                update_data[field] = val
+
+            if not update_data:
+                return {"statusCode": 200, "headers": cors, "body": json.dumps(existing)}
+
+            updated = supabase_request("PATCH", f"users?uid=eq.{uid}", data=update_data)
+            return {"statusCode": 200, "headers": cors, "body": json.dumps(updated)}
 
         else:
-            return {
-                "statusCode": 405,
-                "headers": CORS_HEADERS,
-                "body": json.dumps({"error": "Method not allowed"}),
-            }
+            return {"statusCode": 405, "headers": cors, "body": json.dumps({"error": "Method not allowed"})}
 
+    except KeyError:
+        return {"statusCode": 401, "headers": cors, "body": json.dumps({"error": "Unauthorized"})}
     except Exception as e:
-        return {
-            "statusCode": 500,
-            "headers": CORS_HEADERS,
-            "body": json.dumps({"error": str(e)}),
-        }
+        print(f"[LAMBDA_ERROR] {type(e).__name__}: {str(e)}")
+        print(traceback.format_exc())
+        return {"statusCode": 500, "headers": cors, "body": json.dumps({"error": "Internal server error"})}

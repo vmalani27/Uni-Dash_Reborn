@@ -1,46 +1,40 @@
 "use client";
 
+import { useSearchParams, useRouter } from "next/navigation";
 import ProfileForm from "@/components/ProfileForm";
-import { BadgeCheck, BookOpen, GraduationCap, IdCard, Loader2, Sparkles } from "lucide-react";
-
-const FIELD_STYLE =
-  "w-full rounded-[var(--radius-tile)] border border-[var(--color-outline)] bg-[var(--color-surface)] px-4 py-3 text-sm text-[var(--color-on-surface)] placeholder:text-[color:rgba(31,29,26,0.45)] shadow-[0_1px_0_rgba(0,0,0,0.02)] transition-colors focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[color:rgba(103,80,164,0.18)] dark:placeholder:text-[color:rgba(244,239,244,0.42)]";
-
-const LabeledField = ({
-  label,
-  icon: Icon,
-  children,
-}: {
-  label: string;
-  icon: React.ComponentType<{ className?: string }>;
-  children: React.ReactNode;
-}) => (
-  <div className="space-y-2">
-    <label className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-[color:rgba(31,29,26,0.68)] dark:text-[color:rgba(244,239,244,0.68)]">
-      <Icon className="h-3.5 w-3.5" />
-      {label}
-    </label>
-    {children}
-  </div>
-);
+import { BadgeCheck, BookOpen, X } from "lucide-react";
 
 export default function ProfileSetupPage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const mode = (searchParams.get("mode") || "setup") as "setup" | "edit";
+
   return (
     <main className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-8 text-[var(--color-on-surface)]">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(103,80,164,0.14),transparent_36%),radial-gradient(circle_at_bottom_right,rgba(103,80,164,0.08),transparent_32%)]" />
 
       <section className="relative w-full max-w-[880px] overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-outline)] bg-[var(--color-surface)] shadow-[0_18px_60px_rgba(31,29,26,0.12)] dark:shadow-[0_18px_60px_rgba(0,0,0,0.32)]">
+                {mode === "edit" && (
+                  <button
+                    onClick={() => router.back()}
+                    className="absolute right-4 top-4 z-10 p-2 text-[var(--color-on-surface)] hover:bg-[color:rgba(31,29,26,0.05)] rounded-[var(--radius-tile)] transition-colors dark:hover:bg-[color:rgba(244,239,244,0.05)]"
+                    aria-label="Close profile edit"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                )}
         <div className="grid md:grid-cols-[1.05fr_1.25fr]">
           <aside className="flex flex-col justify-between gap-8 border-b border-[var(--color-outline)] bg-[color:rgba(103,80,164,0.05)] p-6 sm:p-8 md:border-b-0 md:border-r">
             <div className="space-y-6">
-              {/* capsule heading removed as requested */}
 
               <div className="space-y-3">
                 <h1 className="text-2xl font-[var(--font-weight-title)] tracking-tight text-[var(--color-on-surface)] sm:text-[2rem]">
-                  Complete your profile
+                  {mode === "setup" ? "Complete your profile" : "Edit your profile"}
                 </h1>
                 <p className="max-w-sm text-sm leading-6 text-[color:rgba(31,29,26,0.68)] dark:text-[color:rgba(244,239,244,0.68)]">
-                  Add your academic details once so UniDash can shape the dashboard around your student life.
+                  {mode === "setup"
+                    ? "Add your academic details once so UniDash can shape the dashboard around your student life."
+                    : "Update your branch and year of admission to keep your profile current."}
                 </p>
               </div>
 
@@ -68,7 +62,7 @@ export default function ProfileSetupPage() {
             </p>
           </aside>
 
-          <ProfileForm mode="setup" />
+          <ProfileForm mode={mode} />
         </div>
       </section>
     </main>

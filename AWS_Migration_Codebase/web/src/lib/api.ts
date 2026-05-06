@@ -6,10 +6,6 @@ export const getAuthToken = async (): Promise<string | null> => {
   return await getCurrentUserIdToken();
 };
 
-interface FetchOptions extends RequestInit {
-  headers?: Record<string, string>;
-}
-
 export class ApiError extends Error {
   status?: number;
 
@@ -22,7 +18,7 @@ export class ApiError extends Error {
 
 export const fetchWithAuth = async (
   url: string,
-  options: FetchOptions = {}
+  options: RequestInit = {}
 ): Promise<any> => {
   const token = await getAuthToken();
 
@@ -32,63 +28,58 @@ export const fetchWithAuth = async (
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...options.headers,
+    ...(options.headers as Record<string, string> | undefined),
+    Authorization: `Bearer ${token}`,
   };
-
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
 
   const response = await fetch(`${API_BASE_URL}${url}`, {
     ...options,
     headers,
   });
 
+  const data = await response.json();
+
   if (response.status === 401) {
-    throw new ApiError('Unauthorized', 401);
+    throw new ApiError(data.error || 'Unauthorized', 401);
   }
 
   if (response.status === 404) {
-    throw new ApiError('Not Found', 404);
+    throw new ApiError(data.error || 'Not Found', 404);
   }
 
-  return await response.json();
+  if (!response.ok) {
+    throw new ApiError(data.error || 'Request failed', response.status);
+  }
+
+  return data;
 };
 
 export const getUserProfile = async () => {
-  try {
-    return await fetchWithAuth('/user/profile');
-  } catch (error) {
-    const status = error instanceof ApiError ? error.status : (error as any)?.status;
-
-    if (status !== 404 && status !== 401) {
-      console.error('Error fetching user profile:', error);
-    }
-
-    throw error;
-  }
+  return await fetchWithAuth('/user/profile', { method: 'GET' });
 };
 
-export const createUserProfile = async (profileData: any) => {
-  try {
-    return await fetchWithAuth('/user/profile', {
-      method: 'POST',
-      body: JSON.stringify(profileData),
-    });
-  } catch (error) {
-    console.error('Error creating user profile:', error);
-    throw error;
-  }
+export interface ProfileInput {
+  fullName: string;
+  degree: string;
+  branch: string;
+  admissionYear: number;
+  sid?: string;
+}
+
+export const createUserProfile = async (profileData: ProfileInput) => {
+  return await fetchWithAuth('/user/profile', {
+    method: 'POST',
+    body: JSON.stringify(profileData),
+  });
 };
 
-export const updateUserProfile = async (profileData: any) => {
-  try {
-    return await fetchWithAuth('/user/profile', {
-      method: 'PUT',
-      body: JSON.stringify(profileData),
-    });
-  } catch (error) {
-    console.error('Error updating user profile:', error);
-    throw error;
-  }
+export const updateUserProfile = async (profileData: Partial<ProfileInput>) => {
+  const cleaned = Object.fromEntries(
+    Object.entries(profileData).filter(([, value]) => value != null)
+  );
+
+  return await fetchWithAuth('/user/profile', {
+    method: 'PUT',
+    body: JSON.stringify(cleaned),
+  });
 };

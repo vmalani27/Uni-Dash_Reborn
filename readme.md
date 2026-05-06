@@ -1,382 +1,259 @@
-# Uni-Dash: AI-Powered Academic Email Platform [WIP]
+# Uni-Dash: AI-Powered Academic Email Platform
 
-> **Work in Progress — Target Architecture Branch**  
-> This branch represents the migration path from a monolithic Raspberry Pi deployment to a cloud-native, fully decoupled microservices architecture. The current implementation (see `main` branch) remains functional; this branch tracks the evolution toward production-grade infrastructure.
+> **Status: Production Profile Management + AWS Serverless Architecture**  
+> Core authentication, profile management endpoints (POST/GET/PUT), and CORS handling are production-ready on AWS (Cognito, API Gateway, Lambda, Supabase). Email ingestion and AI classification pipelines operational on local backend. OAuth integration (Google Gmail) in development.
 
 ---
 
-## Target System Vision
+## Current Implementation Status
 
-Uni-Dash is evolving into a distributed, cloud-native platform designed for scalability, resilience, and GitOps-driven operations. The target system decouples all concerns into independently deployable services orchestrated via Kubernetes, with infrastructure defined as code.
+### Completed: Authentication & Profile Management
 
-```mermaid
-graph TD
-    %% User Layer
-    subgraph "Client Layer"
-        W[Web Dashboard - Next.js]
-    end
+| Component | Status | Technology | Endpoint |
+|-----------|--------|-----------|----------|
+| User Authentication | Production | AWS Cognito + API Gateway JWT Authorizer | `POST /auth/*` |
+| Profile Creation | Production | Lambda + Supabase REST | `POST /user/profile` |
+| Profile Retrieval | Production | Lambda + Supabase REST | `GET /user/profile` |
+| Profile Update | Production | Lambda + Supabase REST | `PUT /user/profile` |
+| CORS Handling | Production | API Gateway + Lambda headers | All endpoints |
+| Field Validation | Production | Lambda business logic | POST/PUT |
+| Immutable Field Enforcement | Production | Lambda validation | `sid`, `uid`, `email` |
 
-    %% Ingress & Service Mesh
-    subgraph "Kubernetes Cluster (Cloud/On-Prem)"
-        Ingress[NGINX Ingress Controller]
-        Mesh[Istio Service Mesh]
-        
-        subgraph "API Gateway Service"
-            GW[FastAPI Gateway Pod]
-            Auth[OAuth2 Proxy / OIDC]
-            Rate[Rate Limiter Middleware]
-        end
-        
-        subgraph "Email Sync Service"
-            SYNC[Incremental Sync Worker Pod]
-            Queue[Redis Task Queue]
-        end
-        
-        subgraph "AI Inference Service"
-            AI_API[AI Orchestrator Pod]
-            OLLAMA[Ollama Inference Deployment]
-            MODEL[Llama 3 / Fine-tuned Academic Model]
-            GPU[GPU Node Selector / Taints]
-        end
-        
-        subgraph "Notification Service"
-            NOTIFY[Push/Email Notification Worker]
-            FCMS[Firebase Cloud Messaging]
-        end
-    end
+### Working Data Flow
 
-    %% Infrastructure Layer
-    subgraph "Infrastructure as Code"
-        TF[Terraform State]
-        EKS[Amazon EKS / Self-hosted K8s]
-        RDS[Supabase / Managed PostgreSQL]
-        S3[Object Storage - Raw MIME Archive]
-    end
-
-    %% GitOps & CI/CD
-    subgraph "GitOps Control Plane"
-        GH[GitHub Repository]
-        JENKINS[Jenkins Pipeline - Build/Test]
-        ARGO[ArgoCD - Sync to Cluster]
-        REG[Container Registry - ECR/GHCR]
-    end
-
-    %% Connections
-    W -->|HTTPS/WSS| Ingress
-    Ingress --> Mesh
-    Mesh --> GW & Auth & Rate
-    
-    GW -->|gRPC/REST| SYNC & AI_API & NOTIFY
-    SYNC -->|Poll| Queue
-    SYNC -->|Gmail API| GMAIL[Gmail API / OAuth 2.0]
-    
-    AI_API -->|Async Job| Queue
-    AI_API -->|HTTP| OLLAMA
-    OLLAMA --> MODEL
-    AI_API -->|Write Insights| RDS
-    
-    NOTIFY -->|Push| FCMS
-    NOTIFY -->|Email| SES[Amazon SES / SMTP]
-    
-    GW & SYNC & AI_API & NOTIFY -->|Read/Write| RDS
-    SYNC -->|Archive Raw| S3
-    
-    %% GitOps Flow
-    GH -->|Push main| JENKINS
-    JENKINS -->|Build & Test| REG
-    JENKINS -->|Update Helm values| GH
-    ARGO -->|Watch GH| REG & GH
-    ARGO -->|Apply manifests| EKS
-    
-    %% IaC Flow
-    TF -->|Provision| EKS & RDS & S3
+```
+Next.js Frontend
+       |
+       v
+AWS Cognito (SignIn/SignUp) --> ID Token (JWT)
+       |
+       v
+API Gateway (HTTP API)
+       |
+       +-- JWT Authorizer validates token
+       |
+       v
+Lambda Function (Python 3.11)
+       |
+       +-- Extracts claims from JWT (uid, email)
+       +-- Normalizes camelCase to snake_case
+       +-- Validates required fields
+       +-- Enforces immutable field rules
+       |
+       v
+Supabase PostgreSQL (via REST API)
+       |
+       +-- Query: SELECT/INSERT/UPDATE users WHERE uid = :uid
+       +-- Returns JSON representation
+       |
+       v
+Lambda --> API Gateway --> Next.js Frontend
 ```
 
----
+### Lambda Configuration Details
 
-## Architecture Evolution
+| Setting | Value | Notes |
+|---------|-------|-------|
+| Runtime | Python 3.11 | Compatible with requests, cryptography |
+| Memory | 128 MB | Sufficient for REST proxy operations |
+| Timeout | 30 seconds | Handles Supabase network latency |
+| Layers | `requests`, `cryptography` | Pre-bundled to reduce cold start |
+| Environment Variables | `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `ALLOWED_ORIGINS` | Injected at deployment |
+| Cold Start | ~1-2 seconds (unprovisioned) | Acceptable for user-facing profile ops |
+| Deployment | AWS SAM / Terraform | Infrastructure as code |
 
-### Current Implementation (`main` branch)
-| Component | Technology | Location |
-|-----------|-----------|----------|
-| Frontend | Flutter | Client device |
-| API Broker | FastAPI + asyncio | Raspberry Pi (ARM) |
-| Email Sync | Polling worker | Raspberry Pi |
-| AI Inference | Ollama + Llama 3 | Dedicated GPU machine (LAN) |
-| Database | Supabase PostgreSQL | Cloud-managed |
-| Deployment | Docker + GitHub Actions (self-hosted runner) | Raspberry Pi |
+### API Contract: Profile Endpoints
 
-### Target Architecture (This Branch)
-| Component | Technology | Deployment Target |
-|-----------|-----------|------------------|
-| Frontend | Next.js 14 (App Router) + Python SDK | Vercel / CDN |
-| API Gateway | FastAPI + Istio sidecar | Kubernetes Pod |
-| Email Sync Service | Celery + Redis Queue | Kubernetes Deployment (HPA) |
-| AI Inference Service | FastAPI + Ollama + GPU scheduler | Kubernetes StatefulSet (GPU nodes) |
-| Notification Service | Async worker + FCM/SES | Kubernetes CronJob/Deployment |
-| Database | Supabase / Cloud SQL | Managed external |
-| Object Storage | S3-compatible | Cloud storage |
-| Service Mesh | Istio / Linkerd | Kubernetes |
-| Ingress | NGINX Ingress Controller | Kubernetes |
-| Secrets | External Secrets Operator + Vault | Kubernetes |
-| Observability | Prometheus + Grafana + Loki | Kubernetes monitoring stack |
-
----
-
-## DevOps & Infrastructure Pipeline
-
-### Infrastructure as Code (Terraform)
-```hcl
-# modules/kubernetes/main.tf
-module "eks_cluster" {
-  source  = "terraform-aws-modules/eks/aws"
-  version = "~> 19.0"
-  
-  cluster_name    = "unidash-prod"
-  cluster_version = "1.28"
-  
-  # GPU node group for AI workloads
-  node_groups = {
-    gpu-inference = {
-      instance_types = ["g4dn.xlarge"]
-      taints = {
-        dedicated = "gpu:NoSchedule"
-      }
-      labels = {
-        workload-type = "ai-inference"
-      }
-    }
-    
-    # General purpose node group
-    general = {
-      instance_types = ["t3.medium"]
-    }
-  }
+#### POST /user/profile (Create)
+```json
+Request:
+{
+  "fullName": "Vansh Malani",
+  "degree": "BTech",
+  "branch": "CSE",
+  "admissionYear": 2024,
+  "sid": "23dcs056"
 }
 
-# modules/supabase/main.tf
-resource "supabase_project" "unidash" {
-  name = "unidash-production"
-  region = "us-east-1"
+Response (201 Created):
+{
+  "uid": "01934d4a-9081-708a-32c6-da7e24a172fd",
+  "email": "vanshmalani9@gmail.com",
+  "full_name": "Vansh Malani",
+  "degree": "BTech",
+  "branch": "CSE",
+  "admission_year": 2024,
+  "sid": "23dcs056",
+  "profile_completed": true,
+  "oauth_connected": false
 }
+
+Error Responses:
+400: {"error": "Missing field: <field_name>"}
+409: {"error": "User already exists"}
+409: {"error": "SID already registered"}
 ```
 
-### CI/CD Pipeline Architecture
-```mermaid
-graph LR
-    subgraph "Development Workflow"
-        Dev[Developer] -->|git push| GH[GitHub]
-        GH -->|webhook| JENKINS[Jenkins Controller]
-    end
-    
-    subgraph "Jenkins Pipeline"
-        JENKINS --> Checkout[Checkout Code]
-        Checkout --> Lint[Lint + Type Check]
-        Lint --> Test[Unit + Integration Tests]
-        Test --> Build[Build Docker Images]
-        Build --> Scan[Trivy Security Scan]
-        Scan --> Push[Push to Registry]
-        Push --> UpdateHelm[Update Helm Chart Values]
-        UpdateHelm --> CommitGH[Commit to config-repo]
-    end
-    
-    subgraph "GitOps Sync"
-        CommitGH -->|webhook| ARGO[ArgoCD]
-        ARGO -->|compare| Cluster[Kubernetes Cluster]
-        ARGO -->|sync if drift| Cluster
-    end
-    
-    subgraph "Runtime"
-        Cluster --> Health[Pod Health Checks]
-        Cluster --> Metrics[Prometheus Scraping]
-        Cluster --> Logs[Loki Aggregation]
-    end
+#### GET /user/profile (Retrieve)
+```json
+Response (200 OK):
+{
+  "uid": "...",
+  "email": "...",
+  "full_name": "...",
+  "degree": "...",
+  "branch": "...",
+  "admission_year": 2024,
+  "sid": "23dcs056",
+  "profile_completed": true,
+  "oauth_connected": false
+}
+
+Error Responses:
+404: {"error": "User not found"}
 ```
 
-### Key DevOps Components
-| Tool | Purpose | Stage |
-|------|---------|-------|
-| Terraform | Provision EKS, RDS, S3, IAM roles | Infrastructure |
-| Jenkins | Build, test, scan, and package artifacts | CI |
-| ArgoCD | GitOps sync of Helm releases to cluster | CD |
-| Helm | Package Kubernetes manifests with environment values | Packaging |
-| Trivy | Container vulnerability scanning | Security |
-| External Secrets | Sync secrets from Vault/AWS Secrets Manager | Security |
-| Istio | mTLS, traffic splitting, observability | Service Mesh |
-| Prometheus/Grafana | Metrics collection and dashboards | Observability |
-| Loki | Log aggregation | Observability |
+#### PUT /user/profile (Update)
+**Note:** Only `branch` and `admission_year` are mutable. Fields like `sid`, `uid`, `email`, `full_name`, and `degree` are immutable after profile creation.
+
+```json
+Request (partial update allowed):
+{
+  "branch": "AI/ML"
+}
+
+Response (200 OK):
+{
+  "uid": "...",
+  "email": "...",
+  "full_name": "...",
+  "degree": "...",
+  "branch": "AI/ML",
+  "admission_year": 2024,
+  "sid": "23dcs056",
+  "profile_completed": true,
+  "oauth_connected": false
+}
+
+Error Responses:
+400: {"error": "Field 'sid' cannot be updated"}
+400: {"error": "Invalid admission_year"}
+404: {"error": "User not found"}
+```
 
 ---
 
-## Component Breakdown (Target)
+## Next: OAuth Integration (In Development)
 
-### 1. Frontend Layer (Next.js + Python)
-- **Next.js 14 Web Dashboard**: App Router, Server Components, SSR for SEO, PWA capabilities
-- **Python SDK**: Shared OpenAPI-generated client for API contracts, used by both frontend and backend services
-- **Authentication**: NextAuth.js with OIDC provider, session management via secure HTTP-only cookies
-- **State Management**: React Query for server state, Zustand for client state
-- **Styling**: Tailwind CSS with design tokens, dark mode support
+### Objective
+Enable users to connect their Google accounts for read-only access to Gmail and Google Classroom APIs, automating academic email ingestion.
 
-### 2. API Gateway Service
-- FastAPI with async endpoints
-- Istio sidecar for mTLS, retries, circuit breaking
-- OAuth2 Proxy for OIDC authentication flow
-- Rate limiting per user/API key
-- OpenAPI 3.0 spec auto-generated and published
+### Planned Endpoints
+| Endpoint | Purpose | Status |
+|----------|---------|--------|
+| `GET /auth/google/url` | Generate OAuth authorization URL | Not implemented |
+| `GET /auth/google/callback` | Exchange authorization code for tokens | Not implemented |
+| `POST /auth/google/disconnect` | Revoke and delete stored refresh token | Not implemented |
 
-### 3. Email Sync Service
-- Celery workers pulling from Redis queue
-- Incremental sync using Gmail `historyId` with exponential backoff
-- MIME parsing with fallback strategies (text/plain -> text/html -> BeautifulSoup)
-- Raw MIME archival to S3 for audit/compliance
-- Dead-letter queue for unparseable emails
+### Security Approach
+- Google OAuth credentials stored in AWS Secrets Manager
+- Refresh tokens encrypted with Fernet before Supabase storage
+- CSRF protection via state parameter validation
+- Scopes limited to `gmail.readonly` and classroom read access
+- User-initiated disconnect triggers token revocation
 
-### 4. AI Inference Service
-- Stateless orchestrator pod that dequeues jobs from Redis
-- GPU node affinity/taints to schedule only on GPU-equipped nodes
-- Ollama deployed as a sidecar or separate deployment with persistent model cache
-- Prompt templating with academic context injection
-- Structured JSON output validation via Pydantic
-- Fallback to rule-based classifier if Ollama is unreachable
+## Architecture
 
-### 5. Notification Service
-- Listens to database change events (Supabase Realtime or Debezium)
-- Batches notifications to avoid spam
-- Integrates with FCM (mobile push) and SES (email fallback)
-- User preference filtering (quiet hours, topic filters)
+### Current State
+| Component | Technology | Status |
+|-----------|-----------|--------|
+| Frontend | Next.js 14 (App Router) | ✓ Production |
+| Authentication | AWS Cognito | ✓ Production |
+| API Gateway | AWS API Gateway (HTTP) | ✓ Production |
+| Profile API | Lambda (Python 3.11) | ✓ Production |
+| Database | Supabase PostgreSQL | ✓ Production |
+| Email Sync | FastAPI + asyncio | ✓ Functional |
+| AI Inference | Ollama + Llama 3 | ✓ Functional |
+| OAuth (Gmail) | Lambda integration | ⚠️ In Development |
 
-### 6. Observability Stack
-- **Metrics**: Prometheus exporters on each service, custom business metrics (emails processed/min, AI latency p95)
-- **Tracing**: Jaeger/OpenTelemetry for distributed request tracing
-- **Logging**: Structured JSON logs shipped to Loki, correlated via trace IDs
-- **Alerting**: Alertmanager rules for SLO breaches (e.g., sync lag > 5min, AI error rate > 1%)
+### Future: Cloud-Native
+- Email Sync: Celery + Redis on Kubernetes HPA
+- AI Inference: FastAPI + GPU Scheduling on Kubernetes StatefulSet
+- API Gateway: FastAPI with Istio sidecar
+- Object Storage: S3-compatible bucket
+- Observability: CloudWatch + X-Ray
 
----
+## Getting Started
 
-## Getting Started (Target Branch)
+### Prerequisites
+- Node.js 18+ (Next.js frontend)
+- AWS CLI configured with appropriate permissions
+- Supabase project with users table configured
+- Python 3.11+ (optional, for Lambda local testing)
 
-> This branch is under active development. Components may not be fully functional yet.
-
-### Prerequisites (Target)
+### Frontend
 ```bash
-# Infrastructure
-- Terraform >= 1.6
-- kubectl + AWS CLI / gcloud
-- Helm >= 3.12
-- ArgoCD CLI (optional)
-
-# Development
-- Python 3.11 + uv/poetry
-- Node.js 18+ (for Next.js frontend)
-- Docker + Buildx (for multi-arch builds)
+cd web
+npm install
+cp .env.example .env.local
+# Set NEXT_PUBLIC_API_BASE_URL to your API Gateway endpoint
+npm run dev
 ```
 
-### Local Development Workflow
+### Lambda Deployment
 ```bash
-# 1. Provision local Kubernetes (kind/k3d)
-make cluster-up  # Uses kind with GPU emulation (CPU fallback)
+# Using AWS SAM (from infra/lambda/profile-api directory)
+sam build
+sam deploy --guided
 
-# 2. Deploy dependencies
-make deploy-deps  # Installs Istio, Prometheus, Redis, ArgoCD
-
-# 3. Build and load images
-make build-images LOAD=true  # Loads images into kind cluster
-
-# 4. Deploy application stack
-make deploy-app ENV=dev  # Applies Helm charts with dev values
-
-# 5. Access services
-make port-forward  # Exposes API gateway at localhost:8000
-
-# 6. Run Next.js frontend against local API
-cd frontend/web && npm run dev -- --port 3000
+# Requires environment variables:
+# - SUPABASE_URL
+# - SUPABASE_SERVICE_KEY
+# - ALLOWED_ORIGINS
 ```
 
-### Terraform Workflow
+### Testing the API
 ```bash
-cd infra/terraform
+# After obtaining ID token from Cognito login
+export TOKEN="eyJ..."
 
-# Initialize and plan
-terraform init
-terraform plan -var-file=envs/prod.tfvars
+# Create profile
+curl -X POST https://YOUR_API/user/profile \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"fullName":"Test User","degree":"BTech","branch":"CSE","admissionYear":2024,"sid":"test123"}'
 
-# Apply (requires approved PR + manual confirmation)
-terraform apply -var-file=envs/prod.tfvars
+# Retrieve profile
+curl -X GET https://YOUR_API/user/profile \
+  -H "Authorization: Bearer $TOKEN"
 
-# Output kubeconfig for kubectl
-terraform output -raw kubeconfig > ~/.kube/unidash-prod
-```
-
-### ArgoCD Bootstrap
-```bash
-# Install ArgoCD (if not already present)
-kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
-
-# Bootstrap the root application
-kubectl apply -f argocd/root-app.yaml
-
-# Access UI
-kubectl port-forward svc/argocd-server -n argocd 8080:443
-# Login with admin password from:
-kubectl get secret argocd-initial-admin-secret -n argocd -o jsonpath="{.data.password}" | base64 -d
+# Update profile
+curl -X PUT https://YOUR_API/user/profile \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"branch":"AI/ML"}'
 ```
 
 ---
 
-## Security & Compliance (Target)
+## Resources & Contributing
 
-- **Secrets Management**: External Secrets Operator syncs from AWS Secrets Manager / HashiCorp Vault; no secrets in Git or image layers
-- **Network Policies**: Default-deny Kubernetes NetworkPolicies; Istio AuthorizationPolicies for service-to-service RBAC
-- **Pod Security**: Pod Security Admission (restricted profile), seccomp, read-only root filesystems
-- **Supply Chain**: Sigstore cosign for image signing, SLSA-compliant build pipeline
-- **Data Protection**: OAuth tokens encrypted at rest (Fernet + KMS); PII fields masked in logs
-- **Audit**: Kubernetes audit logs shipped to S3 + Athena for compliance queries
+**Documentation & Reference**
+- [OpenAPI Specification](./api/openapi.yaml)
+- [Lambda Build Instructions](./infra/lambda/README.md)
+- [Supabase Schema](./docs/database.md)
+- [Cognito Setup Guide](./docs/auth.md)
 
----
+**Development Guidelines**
+- Trunk-based development with backward-compatible API changes
+- Updated OpenAPI specs for all endpoint modifications
+- Integration tests covering POST/GET/PUT flows
+- Manual verification against Supabase test project
 
-## Migration Roadmap
-
-```mermaid
-gantt
-    title Uni-Dash Migration Timeline
-    dateFormat  YYYY-MM-DD
-    section Infrastructure
-    Terraform modules for EKS/RDS     :active, 2024-06-01, 30d
-    ArgoCD bootstrap + Helm charts    :2024-07-01, 21d
-    section Services
-    API Gateway K8s migration         :2024-07-15, 14d
-    Email Sync → Celery + Redis       :2024-08-01, 21d
-    AI Service GPU scheduling         :crit, 2024-08-20, 30d
-    section Observability
-    Prometheus/Grafana stack          :2024-09-01, 14d
-    Distributed tracing (Jaeger)      :2024-09-15, 14d
-    section Cutover
-    Blue/Green traffic shift          :crit, 2024-10-01, 7d
-    Decommission Raspberry Pi         :2024-10-10, 1d
-```
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for detailed contribution guidelines.
 
 ---
 
-## Documentation
+## Summary
 
-- [Architecture Decision Records (ADRs)](./docs/adr/)
-- [API Contract (OpenAPI)](./api/openapi.yaml)
-- [Helm Chart Values Reference](./charts/unidash/README.md)
-- [Terraform Module Docs](./infra/terraform/modules/README.md)
-- [Runbook: Incident Response](./docs/runbooks/)
-
----
-
-## Contributing
-
-This branch follows trunk-based development with feature flags. All changes require:
-1. PR with linked issue
-2. Passing Jenkins pipeline (lint, test, scan)
-3. ArgoCD sync preview in staging environment
-4. Approval from >=1 maintainer
-
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for detailed guidelines.
-
----
-
-Built to simplify the student experience through resilient, cloud-native systems engineering.
+Uni-Dash is evolving from a functional monolith to a resilient, cloud-native system. The profile management layer demonstrates the target architecture pattern: stateless compute, managed identity, and decoupled data access. OAuth integration is the next step toward enabling the core academic email ingestion pipeline.

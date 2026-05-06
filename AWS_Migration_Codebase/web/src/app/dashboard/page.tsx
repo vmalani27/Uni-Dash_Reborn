@@ -1,8 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useDashboardData } from "@/hooks/useDashboard";
 import { CalendarDays, LayoutGrid, Sparkles } from "lucide-react";
+import { useProfile } from "@/hooks/useProfile";
+import { isCompleteUserProfile } from "@/lib/profileCache";
 
 type TabKey = "assignments" | "exams" | "opportunities" | "admin";
 
@@ -14,8 +17,24 @@ const TABS: { key: TabKey; label: string; backendKey: string }[] = [
 ];
 
 export default function DashboardPage() {
+  const router = useRouter();
+  const { profile, isLoading: isProfileLoading } = useProfile();
   const { data, isLoading, error } = useDashboardData();
   const [activeTab, setActiveTab] = useState<TabKey>("assignments");
+
+  useEffect(() => {
+    if (!isProfileLoading && !isCompleteUserProfile(profile)) {
+      router.replace("/profile-setup?mode=setup");
+    }
+  }, [isProfileLoading, profile, router]);
+
+  if (isProfileLoading || !isCompleteUserProfile(profile)) {
+    return (
+      <main className="flex min-h-screen items-center justify-center">
+        <p className="text-sm text-zinc-500">Preparing your profile...</p>
+      </main>
+    );
+  }
 
   if (isLoading && !data) {
     return (
