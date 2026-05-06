@@ -1,0 +1,1 @@
+docker run --rm -v "D:\vanshmalanidata\Documents\GitHub\Uni-Dash_Reborn\AWS_Migration_Codebase\backend_code\auth\lambda:/var/task" -w /var/task --entrypoint /bin/bash public.ecr.aws/lambda/python:3.14   -c "pip install requests -t ./layer/python"

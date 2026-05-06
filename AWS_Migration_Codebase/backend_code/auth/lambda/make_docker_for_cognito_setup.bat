@@ -1,1 +1,0 @@
-docker run --rm -v "D:\vanshmalanidata\Documents\GitHub\Uni-Dash_Reborn\AWS Migration Codebase\backend code\auth\lambda:/var/task" -w /var/task --entrypoint /bin/bash public.ecr.aws/lambda/python:3.12   -c "pip install \"python-jose[cryptography]\" requests -t ./package"

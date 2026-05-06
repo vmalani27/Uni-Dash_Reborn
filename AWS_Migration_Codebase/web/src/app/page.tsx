@@ -1,12 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Sparkles, ArrowRight, Eye, EyeOff, MoveRight } from "lucide-react";
+import { signUp, confirmSignUp, signIn } from "@/lib/cognito";
+import { getAuthToken } from "@/lib/api";
 
 export default function AuthPage() {
+  const router = useRouter();
   const [isLogin, setIsLogin] = useState(true);
   const [isVerified, setIsVerified] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [email, setEmail] = useState("");
@@ -16,22 +21,58 @@ export default function AuthPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showPasswords, setShowPasswords] = useState(false);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    const checkSession = async () => {
+      try {
+        const token = await getAuthToken();
+
+        if (!isMounted) {
+          return;
+        }
+
+        if (token) {
+          router.replace("/dashboard");
+          return;
+        }
+      } finally {
+        if (isMounted) {
+          setIsCheckingSession(false);
+        }
+      }
+    };
+
+    void checkSession();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [router]);
+
+  if (isCheckingSession) {
+    return null;
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError("");
     
     try {
-      // TODO: Implement actual auth logic
       if (!isLogin && password !== confirmPassword) {
         throw new Error("Passwords do not match");
       }
-      
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      if (!isLogin) {
-        // After registration, show verification step
+
+      if (isLogin) {
+        // Sign in with Cognito
+        await signIn(email, password);
+        // Redirect to dashboard or home page after successful login
+        window.location.href = "/dashboard";
+      } else {
+        // Sign up with Cognito
+        await signUp(email, password);
+        // Show verification step after registration
         setIsVerifying(true);
       }
     } catch (err) {
@@ -47,8 +88,8 @@ export default function AuthPage() {
     setError("");
     
     try {
-      // TODO: Implement actual verification logic
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Verify email with Cognito using the verification code
+      await confirmSignUp(email, verificationCode);
       setIsVerified(true);
       setIsVerifying(false);
     } catch (err) {
@@ -218,7 +259,7 @@ export default function AuthPage() {
                         className="app-input"
                         placeholder="your.name@university.edu"
                         required
-                        pattern=".*@.*\.edu$"
+                        pattern=".*@.*\.com$"
                         title="Please use your academic email address"
                       />
                     </div>
