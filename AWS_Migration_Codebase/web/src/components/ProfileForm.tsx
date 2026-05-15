@@ -127,6 +127,12 @@ export default function ProfileForm({ mode, initialData = null, onSuccess }: Pro
         if (onSuccess) {
           onSuccess();
         } else {
+          try {
+            localStorage.setItem(
+              "unidash:flash",
+              "Profile saved! You can connect Gmail now or later in Settings."
+            );
+          } catch {}
           router.replace("/dashboard");
         }
       } else {

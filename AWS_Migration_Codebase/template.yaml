@@ -1,0 +1,87 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: UniDash Backend - Profile & OAuth APIs
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 128
+    Runtime: python3.11
+    Architectures:
+      - x86_64
+
+Resources:
+  # 1. Shared IAM Role for all backend Lambdas
+  UniDashLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: unidash-lambda-exec-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: LambdaBasePermissions
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # CloudWatch Logs (required by all Lambdas)
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*'
+              # SSM Parameters under /unidash/dev/*
+              - Effect: Allow
+                Action: ssm:GetParameter
+                Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/unidash/dev/*'
+
+  # 2. HTTP API Gateway
+  UniDashApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: prod
+      CorsConfiguration:
+        AllowMethods: 'GET,POST,PUT,OPTIONS'
+        AllowHeaders: 'Content-Type,Authorization'
+        AllowOrigins: '*'
+        MaxAge: 86400
+
+  # 3. Profile Lambda
+  ProfileFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: profile-api
+      Handler: lambda_function.lambda_handler
+      CodeUri: backend_code/auth/
+      Role: !GetAtt UniDashLambdaRole.Arn
+      Events:
+        ProfileRoute:
+          Type: HttpApi
+          Properties:
+            Path: /user/profile
+            Method: ANY
+
+  # 4. OAuth URL Lambda
+  OAuthUrlFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: oauth-url-api
+      Handler: lambda_function.lambda_handler
+      CodeUri: backend_code/oauth/
+      Role: !GetAtt UniDashLambdaRole.Arn
+      Events:
+        OAuthUrlRoute:
+          Type: HttpApi
+          Properties:
+            Path: /auth/google/url
+            Method: GET
+
+Outputs:
+  ApiEndpoint:
+    Description: "API Gateway endpoint URL"
+    Value: !Sub "https://${UniDashApi}.execute-api.${AWS::Region}.amazonaws.com/prod"

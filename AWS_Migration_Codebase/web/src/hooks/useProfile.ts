@@ -13,13 +13,12 @@ export interface UserProfile {
   branch: string;
   admission_year: number;
   sid: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export function useProfile() {
-  const cachedProfile = readCachedUserProfile<UserProfile>();
-  const [profile, setProfile] = useState<UserProfile | null>(cachedProfile);
-  const [isLoading, setIsLoading] = useState(!cachedProfile);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
   const checkProfile = useCallback(async (silent = false) => {
@@ -37,12 +36,17 @@ export function useProfile() {
         setProfile(null);
         clearCachedUserProfile();
       }
-    } catch (err: any) {
-      if (err.status === 404) {
+    } catch (err: unknown) {
+      const status =
+        typeof err === "object" && err !== null && "status" in err
+          ? (err as { status?: number }).status
+          : undefined;
+
+      if (status === 404) {
         setProfile(null);
         clearCachedUserProfile();
       } else {
-        setError(err as Error);
+        setError(err instanceof Error ? err : new Error("Failed to fetch profile"));
       }
     } finally {
       setIsLoading(false);
@@ -50,6 +54,17 @@ export function useProfile() {
   }, []);
 
   useEffect(() => {
+    // Read client cache only after mount to avoid SSR/client hydration mismatches.
+    const cachedProfile = readCachedUserProfile<UserProfile>();
+    if (cachedProfile && isCompleteUserProfile(cachedProfile)) {
+      setProfile(cachedProfile);
+      setIsLoading(false);
+    } else {
+      clearCachedUserProfile();
+      setProfile(null);
+      setIsLoading(true);
+    }
+
     void checkProfile(true);
   }, [checkProfile]);
 

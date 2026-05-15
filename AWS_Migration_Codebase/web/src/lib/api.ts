@@ -83,3 +83,19 @@ export const updateUserProfile = async (profileData: Partial<ProfileInput>) => {
     body: JSON.stringify(cleaned),
   });
 };
+
+
+const connectGoogle = () => {
+  const cognitoDomain = 'ap-south-1zx4mgtd7p.auth.ap-south-1.amazoncognito.com';
+  const clientId = '5in4d2guijiauqepn517h8s1a8';
+  const redirectUri = encodeURIComponent('https://d84l1y8p4kdic.cloudfront.net');
+  
+  const authUrl = `https://${cognitoDomain}/oauth2/authorize?` +
+    `response_type=code&` +
+    `client_id=${clientId}&` +
+    `redirect_uri=${redirectUri}&` +
+    `scope=openid+email+profile&` +
+    `identity_provider=Google`;
+  
+  window.location.href = authUrl;
+};

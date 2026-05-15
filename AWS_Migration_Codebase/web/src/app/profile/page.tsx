@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { getAuthToken } from "@/lib/api";
 import { signOut } from "@/lib/cognito";
+import { getGoogleConnectUrl } from "@/lib/cognito-oauth";
 import { useProfile } from "@/hooks/useProfile";
 import { isCompleteUserProfile } from "@/lib/profileCache";
 
@@ -81,6 +82,24 @@ export default function ProfilePage() {
   const handleLogout = () => {
     signOut();
     router.replace("/");
+  };
+
+  const handleConnectGoogle = async () => {
+    const token = await getAuthToken();
+    if (!token) {
+      router.replace("/");
+      return;
+    }
+
+    try {
+      const state = globalThis.crypto?.randomUUID?.() ?? String(Date.now());
+      localStorage.setItem("cognito_oauth_state", state);
+      const url = getGoogleConnectUrl(state);
+      window.location.href = url;
+    } catch {
+      const url = getGoogleConnectUrl();
+      window.location.href = url;
+    }
   };
 
   if (isLoading) {
@@ -214,7 +233,12 @@ export default function ProfilePage() {
                         Connected
                       </span>
                     ) : (
-                      <button className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-[var(--color-primary)] hover:text-[color:rgba(103,80,164,0.8)] transition-colors">
+                      <button
+                        onClick={() => {
+                          void handleConnectGoogle();
+                        }}
+                        className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-[var(--color-primary)] hover:text-[color:rgba(103,80,164,0.8)] transition-colors"
+                      >
                         Connect account
                       </button>
                     )}
