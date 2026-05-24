@@ -1,0 +1,16 @@
+aws ssm put-parameter --name "/unidash/dev/gcp/client_id" --value "YOUR GCP CLIENT ID HERE" --type SecureString --region ap-south-1
+
+aws ssm put-parameter --name "/unidash/dev/gcp/client_secret" --value "YOUR GCP CLIENT SECRET" --type SecureString --region ap-south-1
+
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+
+aws ssm put-parameter --name "/unidash/dev/fernet_key" --value "Fernet_key_used_for_oauth_crypto" --type SecureString --region ap-south-1
+
+aws ssm put-parameter --name "/unidash/dev/frontend_url" --value "http://localhost:3000" --type String --region ap-south-1
+
+aws ssm put-parameter --name "/unidash/dev/pubsub_topic" --value "projects/f-r-i-d-a-y-vlelfh/topics/gmail-notifications" --type String --region ap-south-1
+
+$(python -c 'import secrets; print(secrets.token_urlsafe(32))')
+
+aws ssm put-parameter --name "/unidash/dev/webhook_secret" --value "token for webhook" --type SecureString --region ap-south-1
+

@@ -6,12 +6,20 @@ Globals:
   Function:
     Timeout: 30
     MemorySize: 128
-    Runtime: python3.11
+    Runtime: python3.14
     Architectures:
       - x86_64
 
+Parameters:
+  CognitoUserPoolId:
+    Type: String
+    Default: "ap-south-1_ZX4Mgtd7P"        # e.g. ap-south-1_AbCdEfGhI
+  CognitoUserPoolClientId:
+    Type: String
+    Default: "5in4d2guijiauqepn517h8s1a8"       # the long alphanumeric string
+
 Resources:
-  # 1. Shared IAM Role for all backend Lambdas
+
   UniDashLambdaRole:
     Type: AWS::IAM::Role
     Properties:
@@ -28,34 +36,45 @@ Resources:
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-              # CloudWatch Logs (required by all Lambdas)
               - Effect: Allow
                 Action:
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource: '*'
-              # SSM Parameters under /unidash/dev/*
               - Effect: Allow
                 Action: ssm:GetParameter
                 Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/unidash/dev/*'
 
-  # 2. HTTP API Gateway
   UniDashApi:
     Type: AWS::Serverless::HttpApi
     Properties:
       StageName: prod
+      Auth:
+        Authorizers:
+          CognitoAuthorizer:
+            IdentitySource: "$request.header.Authorization"
+            JwtConfiguration:
+              issuer: !Sub "https://cognito-idp.${AWS::Region}.amazonaws.com/${CognitoUserPoolId}"
+              audience:
+                - !Ref CognitoUserPoolClientId
+        DefaultAuthorizer: CognitoAuthorizer
       CorsConfiguration:
-        AllowMethods: 'GET,POST,PUT,OPTIONS'
-        AllowHeaders: 'Content-Type,Authorization'
-        AllowOrigins: '*'
+        AllowMethods:
+          - GET
+          - POST
+          - PUT
+          - OPTIONS
+        AllowHeaders:
+          - Content-Type
+          - Authorization
+        AllowOrigins:
+          - "*"
         MaxAge: 86400
-
-  # 3. Profile Lambda
   ProfileFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: profile-api
+      FunctionName: unidash-profile-api
       Handler: lambda_function.lambda_handler
       CodeUri: backend_code/auth/
       Role: !GetAtt UniDashLambdaRole.Arn
@@ -63,23 +82,87 @@ Resources:
         ProfileRoute:
           Type: HttpApi
           Properties:
+            ApiId: !Ref UniDashApi
             Path: /user/profile
             Method: ANY
+            Auth:
+              Authorizer: CognitoAuthorizer
+        ProfileOptions:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref UniDashApi
+            Path: /user/profile
+            Method: OPTIONS
+            Auth:
+              Authorizer: NONE
 
-  # 4. OAuth URL Lambda
   OAuthUrlFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: oauth-url-api
+      FunctionName: unidash-oauth-url
       Handler: lambda_function.lambda_handler
-      CodeUri: backend_code/oauth/
+      CodeUri: backend_code/oauth/url/
       Role: !GetAtt UniDashLambdaRole.Arn
       Events:
         OAuthUrlRoute:
           Type: HttpApi
           Properties:
+            ApiId: !Ref UniDashApi
             Path: /auth/google/url
             Method: GET
+            Auth:
+              Authorizer: CognitoAuthorizer
+
+  OAuthCallbackFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: unidash-oauth-callback
+      Handler: lambda_function.lambda_handler
+      CodeUri: backend_code/oauth/callback/
+      Role: !GetAtt UniDashLambdaRole.Arn
+      Events:
+        OAuthCallbackRoute:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref UniDashApi
+            Path: /auth/google/callback
+            Method: GET
+            Auth:
+              Authorizer: NONE
+
+  OAuthDisconnectFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: unidash-oauth-disconnect
+      Handler: lambda_function.lambda_handler
+      CodeUri: backend_code/oauth/disconnect/
+      Role: !GetAtt UniDashLambdaRole.Arn
+      Events:
+        OAuthDisconnectRoute:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref UniDashApi
+            Path: /auth/google/disconnect
+            Method: POST
+            Auth:
+              Authorizer: CognitoAuthorizer
+
+  GmailWebhookFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: unidash-gmail-webhook
+      Handler: lambda_function.lambda_handler
+      CodeUri: backend_code/gmail/webhook/
+      Role: !GetAtt UniDashLambdaRole.Arn
+      Events:
+        GmailWebhookRoute:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref UniDashApi
+            Path: /gmail/webhook
+            Method: POST
+            Auth:
+              Authorizer: NONE
 
 Outputs:
   ApiEndpoint:

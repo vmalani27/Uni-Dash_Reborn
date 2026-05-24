@@ -20,7 +20,7 @@ def get_param(name: str, decrypt: bool = False) -> str:
 
 # Load config at cold start
 SUPABASE_URL = get_param("/unidash/dev/supabase/url", decrypt=False)
-SUPABASE_KEY = get_param("/unidash/dev/supabase/sevice_key", decrypt=True)
+SUPABASE_KEY = get_param("/unidash/dev/supabase/service_key", decrypt=True)
 ALLOWED_ORIGINS = get_param("/unidash/dev/allowed_origins").split(",")
 
 
@@ -70,26 +70,7 @@ def supabase_request(
     if not resp.text.strip():
         return {"_success": True}
 
-    result = resp.json()
-
-    return (
-        result[0]
-        if isinstance(result, list) and len(result) == 1
-        else result
-    )
-
-
-# --- Normalize camelCase → snake_case ---
-def normalize_input(body: Dict[str, Any]) -> Dict[str, Any]:
-    mapping = {
-        "fullName": "full_name",
-        "admissionYear": "admission_year",
-    }
-
-    return {
-        mapping.get(k, k): v
-        for k, v in body.items()
-    }
+    return resp.json()
 
 
 # --- Lambda Handler ---
@@ -123,7 +104,7 @@ def lambda_handler(event, context):
 
         # Parse body (GET requests will have empty body)
         raw_body = json.loads(event.get("body", "{}") or "{}")
-        body = normalize_input(raw_body)
+        body = raw_body
 
         # Fetch existing profile
         existing_list = supabase_request(
@@ -132,11 +113,7 @@ def lambda_handler(event, context):
             query={"uid": f"eq.{uid}"}
         )
 
-        existing = (
-            existing_list[0]
-            if isinstance(existing_list, list) and existing_list
-            else None
-        )
+        existing = existing_list[0] if isinstance(existing_list, list) and existing_list else None
 
         # ================= GET =================
         if method == "GET":
@@ -195,11 +172,7 @@ def lambda_handler(event, context):
                 query={"sid": f"eq.{sid_value}"}
             )
 
-            if (
-                sid_check
-                and isinstance(sid_check, list)
-                and sid_check
-            ):
+            if isinstance(sid_check, list) and sid_check:
                 return {
                     "statusCode": 409,
                     "headers": cors,

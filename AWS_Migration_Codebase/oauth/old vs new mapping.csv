@@ -1,7 +1,0 @@
-﻿Step,Your FastAPI Monolith,AWS Cloud-Native Equivalent
-1. Generate OAuth URL,GET /auth/google/url → in-memory state store,Cognito Hosted UI" → handles URL, state, CSRF automatically"
-2. User grants scopes & signs in,GET /auth/google/callback → exchanges code for tokens,Cognito Callback" → completes OAuth, creates/federates user in User Pool"
-3. Store tokens & register Pub/Sub watch,"FastAPI callback saves tokens to Supabase, calls Gmail API to create watch",Cognito Post-Auth Lambda Trigger" → runs after sign-in, captures Google refresh token, calls Gmail API to register watch"
-4. Full Sync,BackgroundTask → GmailService.full_sync(),Sync Worker Lambda (triggered via SQS or direct invoke)
-5. Incremental Sync (Webhook),POST /webhook/gmail/pubsub → parses payload → triggers background sync,Webhook Receiver Lambda → validates → pushes to SQS → returns 200
-6. Actual Sync Work,GmailService.incremental_sync() runs in background,Sync Worker Lambda (triggered by SQS) → reads token → calls Gmail API → upserts to Supabase

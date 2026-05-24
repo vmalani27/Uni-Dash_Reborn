@@ -17,7 +17,6 @@ import {
 } from "lucide-react";
 import { getAuthToken } from "@/lib/api";
 import { signOut } from "@/lib/cognito";
-import { getGoogleConnectUrl } from "@/lib/cognito-oauth";
 import { useProfile } from "@/hooks/useProfile";
 import { isCompleteUserProfile } from "@/lib/profileCache";
 
@@ -84,7 +83,7 @@ export default function ProfilePage() {
     router.replace("/");
   };
 
-  const handleConnectGoogle = async () => {
+  const handleConnectGmail = async () => {
     const token = await getAuthToken();
     if (!token) {
       router.replace("/");
@@ -92,13 +91,42 @@ export default function ProfilePage() {
     }
 
     try {
-      const state = globalThis.crypto?.randomUUID?.() ?? String(Date.now());
-      localStorage.setItem("cognito_oauth_state", state);
-      const url = getGoogleConnectUrl(state);
-      window.location.href = url;
-    } catch {
-      const url = getGoogleConnectUrl();
-      window.location.href = url;
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/auth/google/url`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      if (!res.ok) {
+        throw new Error("Failed to get Google auth URL");
+      }
+
+      const data = await res.json();
+      window.location.href = data.auth_url;
+    } catch (error) {
+      console.error("[profile] Connect Gmail failed", error);
+    }
+  };
+
+  const handleDisconnectGmail = async () => {
+    const token = await getAuthToken();
+    if (!token) {
+      router.replace("/");
+      return;
+    }
+
+    try {
+      await fetch(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/auth/google/disconnect`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      window.location.reload();
+    } catch (error) {
+      console.error("[profile] Disconnect Gmail failed", error);
     }
   };
 
@@ -235,7 +263,7 @@ export default function ProfilePage() {
                     ) : (
                       <button
                         onClick={() => {
-                          void handleConnectGoogle();
+                          void handleConnectGmail();
                         }}
                         className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-[var(--color-primary)] hover:text-[color:rgba(103,80,164,0.8)] transition-colors"
                       >
@@ -254,7 +282,9 @@ export default function ProfilePage() {
               </p>
               <div className="mt-4 space-y-2">
                 <button
-                  onClick={handleLogout}
+                  onClick={() => {
+                    void handleDisconnectGmail();
+                  }}
                   className="w-full inline-flex items-center justify-center gap-2 rounded-[var(--radius-button)] border border-[color:rgba(186,26,26,0.2)] bg-[color:rgba(186,26,26,0.06)] px-4 py-2.5 text-sm font-[var(--font-weight-value)] text-[color:#8f1d1d] hover:bg-[color:rgba(186,26,26,0.12)] transition-colors dark:text-[color:#ffb4ab]"
                 >
                   <LogOut className="h-4 w-4" />

@@ -1,259 +1,177 @@
 # Uni-Dash: AI-Powered Academic Email Platform
 
-> **Status: Production Profile Management + AWS Serverless Architecture**  
-> Core authentication, profile management endpoints (POST/GET/PUT), and CORS handling are production-ready on AWS (Cognito, API Gateway, Lambda, Supabase). Email ingestion and AI classification pipelines operational on local backend. OAuth integration (Google Gmail) in development.
+**Status:** Phase 1 complete — Auth, profile management, and Gmail OAuth implemented on AWS Serverless
 
 ---
 
-## Current Implementation Status
+## Overview
 
-### Completed: Authentication & Profile Management
+This repository contains the backend and frontend for Uni-Dash, a serverless academic dashboard that enhances email and classroom triage of educational institutes.
 
-| Component | Status | Technology | Endpoint |
-|-----------|--------|-----------|----------|
-| User Authentication | Production | AWS Cognito + API Gateway JWT Authorizer | `POST /auth/*` |
-| Profile Creation | Production | Lambda + Supabase REST | `POST /user/profile` |
-| Profile Retrieval | Production | Lambda + Supabase REST | `GET /user/profile` |
-| Profile Update | Production | Lambda + Supabase REST | `PUT /user/profile` |
-| CORS Handling | Production | API Gateway + Lambda headers | All endpoints |
-| Field Validation | Production | Lambda business logic | POST/PUT |
-| Immutable Field Enforcement | Production | Lambda validation | `sid`, `uid`, `email` |
+the project is moving from a monolihtic fast api backend to serverless architecture on lambda + api-gateway + event implementations soon.
 
-### Working Data Flow
+constraints to be addressed: hosted database solutions on aws is still costly for my development phase. so i am sticking to supabase. and i tried implementing cognito idp to support google oauth token exchange in aws natively. but it doesnt work like i expected it to. so i am sticking to google console provider for the project setup.
 
-```
-Next.js Frontend
-       |
-       v
-AWS Cognito (SignIn/SignUp) --> ID Token (JWT)
-       |
-       v
-API Gateway (HTTP API)
-       |
-       +-- JWT Authorizer validates token
-       |
-       v
-Lambda Function (Python 3.11)
-       |
-       +-- Extracts claims from JWT (uid, email)
-       +-- Normalizes camelCase to snake_case
-       +-- Validates required fields
-       +-- Enforces immutable field rules
-       |
-       v
-Supabase PostgreSQL (via REST API)
-       |
-       +-- Query: SELECT/INSERT/UPDATE users WHERE uid = :uid
-       +-- Returns JSON representation
-       |
-       v
-Lambda --> API Gateway --> Next.js Frontend
-```
+---
 
-### Lambda Configuration Details
+## Implementation status
 
-| Setting | Value | Notes |
-|---------|-------|-------|
-| Runtime | Python 3.11 | Compatible with requests, cryptography |
-| Memory | 128 MB | Sufficient for REST proxy operations |
-| Timeout | 30 seconds | Handles Supabase network latency |
-| Layers | `requests`, `cryptography` | Pre-bundled to reduce cold start |
-| Environment Variables | `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `ALLOWED_ORIGINS` | Injected at deployment |
-| Cold Start | ~1-2 seconds (unprovisioned) | Acceptable for user-facing profile ops |
-| Deployment | AWS SAM / Terraform | Infrastructure as code |
+Completed components
 
-### API Contract: Profile Endpoints
+- User authentication (AWS Cognito + HTTP API JWT authorizer) — `POST /auth/*`
+- Profile creation, retrieval, update (Lambda + Supabase REST) — `POST|GET|PUT /user/profile`
+- Gmail OAuth URL endpoint (Lambda) — `GET /auth/google/url`
+- Gmail OAuth callback (Lambda) — `GET /auth/google/callback`
+- Gmail disconnect (Lambda) — `POST /auth/google/disconnect`
+- Gmail watch (gmail.watch() via Lambda) — triggered on OAuth connect
+- Webhook receiver for Pub/Sub push (Lambda) — `POST /gmail/webhook`
+- Frontend (Next.js 14 App Router + Cognito) — `localhost:3000` during development
+- IaC (AWS SAM) — `template.yaml`
 
-#### POST /user/profile (Create)
-```json
-Request:
-{
-  "fullName": "Vansh Malani",
-  "degree": "BTech",
-  "branch": "CSE",
-  "admissionYear": 2024,
-  "sid": "23dcs056"
-}
+In progress / next items
 
-Response (201 Created):
-{
-  "uid": "01934d4a-9081-708a-32c6-da7e24a172fd",
-  "email": "vanshmalani9@gmail.com",
-  "full_name": "Vansh Malani",
-  "degree": "BTech",
-  "branch": "CSE",
-  "admission_year": 2024,
-  "sid": "23dcs056",
-  "profile_completed": true,
-  "oauth_connected": false
-}
+- Gmail email sync worker (Lambda triggered by history_id updates)
+- AI classification worker (external Ollama worker polling Supabase)
+- Frontend deployment to S3 + CloudFront
+- Pub/Sub push subscription pointing to the webhook Lambda URL
+- Observability: CloudWatch alarms + X-Ray
 
-Error Responses:
-400: {"error": "Missing field: <field_name>"}
-409: {"error": "User already exists"}
-409: {"error": "SID already registered"}
-```
+---
 
-#### GET /user/profile (Retrieve)
-```json
-Response (200 OK):
-{
-  "uid": "...",
-  "email": "...",
-  "full_name": "...",
-  "degree": "...",
-  "branch": "...",
-  "admission_year": 2024,
-  "sid": "23dcs056",
-  "profile_completed": true,
-  "oauth_connected": false
-}
+## Architecture (high-level)
 
-Error Responses:
-404: {"error": "User not found"}
-```
-
-#### PUT /user/profile (Update)
-**Note:** Only `branch` and `admission_year` are mutable. Fields like `sid`, `uid`, `email`, `full_name`, and `degree` are immutable after profile creation.
-
-```json
-Request (partial update allowed):
-{
-  "branch": "AI/ML"
-}
-
-Response (200 OK):
-{
-  "uid": "...",
-  "email": "...",
-  "full_name": "...",
-  "degree": "...",
-  "branch": "AI/ML",
-  "admission_year": 2024,
-  "sid": "23dcs056",
-  "profile_completed": true,
-  "oauth_connected": false
-}
-
-Error Responses:
-400: {"error": "Field 'sid' cannot be updated"}
-400: {"error": "Invalid admission_year"}
-404: {"error": "User not found"}
+```mermaid
+flowchart LR
+  A[Next.js Frontend] --> B[AWS Cognito]
+  B --> C[API Gateway (HTTP API) - JWT Authorizer]
+  C --> D[Lambda Functions]
+  subgraph Lambdas
+    D1[GET /auth/google/url]
+    D2[GET /auth/google/callback]
+    D3[POST /auth/google/disconnect]
+    D4[POST /gmail/webhook]
+    D5[GET/POST/PUT /user/profile]
+  end
+  D --> E[Supabase (Postgres)]
+  E --> F[Tables: users, oauth_tokens, oauth_states, gmail_sync_status]
+  D2 --> G[Google OAuth]
+  G --> H[Google Pub/Sub]
+  H --> D4
 ```
 
 ---
 
-## Next: OAuth Integration (In Development)
+## Infrastructure (selected resources)
 
-### Objective
-Enable users to connect their Google accounts for read-only access to Gmail and Google Classroom APIs, automating academic email ingestion.
+- Cognito User Pool: `ap-south-1_ZX4Mgtd7P` (ap-south-1)
+- API Gateway (HTTP API): `unidash-backend` (ap-south-1)
+- CloudFormation / SAM stack: `unidash-backend`
+- SAM S3 bucket: aws-sam-cli-managed-default-samclisourcebucket-*
 
-### Planned Endpoints
-| Endpoint | Purpose | Status |
-|----------|---------|--------|
-| `GET /auth/google/url` | Generate OAuth authorization URL | Not implemented |
-| `GET /auth/google/callback` | Exchange authorization code for tokens | Not implemented |
-| `POST /auth/google/disconnect` | Revoke and delete stored refresh token | Not implemented |
+### Key Lambdas (names and code locations)
 
-### Security Approach
-- Google OAuth credentials stored in AWS Secrets Manager
-- Refresh tokens encrypted with Fernet before Supabase storage
-- CSRF protection via state parameter validation
-- Scopes limited to `gmail.readonly` and classroom read access
-- User-initiated disconnect triggers token revocation
+- `unidash-profile-api` — `backend_code/auth/lambda_function.py` (protected)
+- `unidash-oauth-url` — `backend_code/oauth/url/lambda_function.py` (protected)
+- `unidash-oauth-callback` — `backend_code/oauth/callback/lambda_function.py` (public)
+- `unidash-oauth-disconnect` — `backend_code/oauth/disconnect/lambda_function.py` (protected)
+- `unidash-gmail-webhook` — `backend_code/gmail/webhook/lambda_function.py` (public, secret-validated)
 
-## Architecture
+### SSM parameters (prefix `/unidash/dev/`)
 
-### Current State
-| Component | Technology | Status |
-|-----------|-----------|--------|
-| Frontend | Next.js 14 (App Router) | ✓ Production |
-| Authentication | AWS Cognito | ✓ Production |
-| API Gateway | AWS API Gateway (HTTP) | ✓ Production |
-| Profile API | Lambda (Python 3.11) | ✓ Production |
-| Database | Supabase PostgreSQL | ✓ Production |
-| Email Sync | FastAPI + asyncio | ✓ Functional |
-| AI Inference | Ollama + Llama 3 | ✓ Functional |
-| OAuth (Gmail) | Lambda integration | ⚠️ In Development |
+- `supabase/url`
+- `supabase/sevice_key` (secure)
+- `allowed_origins`
+- `frontend_url`
+- `gcp/client_id` (secure)
+- `gcp/client_secret` (secure)
+- `fernet_key` (secure)
+- `pubsub_topic`
+- `webhook_secret` (secure)
 
-### Future: Cloud-Native
-- Email Sync: Celery + Redis on Kubernetes HPA
-- AI Inference: FastAPI + GPU Scheduling on Kubernetes StatefulSet
-- API Gateway: FastAPI with Istio sidecar
-- Object Storage: S3-compatible bucket
-- Observability: CloudWatch + X-Ray
+---
 
-## Getting Started
+## Code layout
 
-### Prerequisites
-- Node.js 18+ (Next.js frontend)
-- AWS CLI configured with appropriate permissions
-- Supabase project with users table configured
-- Python 3.11+ (optional, for Lambda local testing)
-
-### Frontend
-```bash
-cd web
-npm install
-cp .env.example .env.local
-# Set NEXT_PUBLIC_API_BASE_URL to your API Gateway endpoint
-npm run dev
+```text
+AWS_Migration_Codebase/
+├─ template.yaml
+├─ backend_code/
+│  ├─ auth/ (profile Lambda)
+│  ├─ oauth/
+│  │  ├─ url/
+│  │  ├─ callback/
+│  │  └─ disconnect/
+│  └─ gmail/
+│     └─ webhook/
+└─ web/ (Next.js frontend)
+   └─ src/app/
+       ├─ profile/
+       └─ auth/google/callback/ (frontend handler)
 ```
 
-### Lambda Deployment
+---
+
+## OAuth flow (sequence)
+
+```mermaid
+sequenceDiagram
+  participant U as User (Browser)
+  participant FE as Frontend (Next.js)
+  participant AG as API Gateway
+  participant LU as Lambda (oauth/url)
+  participant G as Google OAuth
+  participant LC as Lambda (oauth/callback)
+  participant DB as Supabase
+
+  U->>FE: Click "Connect Gmail"
+  FE->>AG: GET /auth/google/url (Bearer ID token)
+  AG->>LU: invoke
+  LU->>DB: INSERT oauth_states
+  LU-->>FE: return Google auth URL
+  FE->>G: redirect to Google consent
+  G-->>U: redirect to FE callback URL with code & state
+  FE->>LC: forward callback query params to /auth/google/callback
+  LC->>DB: validate state, store tokens in oauth_tokens
+  LC->>G: start gmail.watch() (register Pub/Sub)
+  LC-->>FE: redirect user to dashboard
+```
+
+---
+
+## Deployment
+
+From the `AWS_Migration_Codebase/` directory:
+
 ```bash
-# Using AWS SAM (from infra/lambda/profile-api directory)
 sam build
-sam deploy --guided
-
-# Requires environment variables:
-# - SUPABASE_URL
-# - SUPABASE_SERVICE_KEY
-# - ALLOWED_ORIGINS
-```
-
-### Testing the API
-```bash
-# After obtaining ID token from Cognito login
-export TOKEN="eyJ..."
-
-# Create profile
-curl -X POST https://YOUR_API/user/profile \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"fullName":"Test User","degree":"BTech","branch":"CSE","admissionYear":2024,"sid":"test123"}'
-
-# Retrieve profile
-curl -X GET https://YOUR_API/user/profile \
-  -H "Authorization: Bearer $TOKEN"
-
-# Update profile
-curl -X PUT https://YOUR_API/user/profile \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"branch":"AI/ML"}'
+sam deploy --capabilities CAPABILITY_NAMED_IAM
+# For first-time interactive setup:
+sam deploy --guided --capabilities CAPABILITY_NAMED_IAM
 ```
 
 ---
 
-## Resources & Contributing
+## OAuth callback routing note
 
-**Documentation & Reference**
-- [OpenAPI Specification](./api/openapi.yaml)
-- [Lambda Build Instructions](./infra/lambda/README.md)
-- [Supabase Schema](./docs/database.md)
-- [Cognito Setup Guide](./docs/auth.md)
-
-**Development Guidelines**
-- Trunk-based development with backward-compatible API changes
-- Updated OpenAPI specs for all endpoint modifications
-- Integration tests covering POST/GET/PUT flows
-- Manual verification against Supabase test project
-
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for detailed contribution guidelines.
+During development the frontend hosts the callback route at `/auth/google/callback` which forwards the browser to the backend Lambda at `/auth/google/callback`. Ensure `NEXT_PUBLIC_API_BASE_URL` is set (e.g. `http://localhost:8000`) when running locally so the frontend can forward to the API.
 
 ---
 
-## Summary
+## Next steps
 
-Uni-Dash is evolving from a functional monolith to a resilient, cloud-native system. The profile management layer demonstrates the target architecture pattern: stateless compute, managed identity, and decoupled data access. OAuth integration is the next step toward enabling the core academic email ingestion pipeline.
+- Create the Pub/Sub push subscription pointing at `POST /gmail/webhook?token=<webhook_secret>`
+- Implement the Gmail sync Lambda that reads `last_history_id` and ingests messages
+- Deploy the frontend to S3 + CloudFront and update `frontend_url` SSM parameter and GCP redirect URIs
+- Add a renewal mechanism for `gmail.watch()` (expires weekly)
+
+---
+
+## Known limitations
+
+- `frontend_url` is currently set to `http://localhost:3000` in dev SSM param — update for production
+- Gmail watch expires and requires renewal
+- Ollama worker is external and not yet integrated into AWS
+
+---
+
+If you want different diagrams (architecture, sequence, or file tree) or prefer the README split into a short `README.md` and a longer `docs/ARCHITECTURE.md`, tell me which pieces to expand.
